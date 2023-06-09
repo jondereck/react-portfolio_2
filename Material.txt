@@ -9,3 +9,18 @@ https://www.youtube.com/watch?v=LpZrAjU6Hhk
 Contact Get: https://app.getform.io/forms
 
 npm i react-scroll
+
+
+/** Github**/
+rund cmd admin
+git status
+git add .
+git commit -m 'project-done'
+go to https://github.com/new create a new repository
+
+copy the "push an existing repository from the command line"
+
+git remote add origin https://github.com/jondereck/react-portfolio_2.git
+git branch -M main
+git push -u origin main
+

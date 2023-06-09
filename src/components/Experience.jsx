@@ -1,5 +1,5 @@
 import React from "react";
-import html from "../assets/html.png";
+import htmlImage from "../assets/html.png"; // eslint-disable-next-line
 import css from '../assets/css.png'
 import github from "../assets/github.png";
 import javascript from "../assets/javascript.png";
@@ -7,11 +7,11 @@ import react from "../assets/react.png";
 import tailwind from "../assets/tailwind.png";
 
 const Experience = () => {
-
+// ...
   const exp = [
     {
       id: 1,
-      src: html,
+      src: htmlImage,
       title: 'HTML',
       style: 'shadow-orange-500'
     },
