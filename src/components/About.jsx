@@ -13,22 +13,28 @@ const About = () => {
       >
         <div>
           <p className="text-4xl font-bold inline border-b-4 border-gray-500">
-            About
+            About Me
           </p>
         </div>
         <p className="text-xl mt-20 ">
-          Lorem ipsum dolor sit, amet consectetur adipisicing elit. Beatae, ea
-          tempora animi perferendis aliquam ratione ut, odit pariatur facilis
-          eum maxime tenetur expedita suscipit? Ex quae nostrum aliquam
-          similique inventore.
+          I have a strong foundation in front-end technologies and frameworks,
+          including HTML5, CSS3, and JavaScript. I leverage the power of these
+          languages to build intuitive and responsive user interfaces that
+          deliver seamless interactions. 
+          results.
         </p>
         <br />
         <p className="text-xl">
-          Lorem ipsum dolor sit amet consectetur adipisicing elit. Provident,
-          voluptates temporibus. Neque facere dolorum quibusdam beatae eum
-          numquam quasi veniam, vel natus aspernatur magni architecto at error
-          cum a tempore!
-        </p>
+        Additionally, I am proficient in using
+          modern CSS frameworks like Tailwind CSS to expedite the development
+          process and ensure consistent and visually appealing designs. Beyond
+          front-end development, I also possess knowledge and skills in data
+          analytics. I can effectively analyze and interpret data to derive
+          meaningful insights that drive informed decision-making. This unique
+          combination of technical expertise allows me to create data-driven
+          applications that not only look great but also deliver valuable
+        </p>{" "}
+        
       </div>
     </div>
   );

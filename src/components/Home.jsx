@@ -1,10 +1,9 @@
 import React from "react";
 import { AiOutlineArrowRight } from "react-icons/ai";
 import heroImage from "../assets/heroImage.jpg";
-import {Link} from 'react-scroll'
+import { Link } from "react-scroll";
 
 const Home = () => {
-
   return (
     <div
       name="home"
@@ -17,18 +16,20 @@ const Home = () => {
       items-center justify-center h-full px-4 md:flex-row"
       >
         <div className="flex flex-col justify-center h-full">
-          <h2 className="text-white text-4xl sm:text-7xl font-bold ">
+          <h2 className="text-white text-2xl sm:text-7xl font-bold ">
             I'm a Front end Developer
           </h2>
           <p className="text-gray-500 py-4 max-w-md">
-            I'm a Frontend Developer with 3 years of experience. Lorem ipsum
-            dolor sit amet consectetur adipisicing elit. Excepturi, voluptas
-            laborum suscipit iusto libero consequuntur facere corrupti cum ut,
-            laboriosam maxime beatae provident doloremque ea qui autem. Rerum,
-            nemo amet!
+            Hello! I'm Jon Dereck Nifas, a Front End Developer specializing in
+            HTML, CSS, JavaScript, Tailwind, and React. I also have knowledge in data
+            analytics. I am passionate about crafting exceptional user
+            experiences and delivering seamless web applications.
           </p>
           <div>
-            <Link to="portfolio" smooth duration={500}
+            <Link
+              to="portfolio"
+              smooth
+              duration={500}
               className="group flex  text-white w-fit px-6 py-3 my-2 
             item-center rounded-md bg-gradient-to-r
              from-cyan-500 to to-blue-500 cursor-pointer "

@@ -54,7 +54,6 @@ const SocialLinks = () => {
              rel="noreferrer"
              className="flex justify-between items-center w-full  text-white"
              download={download}>
-                
               {child}
              </a>
            </li>
