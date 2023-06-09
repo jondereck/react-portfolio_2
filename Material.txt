@@ -1,0 +1,11 @@
+📚 Material:
+Tailwind CSS: https://tailwindcss.com/docs/guides/create-react-app
+React Icons: https://react-icons.github.io/react-icons/
+Netlify: https://www.netlify.com
+Project GitHub Link: https://www.buymeacoffee.com/pwyash/e...
+Font: https://fonts.google.com/?preview.text=raleway&preview.text_type=custom&query=raleway
+https://www.youtube.com/watch?v=LpZrAjU6Hhk
+
+Contact Get: https://app.getform.io/forms
+
+npm i react-scroll
