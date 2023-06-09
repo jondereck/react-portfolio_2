@@ -68,3 +68,64 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
+# Initializing GitHub
+1. Open a command prompt or terminal with administrator privileges.
+
+2. Navigate to your project directory:
+   - Use the command `cd <project-directory>` to change to your project directory.
+   - Replace `<project-directory>` with the actual directory path where your project is located.
+
+3. Check the status of your Git repository:
+   - Use the command `git status` to see the current status of your repository.
+   - This will show any untracked or modified files.
+
+4. Stage the changes:
+   - Use the command `git add .` to stage all modified and untracked files.
+   - This adds all changes to the staging area for the next commit.
+
+5. Commit the changes:
+   - Use the command `git commit -m 'project-done'` to create a new commit.
+   - Replace `'project-done'` with a meaningful commit message describing your project.
+
+6. Create a new repository on GitHub:
+   - Go to https://github.com/new to create a new repository.
+   - Provide a name for your repository and any desired settings.
+   - Leave the repository empty without initializing it with a README file.
+
+7. Copy the "push an existing repository from the command line" instructions:
+   - From the newly created repository's page, copy the commands under "push an existing repository from the command line".
+
+8. Add the remote repository:
+   - In the command prompt or terminal, use the command copied from GitHub to add the remote repository.
+   - For example: `git remote add origin https://github.com/jondereck/react-portfolio_2.git`.
+
+9. Rename the main branch (optional):
+   - Use the command `git branch -M main` to rename the branch to `main`.
+   - This step is optional, and you can keep the default branch name if desired.
+
+10. Push the changes to GitHub:
+    - Use the command `git push -u origin main` to push the commits to the remote repository.
+    - This uploads your local code to GitHub.
+
+Once you've followed these steps, your local code will be initialized and pushed to GitHub, creating a new repository.
+
+
+
+# Updating Code on GitHub 
+1. Stage the changes:
+   - Use the command `git add <file>` to stage modified files or new files.
+   - For example, to stage a file named `example.js`, use: `git add example.js`.
+   - To stage all modified files, use: `git add .`.
+
+2. Commit the changes:
+   - Use the command `git commit -m "<commit message>"` to create a new commit.
+   - Provide a meaningful commit message that describes the updates made.
+   - For example: `git commit -m "Update example.js with new feature"`.
+
+3. Push the changes:
+   - Use the command `git push <remote> <branch>` to upload the committed changes to GitHub.
+   - Specify the remote repository and branch to push to.
+   - For example: `git push origin main` pushes changes to the `main` branch of the `origin` remote.
+
+Once you've followed these steps, your local code changes will be updated on GitHub. Others can then fetch and pull these updates from the repository.
