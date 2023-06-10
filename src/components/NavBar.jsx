@@ -41,7 +41,7 @@ const NavBar = ({darkMode, setDarkMode}) => {
           <li
             key={id}
             className="px-4 cursor-pointer capitalize font-medium
-        text-gray-800 dark:text-gray-400 hover:scale-105 duration-200"
+         hover:scale-105 duration-200"
           >
             <Link to={name} smooth duration={800}>
              {name}
@@ -69,7 +69,7 @@ const NavBar = ({darkMode, setDarkMode}) => {
       {nav && (
         <ul
           className="flex flex-col justify-center items-center
-        absolute top-0 left-0 w-full h-screen bg-gradient-to-b from-black to-gray-800"
+        absolute top-0 left-0 w-full h-screen bg-white dark:bg-black"
         >
           {links.map(({ id, name }) => (
             <li
