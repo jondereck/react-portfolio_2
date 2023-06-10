@@ -68,7 +68,7 @@ const NavBar = ({darkMode, setDarkMode}) => {
 
       {nav && (
         <ul
-          className="flex flex-col justify-center items-center
+          className="flex flex-col justify-center items-center 
         absolute top-0 left-0 w-full h-screen bg-white dark:bg-black"
         >
           {links.map(({ id, name }) => (

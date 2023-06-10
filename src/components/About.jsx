@@ -4,7 +4,7 @@ const About = () => {
   return (
     <div
       name="about"
-      className=""
+      className="h-screen w-full "
     >
       <div
         className="mx-auto max-w-screen-lg p-4 flex flex-col justify-center
@@ -28,10 +28,14 @@ const About = () => {
           modern CSS frameworks like Tailwind CSS to expedite the development
           process and ensure consistent and visually appealing designs. Beyond
           front-end development, I also possess knowledge and skills in data
-          analytics. I can effectively analyze and interpret data to derive
+          analytics. 
+        </p>
+        <br/>
+        <p className="text-xl">
+          I can effectively analyze and interpret data to derive
           meaningful insights that drive informed decision-making. This unique
           combination of technical expertise allows me to create data-driven
-          applications that not only look great but also deliver valuable
+          applications that not only look great but also deliver valuable.
         </p>
         
       </div>
