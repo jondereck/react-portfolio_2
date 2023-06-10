@@ -12,7 +12,8 @@ I am a proud graduate of Pangasinan State University, with a Bachelor's degree i
 ## Contact Information
 You can reach out to me via:
 - Email: jonnifas@gmail.com
-- Website: [Your website URL]
+- [Visit my website](https://jdnifas.netlify.app/)
+
 
 Feel free to contact me for any front-end development projects, data analysis collaborations, or general inquiries. I am excited to contribute my skills and knowledge to create impactful solutions.
 
