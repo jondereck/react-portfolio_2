@@ -1,3 +1,22 @@
+## Introduction
+I am Jon Dereck Nifas, a front-end developer with a strong focus on creating engaging and user-friendly web experiences. With a background in data analysis, I bring a unique perspective to my development work.
+
+## Expertise and Interests
+Some of my areas of expertise and interests include:
+- Front-end development using HTML, CSS, React, JavaScript, and Tailwind CSS.
+- Data analysis and visualization.
+
+## Education
+I am a proud graduate of Pangasinan State University, with a Bachelor's degree in Information Technology (BSIT), graduating cum laude.
+
+## Contact Information
+You can reach out to me via:
+- Email: jonnifas@gmail.com
+- Website: [Your website URL]
+
+Feel free to contact me for any front-end development projects, data analysis collaborations, or general inquiries. I am excited to contribute my skills and knowledge to create impactful solutions.
+
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
@@ -68,6 +87,7 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 ### `npm run build` fails to minify
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+
 
 # Initializing GitHub
 1. Open a command prompt or terminal with administrator privileges.
