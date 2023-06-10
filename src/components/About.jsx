@@ -32,7 +32,7 @@ const About = () => {
           meaningful insights that drive informed decision-making. This unique
           combination of technical expertise allows me to create data-driven
           applications that not only look great but also deliver valuable
-        </p>{" "}
+        </p>
         
       </div>
     </div>
