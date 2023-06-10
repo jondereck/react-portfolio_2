@@ -51,11 +51,11 @@ const Experience = () => {
   return (
     <div
       name="experience"
-      className="h-screen w-full bg-gradient-to-b from-gray-800 to-black"
+      className="h-screen w-full "
     >
       <div
         className="max-w-screen-lg mx-auto p-4 flex flex-col 
-      justify-center w-full h-full  text-white"
+      justify-center w-full h-full "
       >
         <div>
           <p className="text-4xl font-bold inline border-b-4 border-gray-500">
