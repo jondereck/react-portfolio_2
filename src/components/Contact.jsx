@@ -29,7 +29,7 @@ const Contact = () => {
               name="message"
               rows="10"
               placeholder="Enter your message"
-              className=" p-2 bg-transparent border-2 rounded-md text-white focus:outline-none"
+              className=" p-2 bg-transparent border-2 rounded-md focus:outline-none"
             ></textarea>
 
             <button className="text-white bg-gradient-to-b  from-cyan-500 to to-blue-500

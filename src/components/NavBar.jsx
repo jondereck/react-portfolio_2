@@ -60,9 +60,9 @@ const NavBar = ({darkMode, setDarkMode}) => {
  
       <div
         onClick={() => setNav(!nav)}
-        className="cursor-pointer pr-4 z-10 text-gray-400 md:hidden"
+        className="cursor-pointer pr-4 z-10 text-black-400 md:hidden"
       >
-        {nav ? <FaTimes size={30} /> : <FaBars size={30} />}
+        {nav ? <FaTimes size={30} className="" /> : <FaBars size={30} />}
       </div>
       </div>
 
