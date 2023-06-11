@@ -17,7 +17,7 @@ const Home = () => {
         
         <div className="flex flex-col justify-center items-center 
         md:items-start md:mt-20 h-full md:py-auto">
-          <h2 className=" text-4xl  md:text-5xl lg:text-7xl font-bold text-center md:text-left ">
+          <h2 className=" text-4xl  md:text-5xl lg:text-7xl font-bold pt-10 text-center md:text-left ">
           I'm a Front-End Developer
           </h2>
           <p className="text-gray-500 py-4 max-w-md">
