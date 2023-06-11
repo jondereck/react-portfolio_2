@@ -1,6 +1,6 @@
 import React from "react";
 import { useState } from "react";
-
+import Success from './Success'
 const Contact = () => {
   const [formData, setFormData] = useState({
     name: "",
@@ -8,6 +8,8 @@ const Contact = () => {
     message: "",
     errors: {} // Add the errors property to the initial state
   });
+
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -61,17 +63,79 @@ const Contact = () => {
 
     // Check if there are any errors
     if (Object.keys(errors).length === 0) {
-      // Form submission logic
-      // ...
-      // If the form is valid, proceed with form submission or further processing
+       // Example: Submitting the form data using fetch
+       fetch("https://getform.io/f/a646050b-6861-4df4-8b0d-c61f41b7205d", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(formData),
+      })
+        .then((response) => {
+          // Handle the response from the form submission
+          console.log("Form submitted successfully");
+          setIsSubmitted(true)
+
+
+          // You can perform any necessary actions after successful form submission
+        })
+        .catch((error) => {
+          // Handle any errors that occur during form submission
+          console.error("Form submission error:", error);
+          // You can display an error message or perform any error handling
+        });
+  
+      // Reset the form data
+      setFormData({
+        name: "",
+        email: "",
+        message: "",
+        errors: {},
+      });
     } else {
       // Handle errors
-
+  
       setFormData((prevData) => ({
         ...prevData,
         errors: { ...errors },
       }));
     }
+  };
+
+  const handleAutoCapitalize = (e) => {
+    const { name, value } = e.target;
+    
+    const capitalizedValue = value === value.toUpperCase() || value.toLowerCase()
+    ? value.toLowerCase().replace(/(^|\s)\S/g, (char) => char.toUpperCase())
+    : value;
+
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: capitalizedValue
+    }));
+
+  }
+
+  const handleAutoLowerCase = (e) => {
+    const {name, value } = e.target;
+
+    const lowerValue = value === value.toUpperCase() || value.toLowerCase()
+    ? value.toLowerCase()
+    : value 
+
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: lowerValue
+    })) 
+  }
+
+  const handleAutoTextArea = (e) => {
+    const { name, value } = e.target;
+    const capitalizedValue = value.charAt(0).toUpperCase() + value.slice(1);
+    setFormData((prevData) => ({
+      ...prevData,
+      [name]: capitalizedValue,
+    }));
   };
   return (
     <div
@@ -87,10 +151,12 @@ const Contact = () => {
           <p className="py-6">Submit the form below to get in touch with me.</p>
         </div>
         <div className="flex justify-center items-center">
-          <form
-            action="https://getform.io/f/a646050b-6861-4df4-8b0d-c61f41b7205d"
+        
+
+          {!isSubmitted 
+          ? (
+            <form   
             className="flex flex-col w-full md:w-1/2"
-            method="POST"
             onSubmit={handleFormSubmit}
           >
             <input
@@ -99,6 +165,7 @@ const Contact = () => {
               name="name"
               value={formData.name}
               onChange={handleInputChange}
+              onBlur={handleAutoCapitalize}
               placeholder=" Enter your name"
             />
             {formData.errors && formData.errors.name && (
@@ -110,6 +177,7 @@ const Contact = () => {
               name="email"
               value={formData.email}
               onChange={handleInputChange}
+              onBlur={handleAutoLowerCase}
               placeholder=" Enter your email"
             />
             {
@@ -121,6 +189,7 @@ const Contact = () => {
               name="message"
               value={formData.message}
               onChange={handleTextArea}
+              onBlur={handleAutoTextArea}
               rows="10"
               placeholder="Enter your message"
               className=" p-2 bg-transparent border-2 rounded-md focus:outline-none"
@@ -138,7 +207,14 @@ const Contact = () => {
             >
               Let's Talk
             </button>
-          </form>
+          </form> 
+
+          )
+
+          : (
+            <Success/>
+          )
+        }
         </div>
       </div>
     </div>

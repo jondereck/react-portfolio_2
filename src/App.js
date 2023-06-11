@@ -23,9 +23,7 @@ function App() {
         <Experience />
         <Contact />
       </main>
-      {/* <HideOnScroll className="duration-500"> */}
-        <SocialLinks />
-      {/* </HideOnScroll> */}
+      <SocialLinks />
     </div>
   );
 }
