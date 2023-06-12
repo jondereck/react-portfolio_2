@@ -60,6 +60,7 @@ const Contact = () => {
     e.preventDefault();
 
     const errors = validateForm();
+    
 
     // Check if there are any errors
     if (Object.keys(errors).length === 0) {
@@ -71,19 +72,20 @@ const Contact = () => {
         },
         body: JSON.stringify(formData),
       })
-        .then((response) => {
-          // Handle the response from the form submission
-          console.log("Form submitted successfully");
-          setIsSubmitted(true)
+      setIsSubmitted(true)
+        // .then((response) => {
+        //   // Handle the response from the form submission
+        //   console.log("Form submitted successfully");
+        //   setIsSubmitted(true)
 
 
-          // You can perform any necessary actions after successful form submission
-        })
-        .catch((error) => {
-          // Handle any errors that occur during form submission
-          console.error("Form submission error:", error);
-          // You can display an error message or perform any error handling
-        });
+        //   // You can perform any necessary actions after successful form submission
+        // })
+        // .catch((error) => {
+        //   // Handle any errors that occur during form submission
+        //   console.error("Form submission error:", error);
+        //   // You can display an error message or perform any error handling
+        // });
   
       // Reset the form data
       setFormData({
@@ -98,8 +100,11 @@ const Contact = () => {
       setFormData((prevData) => ({
         ...prevData,
         errors: { ...errors },
+        
       }));
     }
+
+    
   };
 
   const handleAutoCapitalize = (e) => {
