@@ -16,28 +16,32 @@ const About = () => {
           </p>
         </div>
         <p className="text-xl mt-20 ">
-          I have a strong foundation in front-end technologies and frameworks,
-          including HTML5, CSS3, and JavaScript. I leverage the power of these
-          languages to build intuitive and responsive user interfaces that
-          deliver seamless interactions. 
-          results.
+          Hello! I'm an enthusiastic entry-level web developer eager to grow my skills and contribute to meaningful projects. I've been focusing on front-end development, where I've gained a solid foundation in HTML5, CSS3, and JavaScript, which are essential for building user interfaces and interactive web applications.
+        </p>
+        <br />
+       <p className="text-xl">
+        In my learning journey, I've also explored various modern CSS frameworks like Tailwind CSS, understanding their importance in creating visually appealing and responsive designs efficiently. I'm continuously working to improve my proficiency in these technologies to ensure I can deliver seamless and engaging user experiences.
+      <br/>
+        </p>
+        <br />
+       <p className="text-xl">
+Recently, I've been excited to dive into the world of MERN (MongoDB, Express.js, React, and Node.js) and Next.js, as well as integrating Prisma and TypeScript into my projects. Although I'm still learning, these technologies offer exciting opportunities to build full-stack applications and enhance performance and scalability.
+        </p> 
+        <br />
+        <p className="text-xl">
+        Through my exploration of data analytics, I've realized its significance in making informed decisions, and I'm eager to further develop this skill to create data-driven applications that provide valuable insights.
+ 
         </p>
         <br />
         <p className="text-xl">
-        Additionally, I am proficient in using
-          modern CSS frameworks like Tailwind CSS to expedite the development
-          process and ensure consistent and visually appealing designs. Beyond
-          front-end development, I also possess knowledge and skills in data
-          analytics. 
+While I may be at the entry level, my passion for web development and dedication to learning new technologies drive me to continuously improve and take on new challenges. I'm eager to collaborate with experienced developers and contribute my skills to projects that make a positive impact.
         </p>
-        <br/>
+        <br />
         <p className="text-xl">
-          I can effectively analyze and interpret data to derive
-          meaningful insights that drive informed decision-making. This unique
-          combination of technical expertise allows me to create data-driven
-          applications that not only look great but also deliver valuable.
+
+If you have any opportunities or projects that align with my skillset, I'd love to discuss how I can be a valuable asset to your team. Thank you for considering me!
         </p>
-        
+        <br />
       </div>
     </div>
   );

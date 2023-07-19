@@ -5,6 +5,10 @@ import github from "../assets/github.png";
 import javascript from "../assets/javascript.png";
 import react from "../assets/react.png";
 import tailwind from "../assets/tailwind.png";
+import nextjs from "../assets/nextjs.png";
+import prisma from "../assets/prisma.png";
+import typescipt from "../assets/typescript.png";
+import mongodb from "../assets/mongodb.png";
 
 const Experience = () => {
 // ...
@@ -32,7 +36,7 @@ const Experience = () => {
       id: 3,
       src: github,
       title: 'Github',
-      style: 'shadow-gray-400'
+      style: 'shadow-slate-500'
       
     },
     {
@@ -47,6 +51,32 @@ const Experience = () => {
       title: 'Tailwind',
       style: 'shadow-sky-500'
     },
+    {
+      id: 7,
+      src: typescipt,
+      title: 'Typecript',
+      style: 'shadow-sky-600'
+    },
+    {
+      id: 8,
+      src: prisma,
+      title: 'Prisma',
+      style: 'shadow-teal-500'
+    },
+    {
+      id: 9,
+      src: nextjs,
+      title: 'Next.js',
+      style: 'shadow-slate-500'
+      
+    },
+    // {
+    //   id: 10,
+    //   src: mongodb,
+    //   title: 'MongoDB',
+    //   style: 'shadow-slate-600'
+      
+    // },
   ]
   return (
     <div
@@ -63,7 +93,7 @@ const Experience = () => {
           </p>
           <p className="py-8">These are the technologies I've worked with</p>
         </div>
-        <div className="w-full grid grid-cols-2 lg:grid-cols-3 gap-8 text-center
+        <div className="w-full grid grid-cols-2 lg:grid-cols-4 gap-8 text-center
         py-8 px-12 sm:px-0">  
          {exp.map(({id, src, title, style})=> ( 
          <div 

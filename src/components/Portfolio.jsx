@@ -1,10 +1,7 @@
 import React from "react";
-import arrayDestruct from "../assets/portfolio/arrayDestruct.jpg";
-import installNode from "../assets/portfolio/installNode.jpg";
-import navbar from "../assets/portfolio/navbar.jpg";
-import reactParallax from "../assets/portfolio/reactParallax.jpg";
-import reactSmooth from "../assets/portfolio/reactSmooth.jpg";
-import reactWeather from "../assets/portfolio/reactWeather.jpg";
+import Blog from "../assets/portfolio/Blog.jpg"
+import RestApi from "../assets/portfolio/RestApi.jpg"
+import Stay from "../assets/portfolio/Stay.jpg"
 
 const Portfolio = () => {
 
@@ -19,43 +16,24 @@ const Portfolio = () => {
   const portfolios = [
     {
       id: 1,
-      src: arrayDestruct,
-      demo:'https://react-icons.github.io/react-icons/search?q=linked',
-      code: 'https://react-icons.github.io/react-icons/search?q=linked'
+      src: RestApi,
+      demo:'https://github.com/jondereck/blog_api',
+      code: 'https://github.com/jondereck/blog_api'
     },
     {
       id: 2,
-      src: installNode,
-      demo:'https://react-icons.github.io/react-icons/search?q=linked',
-      code: 'https://react-icons.github.io/react-icons/search?q=linked'
+      src: Blog,
+      demo:'https://jdnblog.netlify.app/',
+      code: 'https://github.com/jondereck/blog_client'
     },
 
     {
       id: 3,
-      src: navbar,
-      demo:'https://react-icons.github.io/react-icons/search?q=linked',
-      code: 'https://react-icons.github.io/react-icons/search?q=linked'
+      src: Stay,
+      demo:'https://stayc.netlify.app/',
+      code: 'https://github.com/jondereck/stay'
     },
-    {
-      id: 4,
-      src: reactParallax,
-      demo:'https://react-icons.github.io/react-icons/search?q=linked',
-      code: 'https://react-icons.github.io/react-icons/search?q=linked'
-    },
-
-    {
-      id: 5,
-      src: reactSmooth,
-      demo:'https://react-icons.github.io/react-icons/search?q=linked',
-      code: 'https://react-icons.github.io/react-icons/search?q=linked'
-    },
-
-    {
-      id: 6,
-      src: reactWeather,
-      demo:'https://react-icons.github.io/react-icons/search?q=linked',
-      code: 'https://react-icons.github.io/react-icons/search?q=linked'
-    },
+    
   ];
   return (
     <div
