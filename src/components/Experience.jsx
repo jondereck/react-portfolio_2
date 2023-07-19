@@ -8,7 +8,7 @@ import tailwind from "../assets/tailwind.png";
 import nextjs from "../assets/nextjs.png";
 import prisma from "../assets/prisma.png";
 import typescipt from "../assets/typescript.png";
-import mongodb from "../assets/mongodb.png";
+// import mongodb from "../assets/mongodb.png";
 
 const Experience = () => {
 // ...
