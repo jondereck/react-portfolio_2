@@ -200,7 +200,7 @@ const Contact = () => {
               className=" p-2 bg-transparent border-2 rounded-md focus:outline-none"
             ></textarea>
 
-              {
+            {
               formData.errors && formData.errors.message && (
                 <p className="text-red-500 text-sm"> {formData.errors.message}</p>
               )
