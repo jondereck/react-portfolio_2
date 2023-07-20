@@ -5,7 +5,7 @@ const HideOnScroll = ({ children }) => {
 
   useEffect(() => {
     const handleScroll = () => {
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
       setIsScrolling(scrollTop > 0);
     };
 
@@ -18,7 +18,9 @@ const HideOnScroll = ({ children }) => {
 
   return (
     <div
-      className={`transition-opacity duration-500 ${isScrolling ? 'opacity-0' : 'opacity-100'}`}
+      className={`transition-opacity duration-500 ${
+        isScrolling && window.innerWidth <= 768 ? "opacity-0" : "opacity-100"
+      }`}
     >
       {children}
     </div>

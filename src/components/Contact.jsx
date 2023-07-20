@@ -145,7 +145,7 @@ const Contact = () => {
   return (
     <div
       name="contact"
-      className="h-full w-full  p-4
+      className="h-screen w-full  p-4
   "
     >
       <div className="flex flex-col p-4 justify-center max-w-screen-lg mx-auto h-full">

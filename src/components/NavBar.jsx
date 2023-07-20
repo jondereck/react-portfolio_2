@@ -24,6 +24,10 @@ const NavBar = ({darkMode, setDarkMode}) => {
     },
     {
       id: 5,
+      name: "certificates",
+    },
+    {
+      id: 6,
       name: "contact",
     },
   ];

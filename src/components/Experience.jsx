@@ -8,7 +8,7 @@ import tailwind from "../assets/tailwind.png";
 import nextjs from "../assets/nextjs.png";
 import prisma from "../assets/prisma.png";
 import typescipt from "../assets/typescript.png";
-// import mongodb from "../assets/mongodb.png";
+import mongodb from "../assets/monggodb.gif";
 
 const Experience = () => {
 // ...
@@ -70,18 +70,18 @@ const Experience = () => {
       style: 'shadow-slate-500'
       
     },
-    // {
-    //   id: 10,
-    //   src: mongodb,
-    //   title: 'MongoDB',
-    //   style: 'shadow-slate-600'
+    {
+      id: 10,
+      src: mongodb,
+      title: 'MongoDB',
+      style: 'shadow-slate-600'
       
-    // },
+    },
   ]
   return (
     <div
       name="experience"
-      className="h-screen w-full "
+      className="md:h-screen w-full "
     >
       <div
         className="max-w-screen-lg mx-auto p-4 flex flex-col 

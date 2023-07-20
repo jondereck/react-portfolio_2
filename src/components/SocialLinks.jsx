@@ -1,6 +1,7 @@
 import React from "react";
 import { AiFillLinkedin, AiFillGithub, AiOutlineMail } from "react-icons/ai";
 import { BsFileEarmarkPerson } from "react-icons/bs";
+import HideOnScroll from "./HideOnScroll";
 const SocialLinks = () => {
 
     const links = [
@@ -45,7 +46,8 @@ const SocialLinks = () => {
         }
     ]
   return (
-    <div className="hidden lg:flex flex-col top-[35%] left-0 fixed">
+    <HideOnScroll className="lg:hidden">
+    <div className=" lg:flex flex-col top-[35%] left-0 fixed">
       <ul>
         {links.map(({id,child,href,style,download}) => (
             <li key={id} className={`flex justify-between item-center w-40 h-14 bg-gray-500 px-4 ml-[-100px] hover:ml-[-10px] hover:rounded-md duration-300 ${style}`} >
@@ -62,6 +64,7 @@ const SocialLinks = () => {
         
       </ul>
     </div>
+    </HideOnScroll>
   );
 };
 

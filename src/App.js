@@ -7,11 +7,12 @@ import Home from './components/Home';
 import NavBar from './components/NavBar';
 import Portfolio from './components/Portfolio';
 import SocialLinks from './components/SocialLinks';
+import Certificates from './components/Certificates'
 import './index.css';
 
 function App() {
 
-  const [darkMode, setDarkMode] = useState(true)
+  const [darkMode, setDarkMode] = useState(false)
 
   return (
     <div className={darkMode && "dark"}>
@@ -21,6 +22,7 @@ function App() {
         <About />
         <Portfolio />
         <Experience />
+        <Certificates />
         <Contact />
       </main>
       <SocialLinks />

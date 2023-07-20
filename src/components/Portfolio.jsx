@@ -2,6 +2,8 @@ import React from "react";
 import Blog from "../assets/portfolio/Blog.jpg"
 import RestApi from "../assets/portfolio/RestApi.jpg"
 import Stay from "../assets/portfolio/Stay.jpg"
+import Homestay from "../assets/portfolio/hs.png";
+import Jdnp from "../assets/portfolio/pt.png";
 
 const Portfolio = () => {
 
@@ -32,6 +34,20 @@ const Portfolio = () => {
       src: Stay,
       demo:'https://stayc.netlify.app/',
       code: 'https://github.com/jondereck/stay'
+    },
+    
+    {
+      id: 4,
+      src: Homestay,
+      demo:'https://nifashomestay.netlify.app/',
+      code: 'https://github.com/jondereck/piningshomestay'
+    },
+    
+    {
+      id: 5,
+      src: Jdnp,
+      demo:'https://jdnp.netlify.app/',
+      code: 'https://github.com/jondereck/JDN-PHOTOGRAPY-VIDEO'
     },
     
   ];
