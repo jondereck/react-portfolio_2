@@ -54,7 +54,7 @@ const Portfolio = () => {
     {
       id: 6,
       src: five,
-      demo:'https://www.coursera.org/account/accomplishments/verify/YP5V8RVBBHZUhttps://jdnp.netlify.app/',
+      demo:'https://www.coursera.org/account/accomplishments/verify/YP5V8RVBBHZU',
     },
     {
       id: 7,
