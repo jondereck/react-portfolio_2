@@ -4,6 +4,7 @@ import RestApi from "../assets/portfolio/RestApi.jpg"
 import Stay from "../assets/portfolio/Stay.jpg"
 import Homestay from "../assets/portfolio/hs.png";
 import Jdnp from "../assets/portfolio/pt.png";
+import Genio from "../assets/portfolio/Genio.png"
 
 const Portfolio = () => {
 
@@ -35,16 +36,23 @@ const Portfolio = () => {
       demo:'https://stayc.netlify.app/',
       code: 'https://github.com/jondereck/stay'
     },
-    
+
     {
       id: 4,
+      src: Genio,
+      demo:'https://genioai.vercel.app/',
+      code: 'https://github.com/jondereck/genio_ai'
+    },
+    
+    {
+      id: 5,
       src: Homestay,
       demo:'https://nifashomestay.netlify.app/',
       code: 'https://github.com/jondereck/piningshomestay'
     },
     
     {
-      id: 5,
+      id: 6,
       src: Jdnp,
       demo:'https://jdnp.netlify.app/',
       code: 'https://github.com/jondereck/JDN-PHOTOGRAPY-VIDEO'
