@@ -25,7 +25,15 @@ export async function POST(request: Request) {
 
     const created = await prisma.experience.create({
       data: {
-        ...parsed.data,
+        title: parsed.data.title,
+        company: parsed.data.company,
+        description: parsed.data.description,
+        location: parsed.data.location ?? null,
+        employmentType: parsed.data.employmentType ?? null,
+        image: parsed.data.image ?? null,
+        isCurrent: parsed.data.isCurrent ?? false,
+        sortOrder: parsed.data.sortOrder ?? 0,
+        isPublished: parsed.data.isPublished ?? true,
         startDate: new Date(parsed.data.startDate),
         endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : null,
       },
@@ -57,7 +65,15 @@ export async function PUT(request: Request) {
     const updated = await prisma.experience.update({
       where: { id },
       data: {
-        ...parsed.data,
+        title: parsed.data.title,
+        company: parsed.data.company,
+        description: parsed.data.description,
+        location: parsed.data.location ?? null,
+        employmentType: parsed.data.employmentType ?? null,
+        image: parsed.data.image ?? null,
+        isCurrent: parsed.data.isCurrent ?? false,
+        sortOrder: parsed.data.sortOrder ?? 0,
+        isPublished: parsed.data.isPublished ?? true,
         startDate: new Date(parsed.data.startDate),
         endDate: parsed.data.endDate ? new Date(parsed.data.endDate) : null,
       },

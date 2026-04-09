@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';
-import { Link } from 'react-scroll';
+import Link from 'next/link';
+import { Link as ScrollLink } from 'react-scroll';
 
 const links = ['home', 'about', 'portfolio', 'experience', 'certificates', 'contact'];
 
@@ -17,20 +18,23 @@ const NavBar = ({ darkMode, setDarkMode }) => {
           <ul className="flex items-center gap-2">
             {links.map((name) => (
               <li key={name}>
-                <Link
+                <ScrollLink
                   to={name}
                   smooth
                   duration={500}
                   className="cursor-pointer rounded-full px-4 py-2 text-sm font-medium capitalize text-slate-700 transition hover:bg-slate-100 hover:text-cyan-500 dark:text-slate-200 dark:hover:bg-slate-800"
                 >
                   {name}
-                </Link>
+                </ScrollLink>
               </li>
             ))}
           </ul>
         </nav>
 
         <div className="flex items-center gap-2">
+          <Link href="/admin" className="inline-flex h-9 items-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+            Admin
+          </Link>
           <button
             type="button"
             onClick={() => setDarkMode(!darkMode)}
@@ -55,7 +59,7 @@ const NavBar = ({ darkMode, setDarkMode }) => {
         <ul className="space-y-2 pb-4 md:hidden">
           {links.map((name) => (
             <li key={name}>
-              <Link
+              <ScrollLink
                 onClick={() => setNav(false)}
                 to={name}
                 smooth
@@ -63,7 +67,7 @@ const NavBar = ({ darkMode, setDarkMode }) => {
                 className="block cursor-pointer rounded-lg px-4 py-2 capitalize text-slate-700 transition hover:bg-slate-100 dark:text-slate-100 dark:hover:bg-slate-800"
               >
                 {name}
-              </Link>
+              </ScrollLink>
             </li>
           ))}
         </ul>

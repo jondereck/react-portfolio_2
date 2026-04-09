@@ -23,7 +23,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const created = await prisma.skill.create({ data: parsed.data });
+    const created = await prisma.skill.create({
+      data: {
+        name: parsed.data.name,
+        level: parsed.data.level,
+        category: parsed.data.category,
+        description: parsed.data.description ?? null,
+        image: parsed.data.image ?? null,
+        sortOrder: parsed.data.sortOrder ?? 0,
+        isPublished: parsed.data.isPublished ?? true,
+      },
+    });
     return NextResponse.json(created, { status: 201 });
   } catch {
     return NextResponse.json({ error: 'Unable to create skill' }, { status: 500 });
@@ -47,7 +57,18 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const updated = await prisma.skill.update({ where: { id }, data: parsed.data });
+    const updated = await prisma.skill.update({
+      where: { id },
+      data: {
+        name: parsed.data.name,
+        level: parsed.data.level,
+        category: parsed.data.category,
+        description: parsed.data.description ?? null,
+        image: parsed.data.image ?? null,
+        sortOrder: parsed.data.sortOrder ?? 0,
+        isPublished: parsed.data.isPublished ?? true,
+      },
+    });
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json({ error: 'Unable to update skill' }, { status: 500 });
