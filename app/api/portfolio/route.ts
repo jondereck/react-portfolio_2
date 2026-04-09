@@ -1,11 +1,24 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
-import { skillSchema } from '@/lib/validators';
+import { portfolioSchema } from '@/lib/validators';
+
+const normalizeTech = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
 
 export async function GET() {
-  const skills = await prisma.skill.findMany();
-  return NextResponse.json(skills);
+  const projects = await prisma.portfolio.findMany();
+  return NextResponse.json(projects);
 }
 
 export async function POST(request: Request) {
@@ -15,15 +28,15 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const parsed = skillSchema.safeParse(payload);
+    const parsed = portfolioSchema.safeParse({ ...payload, tech: normalizeTech(payload.tech) });
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const created = await prisma.skill.create({ data: parsed.data });
+    const created = await prisma.portfolio.create({ data: parsed.data });
     return NextResponse.json(created, { status: 201 });
   } catch {
-    return NextResponse.json({ error: 'Unable to create skill' }, { status: 500 });
+    return NextResponse.json({ error: 'Unable to create project' }, { status: 500 });
   }
 }
 
@@ -39,15 +52,15 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
 
-    const parsed = skillSchema.safeParse(payload);
+    const parsed = portfolioSchema.safeParse({ ...payload, tech: normalizeTech(payload.tech) });
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const updated = await prisma.skill.update({ where: { id }, data: parsed.data });
+    const updated = await prisma.portfolio.update({ where: { id }, data: parsed.data });
     return NextResponse.json(updated);
   } catch {
-    return NextResponse.json({ error: 'Unable to update skill' }, { status: 500 });
+    return NextResponse.json({ error: 'Unable to update project' }, { status: 500 });
   }
 }
 
@@ -63,9 +76,9 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
 
-    await prisma.skill.delete({ where: { id } });
+    await prisma.portfolio.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch {
-    return NextResponse.json({ error: 'Unable to delete skill' }, { status: 500 });
+    return NextResponse.json({ error: 'Unable to delete project' }, { status: 500 });
   }
 }

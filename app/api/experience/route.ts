@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { isAuthorizedMutation } from '@/src/lib/adminAuth';
-import { experienceSchema } from '@/src/lib/validators';
+import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { experienceSchema } from '@/lib/validators';
 
 export async function GET() {
   const experience = await prisma.experience.findMany();

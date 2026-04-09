@@ -1,5 +1,25 @@
 {
-  "skills": [],
+  "skills": [
+    {
+      "id": 1,
+      "name": "safasf",
+      "level": 85,
+      "category": "Information",
+      "createdAt": "2026-04-09T08:55:52.529Z",
+      "updatedAt": "2026-04-09T08:55:52.529Z"
+    }
+  ],
   "experience": [],
-  "certificates": []
+  "certificates": [
+    {
+      "id": 1,
+      "title": "test",
+      "issuer": "test",
+      "image": "https://chatgpt.com/c/69d761c2-b440-8321-9a88-7e4d5daebdc4",
+      "link": "https://chatgpt.com/c/69d761c2-b440-8321-9a88-7e4d5daebdc4",
+      "category": "tes",
+      "createdAt": "2026-04-09T08:54:50.181Z",
+      "updatedAt": "2026-04-09T08:54:50.181Z"
+    }
+  ]
 }

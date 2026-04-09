@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { isAuthorizedMutation } from '@/src/lib/adminAuth';
-import { certificateSchema } from '@/src/lib/validators';
+import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { certificateSchema } from '@/lib/validators';
 
 export async function GET() {
   const certificates = await prisma.certificate.findMany();
