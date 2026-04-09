@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';
+import NextLink from 'next/link';
 import { Link } from 'react-scroll';
+import { Button } from '@/components/ui/button';
 
 const links = ['home', 'about', 'portfolio', 'experience', 'certificates', 'contact'];
 
@@ -31,6 +33,10 @@ const NavBar = ({ darkMode, setDarkMode }) => {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Button render={<NextLink href="/admin" />} variant="outline" size="sm">
+            Admin
+          </Button>
+
           <button
             type="button"
             onClick={() => setDarkMode(!darkMode)}
