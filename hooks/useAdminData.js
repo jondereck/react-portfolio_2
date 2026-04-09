@@ -26,7 +26,13 @@ const buildPayload = (fields, formState) => {
     }
 
     if (field.type === 'number') {
-      payload[field.name] = rawValue === '' ? undefined : Number(rawValue);
+      if (rawValue === '' || rawValue === null || rawValue === undefined) {
+        if (field.required !== false) {
+          payload[field.name] = undefined;
+        }
+      } else {
+        payload[field.name] = Number(rawValue);
+      }
       continue;
     }
 
@@ -35,7 +41,16 @@ const buildPayload = (fields, formState) => {
       continue;
     }
 
-    payload[field.name] = rawValue === '' ? null : rawValue;
+    const normalizedValue = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+    const isEmptyValue = normalizedValue === '' || normalizedValue === null || normalizedValue === undefined;
+    if (isEmptyValue) {
+      if (field.required !== false) {
+        payload[field.name] = '';
+      }
+      continue;
+    }
+
+    payload[field.name] = normalizedValue;
   }
 
   return payload;
@@ -75,7 +90,14 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(endpoint, { cache: 'no-store' });
+      const response = await fetch(endpoint, {
+        cache: 'no-store',
+        headers: adminKey
+          ? {
+              'x-admin-key': adminKey,
+            }
+          : undefined,
+      });
       if (!response.ok) throw new Error('Failed to load data');
 
       const data = await response.json();
@@ -87,7 +109,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
     } finally {
       setLoading(false);
     }
-  }, [endpoint, title]);
+  }, [adminKey, endpoint, title]);
 
   useEffect(() => {
     loadItems();
@@ -112,7 +134,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
       event.preventDefault();
       if (!adminKey) {
         toast.error('Provide the admin API key to save changes.');
-        return;
+        return false;
       }
 
       setSaving(true);
@@ -137,10 +159,12 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         toast.success(`${title} ${isUpdating ? 'updated' : 'created'}.`);
         await loadItems();
         resetForm();
+        return true;
       } catch (error) {
         toast.error(`Unable to save ${title}`, {
           description: error instanceof Error ? error.message : undefined,
         });
+        return false;
       } finally {
         setSaving(false);
       }

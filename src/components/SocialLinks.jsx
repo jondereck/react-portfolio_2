@@ -25,7 +25,7 @@ const SocialLinks = () => {
             href: 'https://github.com/jondereck',
         },
         {
-            id: 1,
+            id: 3,
             child:(
                 <>
                 Email <AiOutlineMail size={35}/>
@@ -34,7 +34,7 @@ const SocialLinks = () => {
             href: 'mailto:jonderecknifas@gmail.com',
         },
         {
-            id: 1,
+            id: 4,
             child:(
                 <>
                 Resume <BsFileEarmarkPerson size={35}/>
