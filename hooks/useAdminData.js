@@ -75,10 +75,18 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(endpoint, { cache: 'no-store' });
+      const response = await fetch(endpoint, {
+        cache: 'no-store',
+        headers: adminKey
+          ? {
+              'x-admin-key': adminKey,
+            }
+          : undefined,
+      });
       if (!response.ok) throw new Error('Failed to load data');
 
       const data = await response.json();
+      console.log('RESPONSE:', { endpoint, method: 'GET', data });
       setItems(Array.isArray(data) ? data : []);
     } catch (error) {
       toast.error(`Unable to load ${title}`, {
@@ -87,7 +95,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
     } finally {
       setLoading(false);
     }
-  }, [endpoint, title]);
+  }, [adminKey, endpoint, title]);
 
   useEffect(() => {
     loadItems();
@@ -119,6 +127,13 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
       try {
         const payload = buildPayload(fields, formState);
         const isUpdating = editingId !== null;
+        const requestBody = isUpdating ? { ...payload, id: editingId } : payload;
+
+        console.log('REQUEST:', {
+          endpoint,
+          method: isUpdating ? 'PUT' : 'POST',
+          payload: requestBody,
+        });
 
         const response = await fetch(endpoint, {
           method: isUpdating ? 'PUT' : 'POST',
@@ -126,13 +141,16 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
             'Content-Type': 'application/json',
             'x-admin-key': adminKey,
           },
-          body: JSON.stringify(isUpdating ? { ...payload, id: editingId } : payload),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(detail?.error || 'Request failed');
         }
+
+        const data = await response.json();
+        console.log('RESPONSE:', { endpoint, method: isUpdating ? 'PUT' : 'POST', data });
 
         toast.success(`${title} ${isUpdating ? 'updated' : 'created'}.`);
         await loadItems();
@@ -157,19 +175,25 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
       setDeletingId(id);
       try {
+        const requestBody = { id };
+        console.log('REQUEST:', { endpoint, method: 'DELETE', payload: requestBody });
+
         const response = await fetch(endpoint, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
             'x-admin-key': adminKey,
           },
-          body: JSON.stringify({ id }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(detail?.error || 'Delete failed');
         }
+
+        const data = await response.json();
+        console.log('RESPONSE:', { endpoint, method: 'DELETE', data });
 
         toast.success(`${title} entry deleted.`);
         await loadItems();

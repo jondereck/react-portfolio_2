@@ -3,9 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { certificateSchema } from '@/lib/validators';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const includeDrafts = isAuthorizedMutation(request);
   const certificates = await prisma.certificate.findMany({
-    where: { isPublished: true },
+    where: includeDrafts ? undefined : { isPublished: true },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
   });
   return NextResponse.json(certificates);
