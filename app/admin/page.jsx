@@ -26,6 +26,31 @@ const resources = [
     ],
   },
   {
+    key: 'portfolio',
+    title: 'Portfolio',
+    endpoint: '/api/portfolio',
+    fields: [
+      { name: 'title', label: 'Project Title', type: 'text' },
+      { name: 'description', label: 'Description', type: 'textarea', rows: 4 },
+      {
+        name: 'tech',
+        label: 'Tech Stack (comma-separated)',
+        type: 'text',
+        serialize: (value) =>
+          typeof value === 'string'
+            ? value
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : [],
+        deserialize: (value) => (Array.isArray(value) ? value.join(', ') : ''),
+      },
+      { name: 'link', label: 'Project Link', type: 'url' },
+      { name: 'image', label: 'Image URL', type: 'url' },
+      { name: 'badge', label: 'Badge', type: 'text' },
+    ],
+  },
+  {
     key: 'experience',
     title: 'Experience',
     endpoint: '/api/experience',
@@ -285,6 +310,190 @@ function AdminSection({ resource, adminKey }) {
   );
 }
 
+function SiteContentSection({ adminKey }) {
+  const [hero, setHero] = useState({
+    eyebrow: '',
+    title: '',
+    description: '',
+    primaryCtaLabel: '',
+    primaryCtaHref: '',
+    secondaryCtaLabel: '',
+    secondaryCtaHref: '',
+    image: '',
+  });
+  const [about, setAbout] = useState({
+    title: '',
+    body: '',
+    highlights: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const loadSiteContent = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/site-content', { cache: 'no-store' });
+      if (!response.ok) throw new Error('Failed to load site content');
+      const data = await response.json();
+      setHero({
+        eyebrow: data?.hero?.eyebrow ?? '',
+        title: data?.hero?.title ?? '',
+        description: data?.hero?.description ?? '',
+        primaryCtaLabel: data?.hero?.primaryCtaLabel ?? '',
+        primaryCtaHref: data?.hero?.primaryCtaHref ?? '',
+        secondaryCtaLabel: data?.hero?.secondaryCtaLabel ?? '',
+        secondaryCtaHref: data?.hero?.secondaryCtaHref ?? '',
+        image: data?.hero?.image ?? '',
+      });
+      setAbout({
+        title: data?.about?.title ?? '',
+        body: data?.about?.body ?? '',
+        highlights: Array.isArray(data?.about?.highlights) ? JSON.stringify(data.about.highlights, null, 2) : '[]',
+      });
+      setError('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load site content');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSiteContent();
+  }, [loadSiteContent]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!adminKey) {
+      setError('Provide the admin API key to update site content.');
+      return;
+    }
+
+    let parsedHighlights = [];
+    try {
+      parsedHighlights = JSON.parse(about.highlights);
+    } catch {
+      setError('Highlights must be valid JSON array.');
+      return;
+    }
+
+    setError('');
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/site-content', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': adminKey,
+        },
+        body: JSON.stringify({
+          hero,
+          about: {
+            title: about.title,
+            body: about.body,
+            highlights: parsedHighlights,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail?.error || 'Update failed');
+      }
+
+      setMessage('Site content updated.');
+      await loadSiteContent();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Update failed');
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">Site Content (Hero + About)</h2>
+          {message && <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
+          {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+        </div>
+        <button type="button" className="text-sm text-blue-600 underline" onClick={loadSiteContent} disabled={loading}>
+          Refresh
+        </button>
+      </div>
+
+      <form onSubmit={submit} className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2">
+          {Object.keys(hero).map((field) => (
+            <label key={field} className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
+              {field}
+              {field === 'description' ? (
+                <textarea
+                  value={hero[field]}
+                  onChange={(event) => setHero((prev) => ({ ...prev, [field]: event.target.value }))}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  rows={4}
+                  required
+                />
+              ) : (
+                <input
+                  type={field.includes('Href') || field === 'image' ? 'url' : 'text'}
+                  value={hero[field]}
+                  onChange={(event) => setHero((prev) => ({ ...prev, [field]: event.target.value }))}
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+                  required
+                />
+              )}
+            </label>
+          ))}
+        </div>
+
+        <div className="grid gap-4">
+          <label className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
+            About title
+            <input
+              type="text"
+              value={about.title}
+              onChange={(event) => setAbout((prev) => ({ ...prev, title: event.target.value }))}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              required
+            />
+          </label>
+          <label className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
+            About body
+            <textarea
+              value={about.body}
+              onChange={(event) => setAbout((prev) => ({ ...prev, body: event.target.value }))}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              rows={4}
+              required
+            />
+          </label>
+          <label className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
+            Highlights JSON
+            <textarea
+              value={about.highlights}
+              onChange={(event) => setAbout((prev) => ({ ...prev, highlights: event.target.value }))}
+              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
+              rows={6}
+              required
+            />
+          </label>
+        </div>
+
+        <button
+          type="submit"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
+          disabled={loading}
+        >
+          Update Site Content
+        </button>
+      </form>
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState('');
 
@@ -296,7 +505,7 @@ export default function AdminPage() {
             <p className="text-sm uppercase tracking-wide text-slate-500">Admin Console</p>
             <h1 className="text-3xl font-bold">Portfolio CMS</h1>
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Manage certificates, skills, and experience in one place. Provide the admin API key to unlock write actions.
+              Manage front page content, portfolio, certificates, skills, and experience in one place. Provide the admin API key to unlock write actions.
             </p>
           </div>
           <label className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -312,6 +521,7 @@ export default function AdminPage() {
         </header>
 
         <div className="space-y-6">
+          <SiteContentSection adminKey={adminKey} />
           {resources.map((resource) => (
             <AdminSection key={resource.key} resource={resource} adminKey={adminKey} />
           ))}

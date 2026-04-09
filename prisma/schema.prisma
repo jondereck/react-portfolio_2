@@ -8,12 +8,18 @@ datasource db {
 }
 
 model Skill {
-  id        Int      @id @default(autoincrement())
-  name      String
-  level     Int
-  category  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  name        String
+  level       Int
+  category    String
+  description String?
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category, sortOrder])
+  @@index([isPublished])
 }
 
 model Experience {
@@ -23,17 +29,64 @@ model Experience {
   description String
   startDate   DateTime
   endDate     DateTime?
+  location    String?
+  employmentType String?
+  isCurrent   Boolean   @default(false)
+  sortOrder   Int       @default(0)
+  isPublished Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@index([isCurrent, sortOrder])
+  @@index([isPublished])
 }
 
 model Certificate {
-  id        Int      @id @default(autoincrement())
-  title     String
-  issuer    String
-  image     String
-  link      String
-  category  String
+  id          Int      @id @default(autoincrement())
+  title       String
+  issuer      String
+  image       String
+  link        String
+  category    String
+  issuedAt    DateTime?
+  expiresAt   DateTime?
+  credentialId String?
+  sortOrder   Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category, sortOrder])
+  @@index([isPublished])
+}
+
+model Portfolio {
+  id          Int      @id @default(autoincrement())
+  title       String
+  slug        String   @unique
+  description String
+  tech        Json
+  link        String
+  image       String
+  badge       String
+  repoUrl     String?
+  demoUrl     String?
+  sortOrder   Int      @default(0)
+  isFeatured  Boolean  @default(false)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isPublished, sortOrder])
+  @@index([isFeatured])
+}
+
+model SiteContent {
+  id        Int      @id @default(1)
+  hero      Json
+  about     Json
+  contact   Json?
+  seo       Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
