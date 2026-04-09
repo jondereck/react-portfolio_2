@@ -35,7 +35,12 @@ const buildPayload = (fields, formState) => {
       continue;
     }
 
-    payload[field.name] = rawValue === '' ? null : rawValue;
+    if (rawValue === '' && field.required === false) {
+      payload[field.name] = undefined;
+      continue;
+    }
+
+    payload[field.name] = rawValue;
   }
 
   return payload;
