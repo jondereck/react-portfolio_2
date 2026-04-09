@@ -16,8 +16,18 @@ const normalizeTech = (value: unknown): string[] => {
   return [];
 };
 
+const slugify = (value: string): string =>
+  value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
 export async function GET() {
-  const projects = await prisma.portfolio.findMany();
+  const projects = await prisma.portfolio.findMany({
+    where: { isPublished: true },
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  });
   return NextResponse.json(projects);
 }
 
@@ -28,7 +38,11 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const parsed = portfolioSchema.safeParse({ ...payload, tech: normalizeTech(payload.tech) });
+    const parsed = portfolioSchema.safeParse({
+      ...payload,
+      slug: slugify(String(payload.slug || payload.title || '')),
+      tech: normalizeTech(payload.tech),
+    });
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
@@ -52,7 +66,11 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
 
-    const parsed = portfolioSchema.safeParse({ ...payload, tech: normalizeTech(payload.tech) });
+    const parsed = portfolioSchema.safeParse({
+      ...payload,
+      slug: slugify(String(payload.slug || payload.title || '')),
+      tech: normalizeTech(payload.tech),
+    });
     if (!parsed.success) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }

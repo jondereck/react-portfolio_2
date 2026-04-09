@@ -21,6 +21,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "esModuleInterop": true,
+    "types": ["node"],
 
     "ignoreDeprecations": "6.0",
 

@@ -1,36 +1,93 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { toast, Toaster } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 const resources = [
   {
     key: 'certificates',
     title: 'Certificates',
     endpoint: '/api/certificates',
+    listColumns: [
+      { key: 'title', label: 'Title' },
+      { key: 'category', label: 'Category' },
+      { key: 'issuer', label: 'Issuer' },
+    ],
     fields: [
       { name: 'title', label: 'Title', type: 'text' },
       { name: 'issuer', label: 'Issuer', type: 'text' },
       { name: 'image', label: 'Image URL', type: 'url' },
       { name: 'link', label: 'Reference Link', type: 'url' },
       { name: 'category', label: 'Category', type: 'text' },
+      {
+        name: 'issuedAt',
+        label: 'Issued At',
+        type: 'date',
+        required: false,
+        serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
+        deserialize: (value) => (value ? value.substring(0, 10) : ''),
+      },
+      {
+        name: 'expiresAt',
+        label: 'Expires At',
+        type: 'date',
+        required: false,
+        serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
+        deserialize: (value) => (value ? value.substring(0, 10) : ''),
+      },
+      { name: 'credentialId', label: 'Credential ID', type: 'text', required: false },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
     ],
   },
   {
     key: 'skills',
     title: 'Skills',
     endpoint: '/api/skills',
+    listColumns: [
+      { key: 'name', label: 'Name' },
+      { key: 'category', label: 'Category' },
+      { key: 'level', label: 'Level', formatter: (item) => `${item.level}%` },
+    ],
     fields: [
       { name: 'name', label: 'Name', type: 'text' },
       { name: 'level', label: 'Level (1-100)', type: 'number', placeholder: '50' },
       { name: 'category', label: 'Category', type: 'text' },
+      { name: 'description', label: 'Description', type: 'textarea', rows: 3, required: false },
+      { name: 'image', label: 'Image URL', type: 'url', required: false },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
     ],
   },
   {
     key: 'portfolio',
     title: 'Portfolio',
     endpoint: '/api/portfolio',
+    listColumns: [
+      { key: 'title', label: 'Title' },
+      { key: 'badge', label: 'Badge' },
+      { key: 'tech', label: 'Tech', formatter: (item) => (Array.isArray(item.tech) ? item.tech.join(', ') : '') },
+    ],
     fields: [
       { name: 'title', label: 'Project Title', type: 'text' },
+      { name: 'slug', label: 'Slug (optional — auto-generated)', type: 'text', required: false },
       { name: 'description', label: 'Description', type: 'textarea', rows: 4 },
       {
         name: 'tech',
@@ -48,16 +105,29 @@ const resources = [
       { name: 'link', label: 'Project Link', type: 'url' },
       { name: 'image', label: 'Image URL', type: 'url' },
       { name: 'badge', label: 'Badge', type: 'text' },
+      { name: 'repoUrl', label: 'Repo URL', type: 'url', required: false },
+      { name: 'demoUrl', label: 'Demo URL', type: 'url', required: false },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
+      { name: 'isFeatured', label: 'Featured', type: 'checkbox', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
     ],
   },
   {
     key: 'experience',
     title: 'Experience',
     endpoint: '/api/experience',
+    listColumns: [
+      { key: 'title', label: 'Role' },
+      { key: 'company', label: 'Company' },
+      { key: 'location', label: 'Location' },
+    ],
     fields: [
       { name: 'title', label: 'Role Title', type: 'text' },
       { name: 'company', label: 'Company', type: 'text' },
       { name: 'description', label: 'Description', type: 'textarea', rows: 4 },
+      { name: 'location', label: 'Location', type: 'text', required: false },
+      { name: 'employmentType', label: 'Employment Type', type: 'text', required: false },
+      { name: 'image', label: 'Image URL', type: 'url', required: false },
       {
         name: 'startDate',
         label: 'Start Date',
@@ -69,16 +139,20 @@ const resources = [
         name: 'endDate',
         label: 'End Date (leave blank for ongoing)',
         type: 'date',
+        required: false,
         serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
         deserialize: (value) => (value ? value.substring(0, 10) : ''),
       },
+      { name: 'isCurrent', label: 'Current role', type: 'checkbox', required: false },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
     ],
   },
 ];
 
 const defaultFormState = (fields) =>
   fields.reduce((state, field) => {
-    state[field.name] = '';
+    state[field.name] = field.type === 'checkbox' ? false : '';
     return state;
   }, {});
 
@@ -92,7 +166,12 @@ const buildPayload = (fields, formState) => {
     }
 
     if (field.type === 'number') {
-      payload[field.name] = rawValue === '' ? null : Number(rawValue);
+      payload[field.name] = rawValue === '' ? undefined : Number(rawValue);
+      return;
+    }
+
+    if (field.type === 'checkbox') {
+      payload[field.name] = Boolean(rawValue);
       return;
     }
 
@@ -114,18 +193,78 @@ const formatForForm = (fields, item) =>
       return state;
     }
 
+    if (field.type === 'checkbox') {
+      state[field.name] = Boolean(value);
+      return state;
+    }
+
     state[field.name] = value ?? '';
     return state;
   }, defaultFormState(fields));
 
+const dateFormatter = new Intl.DateTimeFormat('en', { month: 'short', day: '2-digit', year: 'numeric' });
+const formatDate = (value) => {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return dateFormatter.format(date);
+};
+
+function PreviewDialogButton({ item, title }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          Preview
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{title} Details</DialogTitle>
+          <DialogDescription>Raw payload returned by the API.</DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] overflow-auto rounded-xl bg-slate-50 p-4 font-mono text-xs text-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          <pre>{JSON.stringify(item, null, 2)}</pre>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteDialogButton({ label, onConfirm, pending }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="destructive" disabled={pending}>
+          Delete
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete {label}?</DialogTitle>
+          <DialogDescription>This action cannot be undone and will remove the entry permanently.</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="ghost">Cancel</Button>
+          </DialogClose>
+          <Button variant="destructive" onClick={onConfirm} disabled={pending}>
+            {pending ? 'Deleting…' : 'Delete'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AdminSection({ resource, adminKey }) {
-  const { endpoint, fields, title } = resource;
+  const { endpoint, fields, title, listColumns = [] } = resource;
   const [items, setItems] = useState([]);
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const loadItems = useCallback(async () => {
     try {
@@ -134,13 +273,12 @@ function AdminSection({ resource, adminKey }) {
       if (!response.ok) throw new Error('Failed to load data');
       const data = await response.json();
       setItems(Array.isArray(data) ? data : []);
-      setError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load data');
+      toast.error(`Unable to load ${title}`, { description: err instanceof Error ? err.message : undefined });
     } finally {
       setLoading(false);
     }
-  }, [endpoint]);
+  }, [endpoint, title]);
 
   useEffect(() => {
     loadItems();
@@ -149,24 +287,21 @@ function AdminSection({ resource, adminKey }) {
   const resetForm = () => {
     setEditingId(null);
     setFormState(defaultFormState(fields));
-    setMessage('');
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!adminKey) {
-      setError('Provide the admin API key to create or update entries.');
+      toast.error('Provide the admin API key to save changes.');
       return;
     }
 
-    setError('');
-    setMessage('');
-
-    const payload = buildPayload(fields, formState);
-    const method = editingId ? 'PUT' : 'POST';
-    const body = editingId ? { ...payload, id: editingId } : payload;
-
+    setSaving(true);
     try {
+      const payload = buildPayload(fields, formState);
+      const method = editingId ? 'PUT' : 'POST';
+      const body = editingId ? { ...payload, id: editingId } : payload;
+
       const response = await fetch(endpoint, {
         method,
         headers: {
@@ -181,28 +316,29 @@ function AdminSection({ resource, adminKey }) {
         throw new Error(detail?.error || 'Request failed');
       }
 
+      toast.success(`${title} ${editingId ? 'updated' : 'created'}.`);
       await loadItems();
-      setMessage(editingId ? 'Entry updated.' : 'Entry created.');
       resetForm();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Request failed');
+      toast.error(`Unable to save ${title}`, { description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleEdit = (item) => {
     setEditingId(item.id);
     setFormState(formatForForm(fields, item));
-    setMessage(`Editing #${item.id}`);
+    toast.message(`Editing ${title.toLowerCase()} #${item.id}`);
   };
 
   const handleDelete = async (id) => {
     if (!adminKey) {
-      setError('Provide the admin API key to delete entries.');
+      toast.error('Provide the admin API key to delete entries.');
       return;
     }
 
-    if (!confirm(`Delete ${title.toLowerCase()} entry #${id}?`)) return;
-
+    setDeletingId(id);
     try {
       const response = await fetch(endpoint, {
         method: 'DELETE',
@@ -218,95 +354,142 @@ function AdminSection({ resource, adminKey }) {
         throw new Error(detail?.error || 'Delete failed');
       }
 
-      setMessage('Entry deleted.');
+      toast.success(`${title} entry deleted.`);
       await loadItems();
       if (editingId === id) {
         resetForm();
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Delete failed');
+      toast.error(`Unable to delete ${title}`, { description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">{title}</h2>
-          {message && <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
-          {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
+  const renderField = (field) => {
+    if (field.type === 'checkbox') {
+      return (
+        <div
+          key={field.name}
+          className="md:col-span-2 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40"
+        >
+          <div>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{field.label}</p>
+            {field.helper && <p className="text-xs text-slate-500 dark:text-slate-400">{field.helper}</p>}
+          </div>
+          <Switch
+            id={`${resource.key}-${field.name}`}
+            checked={Boolean(formState[field.name])}
+            onCheckedChange={(checked) => setFormState((prev) => ({ ...prev, [field.name]: checked }))}
+          />
         </div>
-        <button type="button" className="text-sm text-blue-600 underline" onClick={loadItems} disabled={loading}>
-          Refresh
-        </button>
-      </div>
+      );
+    }
 
-      <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
-        {fields.map((field) => {
-          const commonProps = {
-            id: `${resource.key}-${field.name}`,
-            name: field.name,
-            value: formState[field.name] ?? '',
-            onChange: (event) => setFormState((prev) => ({ ...prev, [field.name]: event.target.value })),
-            className:
-              'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100',
-            required: field.name !== 'endDate',
-            placeholder: field.placeholder,
-          };
+    const commonProps = {
+      id: `${resource.key}-${field.name}`,
+      name: field.name,
+      value: formState[field.name] ?? '',
+      onChange: (event) => setFormState((prev) => ({ ...prev, [field.name]: event.target.value })),
+      placeholder: field.placeholder,
+      required: field.required !== false,
+    };
 
-          return (
-            <label key={field.name} className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
-              {field.label}
-              {field.type === 'textarea' ? (
-                <textarea {...commonProps} rows={field.rows || 3} />
-              ) : (
-                <input type={field.type} {...commonProps} />
-              )}
-            </label>
-          );
-        })}
-        <div className="md:col-span-2 flex gap-2">
-          <button
-            type="submit"
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
-            disabled={loading}
-          >
-            {editingId ? 'Update Entry' : 'Create Entry'}
-          </button>
-          {editingId && (
-            <button type="button" className="text-sm text-slate-600 underline dark:text-slate-300" onClick={resetForm}>
-              Cancel
-            </button>
+    const colSpan = field.type === 'textarea' ? 'md:col-span-2' : '';
+
+    return (
+      <label key={field.name} className={`flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200 ${colSpan}`}>
+        {field.label}
+        {field.type === 'textarea' ? (
+          <Textarea {...commonProps} rows={field.rows || 3} />
+        ) : (
+          <Input type={field.type} {...commonProps} />
+        )}
+      </label>
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>Manage {title.toLowerCase()} entries, publish state, and metadata.</CardDescription>
+        </div>
+        <Button variant="ghost" onClick={loadItems} disabled={loading}>
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+          {fields.map((field) => renderField(field))}
+          <div className="md:col-span-2 flex gap-2">
+            <Button type="submit" disabled={saving}>
+              {saving ? 'Saving…' : editingId ? 'Update Entry' : 'Create Entry'}
+            </Button>
+            {editingId && (
+              <Button type="button" variant="ghost" onClick={resetForm} disabled={saving}>
+                Cancel
+              </Button>
+            )}
+          </div>
+        </form>
+        <div className="mt-8">
+          {items.length === 0 && !loading ? (
+            <p className="text-sm text-slate-500">No entries yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-16">ID</TableHead>
+                  {listColumns.map((column) => (
+                    <TableHead key={column.key}>{column.label}</TableHead>
+                  ))}
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-48 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-mono text-xs text-slate-500 dark:text-slate-400">#{item.id}</TableCell>
+                    {listColumns.map((column) => {
+                      const value = column.formatter ? column.formatter(item) : item[column.key];
+                      return (
+                        <TableCell key={`${item.id}-${column.key}`}>
+                          {Array.isArray(value) ? value.join(', ') : value || '—'}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={item.isPublished ? 'success' : 'secondary'}>
+                          {item.isPublished ? 'Published' : 'Draft'}
+                        </Badge>
+                        <span className="text-[11px] text-slate-400 dark:text-slate-500">Updated {formatDate(item.updatedAt)}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => handleEdit(item)}>
+                          Edit
+                        </Button>
+                        <PreviewDialogButton item={item} title={title} />
+                        <DeleteDialogButton
+                          label={`${title.toLowerCase()} #${item.id}`}
+                          onConfirm={() => handleDelete(item.id)}
+                          pending={deletingId === item.id}
+                        />
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </div>
-      </form>
-
-      <div className="mt-6 space-y-3">
-        {loading && <p className="text-sm text-slate-500">Loading data…</p>}
-        {!loading && items.length === 0 && <p className="text-sm text-slate-500">No entries yet.</p>}
-        {items.map((item) => (
-          <article
-            key={item.id}
-            className="rounded-lg border border-slate-200 p-4 text-sm shadow-sm dark:border-slate-700"
-          >
-            <div className="flex items-center justify-between">
-              <div className="font-semibold">#{item.id}</div>
-              <div className="flex gap-2 text-xs">
-                <button className="text-blue-600" type="button" onClick={() => handleEdit(item)}>
-                  Edit
-                </button>
-                <button className="text-rose-600" type="button" onClick={() => handleDelete(item.id)}>
-                  Delete
-                </button>
-              </div>
-            </div>
-            <pre className="mt-2 whitespace-pre-wrap text-xs text-slate-600 dark:text-slate-300">
-              {JSON.stringify(item, null, 2)}
-            </pre>
-          </article>
-        ))}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -324,11 +507,10 @@ function SiteContentSection({ adminKey }) {
   const [about, setAbout] = useState({
     title: '',
     body: '',
-    highlights: '',
+    highlights: '[]',
   });
   const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const loadSiteContent = useCallback(async () => {
     try {
@@ -351,9 +533,8 @@ function SiteContentSection({ adminKey }) {
         body: data?.about?.body ?? '',
         highlights: Array.isArray(data?.about?.highlights) ? JSON.stringify(data.about.highlights, null, 2) : '[]',
       });
-      setError('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load site content');
+      toast.error('Unable to load hero/about content', { description: err instanceof Error ? err.message : undefined });
     } finally {
       setLoading(false);
     }
@@ -366,21 +547,22 @@ function SiteContentSection({ adminKey }) {
   const submit = async (event) => {
     event.preventDefault();
     if (!adminKey) {
-      setError('Provide the admin API key to update site content.');
+      toast.error('Provide the admin API key to update site content.');
       return;
     }
 
     let parsedHighlights = [];
     try {
       parsedHighlights = JSON.parse(about.highlights);
+      if (!Array.isArray(parsedHighlights)) {
+        throw new Error('Highlights must be an array');
+      }
     } catch {
-      setError('Highlights must be valid JSON array.');
+      toast.error('Highlights must be valid JSON array.');
       return;
     }
 
-    setError('');
-    setMessage('');
-
+    setSaving(true);
     try {
       const response = await fetch('/api/site-content', {
         method: 'PUT',
@@ -403,94 +585,84 @@ function SiteContentSection({ adminKey }) {
         throw new Error(detail?.error || 'Update failed');
       }
 
-      setMessage('Site content updated.');
+      toast.success('Site content updated.');
       await loadSiteContent();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Update failed');
+      toast.error('Unable to update site content', { description: err instanceof Error ? err.message : undefined });
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Site Content (Hero + About)</h2>
-          {message && <p className="text-sm text-emerald-600 dark:text-emerald-400">{message}</p>}
-          {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
-        </div>
-        <button type="button" className="text-sm text-blue-600 underline" onClick={loadSiteContent} disabled={loading}>
-          Refresh
-        </button>
-      </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Site Content (Hero + About)</CardTitle>
+        <CardDescription>Centralized controls for the hero headline, CTA links, and about section.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={submit} className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-2">
+            {Object.entries(hero).map(([field, value]) => (
+              <label key={field} className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                {field}
+                {field === 'description' ? (
+                  <Textarea
+                    value={value}
+                    onChange={(event) => setHero((prev) => ({ ...prev, [field]: event.target.value }))}
+                    rows={4}
+                    required
+                  />
+                ) : (
+                  <Input
+                    type={field === 'image' ? 'url' : 'text'}
+                    value={value}
+                    onChange={(event) => setHero((prev) => ({ ...prev, [field]: event.target.value }))}
+                    required
+                  />
+                )}
+              </label>
+            ))}
+          </div>
 
-      <form onSubmit={submit} className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2">
-          {Object.keys(hero).map((field) => (
-            <label key={field} className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
-              {field}
-              {field === 'description' ? (
-                <textarea
-                  value={hero[field]}
-                  onChange={(event) => setHero((prev) => ({ ...prev, [field]: event.target.value }))}
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                  rows={4}
-                  required
-                />
-              ) : (
-                <input
-                  type={field.includes('Href') || field === 'image' ? 'url' : 'text'}
-                  value={hero[field]}
-                  onChange={(event) => setHero((prev) => ({ ...prev, [field]: event.target.value }))}
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-                  required
-                />
-              )}
+          <div className="grid gap-4">
+            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              About title
+              <Input
+                type="text"
+                value={about.title}
+                onChange={(event) => setAbout((prev) => ({ ...prev, title: event.target.value }))}
+                required
+              />
             </label>
-          ))}
-        </div>
+            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              About body
+              <Textarea
+                value={about.body}
+                onChange={(event) => setAbout((prev) => ({ ...prev, body: event.target.value }))}
+                rows={4}
+                required
+              />
+            </label>
+            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              Highlights JSON
+              <Textarea
+                value={about.highlights}
+                onChange={(event) => setAbout((prev) => ({ ...prev, highlights: event.target.value }))}
+                rows={6}
+                className="font-mono"
+                required
+              />
+              <span className="text-xs text-slate-500 dark:text-slate-400">Provide an array of {"{ label, value }"} objects.</span>
+            </label>
+          </div>
 
-        <div className="grid gap-4">
-          <label className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
-            About title
-            <input
-              type="text"
-              value={about.title}
-              onChange={(event) => setAbout((prev) => ({ ...prev, title: event.target.value }))}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-              required
-            />
-          </label>
-          <label className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
-            About body
-            <textarea
-              value={about.body}
-              onChange={(event) => setAbout((prev) => ({ ...prev, body: event.target.value }))}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-              rows={4}
-              required
-            />
-          </label>
-          <label className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
-            Highlights JSON
-            <textarea
-              value={about.highlights}
-              onChange={(event) => setAbout((prev) => ({ ...prev, highlights: event.target.value }))}
-              className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 font-mono text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-              rows={6}
-              required
-            />
-          </label>
-        </div>
-
-        <button
-          type="submit"
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
-          disabled={loading}
-        >
-          Update Site Content
-        </button>
-      </form>
-    </section>
+          <Button type="submit" disabled={saving || loading}>
+            {saving ? 'Saving…' : 'Update Site Content'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -499,22 +671,20 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
+      <Toaster position="top-right" richColors />
       <div className="mx-auto max-w-6xl space-y-8">
-        <header className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-          <div>
-            <p className="text-sm uppercase tracking-wide text-slate-500">Admin Console</p>
-            <h1 className="text-3xl font-bold">Portfolio CMS</h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Manage front page content, portfolio, certificates, skills, and experience in one place. Provide the admin API key to unlock write actions.
-            </p>
-          </div>
-          <label className="flex flex-col text-sm font-medium text-slate-700 dark:text-slate-200">
+        <header className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p className="text-sm uppercase tracking-wide text-slate-500">Admin Console</p>
+          <h1 className="text-3xl font-bold">Portfolio CMS</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Manage front page content, portfolio, certificates, skills, and experience in one place. Provide the admin API key to unlock write actions.
+          </p>
+          <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
             Admin API Key
-            <input
+            <Input
               type="password"
               value={adminKey}
               onChange={(event) => setAdminKey(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
               placeholder="Enter the value of ADMIN_API_KEY"
             />
           </label>

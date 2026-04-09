@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
 import Blog from '../assets/portfolio/Blog.jpg';
@@ -8,103 +9,197 @@ import Homestay from '../assets/portfolio/hs.png';
 import Jdnp from '../assets/portfolio/pt.png';
 import Genio from '../assets/portfolio/Genio.png';
 
-const projects = [
+const fallbackProjects = [
   {
-    id: 1,
+    id: 'fallback-1',
     title: 'RESTful Blog API',
     image: RestApi,
-    techStack: ['Node.js', 'Express', 'MongoDB'],
+    tech: ['Node.js', 'Express', 'MongoDB'],
     description: 'Backend API for blog content, authentication, and admin operations.',
     features: ['JWT authentication', 'CRUD posts & comments', 'Role-based access'],
-    link: 'https://github.com/jondereck/blog_api',
-    category: 'Fullstack',
+    demoUrl: 'https://github.com/jondereck/blog_api',
+    badge: 'API',
   },
   {
-    id: 2,
+    id: 'fallback-2',
     title: 'Blog Client',
     image: Blog,
-    techStack: ['React', 'Tailwind', 'REST API'],
+    tech: ['React', 'Tailwind', 'REST API'],
     description: 'Responsive blog frontend focused on clean reading and author workflows.',
     features: ['Dynamic article pages', 'Client-side routing', 'Mobile-first design'],
-    link: 'https://jdnblog.netlify.app/',
-    category: 'React',
+    demoUrl: 'https://jdnblog.netlify.app/',
+    badge: 'Frontend',
   },
   {
-    id: 3,
+    id: 'fallback-3',
     title: 'StayC Booking',
     image: Stay,
-    techStack: ['React', 'Tailwind CSS'],
+    tech: ['React', 'Tailwind CSS'],
     description: 'Travel booking landing experience with service highlights and conversion flow.',
     features: ['Hero search CTA', 'Feature showcase', 'Responsive cards'],
-    link: 'https://stayc.netlify.app/',
-    category: 'React',
+    demoUrl: 'https://stayc.netlify.app/',
+    badge: 'Landing Page',
   },
   {
-    id: 4,
+    id: 'fallback-4',
     title: 'Genio AI',
     image: Genio,
-    techStack: ['Next.js', 'OpenAI API', 'Tailwind'],
+    tech: ['Next.js', 'OpenAI API', 'Tailwind'],
     description: 'AI-powered app with fast UI interactions and contextual content generation.',
     features: ['Prompt workflows', 'Server-side rendering', 'Modern dashboard UI'],
-    link: 'https://genioai.vercel.app/',
-    category: 'Fullstack',
+    demoUrl: 'https://genioai.vercel.app/',
+    badge: 'AI',
   },
   {
-    id: 5,
+    id: 'fallback-5',
     title: 'Homestay Website',
     image: Homestay,
-    techStack: ['React', 'Tailwind CSS'],
+    tech: ['React', 'Tailwind CSS'],
     description: 'Hospitality site with booking-focused storytelling and visual hierarchy.',
     features: ['Property gallery', 'Location details', 'Call-to-book flow'],
-    link: 'https://nifashomestay.netlify.app/',
-    category: 'React',
+    demoUrl: 'https://nifashomestay.netlify.app/',
+    badge: 'Hospitality',
   },
   {
-    id: 6,
+    id: 'fallback-6',
     title: 'Photography Portfolio',
     image: Jdnp,
-    techStack: ['React', 'CSS'],
+    tech: ['React', 'CSS'],
     description: 'Creative portfolio for photo/video production services.',
     features: ['Project galleries', 'Service highlights', 'Contact conversion CTA'],
-    link: 'https://jdnp.netlify.app/',
-    category: 'All',
+    demoUrl: 'https://jdnp.netlify.app/',
+    badge: 'Creative',
   },
 ];
 
+const normalizeTech = (value) => {
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
 const Projects = () => {
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/portfolio', { cache: 'no-store' });
+        if (!response.ok) {
+          throw new Error('Unable to load projects');
+        }
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setProjects(data);
+        } else {
+          setProjects([]);
+        }
+        setError('');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unable to load projects');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProjects();
+  }, []);
+
+  const projectList = projects.length > 0 ? projects : fallbackProjects;
+
   return (
     <SectionContainer name="portfolio" title="Portfolio" subtitle="Selected projects that combine design quality, performance, and product thinking.">
+      {error && (
+        <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+          {error}. Showing fallback projects instead.
+        </p>
+      )}
+      {loading && <p className="mb-4 text-sm text-slate-500">Loading projects…</p>}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {projects.map((project) => (
-          <motion.article
-            key={project.id}
-            whileHover={{ y: -8, scale: 1.01 }}
-            transition={{ type: 'spring', stiffness: 240, damping: 18 }}
-            className="group overflow-hidden rounded-2xl border border-slate-200 bg-white/70 shadow-lg shadow-slate-300/30 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-black/20"
-          >
-            <img src={project.image} alt={project.title} className="h-44 w-full object-cover" />
-            <div className="space-y-3 p-5">
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{project.title}</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-300">{project.description}</p>
-              <p className="text-xs font-medium uppercase tracking-wider text-cyan-600 dark:text-cyan-300">
-                {project.techStack.join(' • ')}
-              </p>
-              <ul className="list-inside list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300">
-                {project.features.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-              <a
-                href={project.link}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-block rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 px-4 py-2 text-sm font-semibold text-white transition group-hover:shadow-lg group-hover:shadow-cyan-500/30"
-              >
-                View Details
-              </a>
-            </div>
-          </motion.article>
-        ))}
+        {projectList.map((project) => {
+          const tech = normalizeTech(project.tech ?? project.techStack);
+          const featureList = Array.isArray(project.features) ? project.features : [];
+          const link = project.demoUrl || project.link;
+          const secondaryLink = project.repoUrl || project.link;
+          return (
+            <motion.article
+              key={project.id ?? project.slug}
+              whileHover={{ y: -8, scale: 1.01 }}
+              transition={{ type: 'spring', stiffness: 240, damping: 18 }}
+              className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/70 shadow-lg shadow-slate-300/30 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-black/20"
+            >
+              <div className="relative h-48 w-full overflow-hidden">
+                <Image
+                  src={project.image}
+                  alt={project.title}
+                  fill
+                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  className="object-cover transition duration-500 group-hover:scale-105"
+                />
+                {project.badge && (
+                  <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm dark:bg-slate-900/70 dark:text-slate-100">
+                    {project.badge}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-1 flex-col space-y-4 p-5">
+                <div>
+                  <h3 className="text-xl font-semibold text-slate-900 dark:text-slate-100">{project.title}</h3>
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">{project.description}</p>
+                </div>
+                {tech.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {tech.map((stack) => (
+                      <span
+                        key={stack}
+                        className="rounded-full border border-cyan-200 px-3 py-1 text-xs font-semibold text-cyan-600 dark:border-cyan-300/40 dark:text-cyan-200"
+                      >
+                        {stack}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {featureList.length > 0 && (
+                  <ul className="list-inside list-disc space-y-1 text-sm text-slate-600 dark:text-slate-300">
+                    {featureList.map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-auto flex flex-wrap gap-3 pt-2">
+                  {link && (
+                    <a
+                      href={link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex flex-1 items-center justify-center rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 px-4 py-2 text-sm font-semibold text-white transition group-hover:shadow-lg group-hover:shadow-cyan-500/30"
+                    >
+                      View Project
+                    </a>
+                  )}
+                  {secondaryLink && secondaryLink !== link && (
+                    <a
+                      href={secondaryLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex flex-1 items-center justify-center rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-cyan-400 hover:text-cyan-500 dark:border-slate-700 dark:text-slate-200"
+                    >
+                      View Repo
+                    </a>
+                  )}
+                </div>
+              </div>
+            </motion.article>
+          );
+        })}
       </div>
     </SectionContainer>
   );
