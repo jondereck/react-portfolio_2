@@ -1,26 +1,24 @@
-
 import { useState } from 'react';
 import About from './components/About';
+import Certificates from './components/Certificates';
 import Contact from './components/Contact';
 import Experience from './components/Experience';
-import Home from './components/Home';
+import Hero from './components/Hero';
 import NavBar from './components/NavBar';
-import Portfolio from './components/Portfolio';
+import Projects from './components/Projects';
 import SocialLinks from './components/SocialLinks';
-import Certificates from './components/Certificates'
 import './index.css';
 
 function App() {
-
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(true);
 
   return (
-    <div className={darkMode && "dark"}>
+    <div className={darkMode ? 'dark' : ''}>
       <NavBar darkMode={darkMode} setDarkMode={setDarkMode} />
-      <main className=' text-black dark:text-white bg-white dark:duration-500 duration-500 dark:bg-black'>
-        <Home />
+      <main className="bg-slate-50 text-black transition duration-500 dark:bg-slate-950 dark:text-white">
+        <Hero />
         <About />
-        <Portfolio />
+        <Projects />
         <Experience />
         <Certificates />
         <Contact />

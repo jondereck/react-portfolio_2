@@ -1,228 +1,124 @@
-import React from "react";
-import { useState } from "react";
-import Success from './Success'
-const Contact = () => {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    message: "",
-    errors: {} // Add the errors property to the initial state
-  });
+import React, { useState } from 'react';
+import SectionContainer from './SectionContainer';
+import Success from './Success';
 
+const initialForm = { name: '', email: '', message: '' };
+
+const sanitizeInput = (value) => value.replace(/[<>]/g, '').replace(/\s+/g, ' ').trimStart();
+
+const Contact = () => {
+  const [formData, setFormData] = useState(initialForm);
+  const [errors, setErrors] = useState(initialForm);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
-  };
+  const validateForm = ({ name, email, message }) => {
+    const nextErrors = { ...initialForm };
 
-  const handleTextArea = (e) => {
-    const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
-  };
-
-  const validateForm = () => {
-    const { name, email, message } = formData;
-
-    const nameRegex = /^[a-zA-Z\s]{3,}$/;
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    const errors = {};
-
-    if (!name || name.trim() === "") {
-      errors.name = "Please enter a name.";
-    } else if (!name.match(nameRegex)) {
-      errors.name = "Name must be at least 3 characters long.";
+    if (!/^[A-Za-z\s]{3,60}$/.test(name.trim())) {
+      nextErrors.name = 'Enter a valid name (3-60 letters).';
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      nextErrors.email = 'Enter a valid email address.';
+    }
+    if (message.trim().length < 10 || message.trim().length > 800) {
+      nextErrors.message = 'Message must be between 10 and 800 characters.';
     }
 
-    if (!email || email.trim() === "") {
-      errors.email = "Please enter an email address.";
-    } else if (!email.match(emailRegex)) {
-      errors.email = "Please enter a valid email.";
-    }
-
-    if (!message || message.trim() === "") {
-      errors.message = "Please enter a message.";
-    } else if (message.length < 10) {
-      errors.message = "Message must be at least 10 characters"
-    }
-
-    return errors;
+    return nextErrors;
   };
 
-  const handleFormSubmit = (e) => {
-    e.preventDefault();
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({ ...prev, [name]: sanitizeInput(value) }));
+  };
 
-    const errors = validateForm();
-    
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    const validationErrors = validateForm(formData);
+    setErrors(validationErrors);
 
-    // Check if there are any errors
-    if (Object.keys(errors).length === 0) {
-       // Example: Submitting the form data using fetch
-       fetch("https://getform.io/f/a646050b-6861-4df4-8b0d-c61f41b7205d", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+    const hasErrors = Object.values(validationErrors).some(Boolean);
+    if (hasErrors) {
+      return;
+    }
+
+    try {
+      const response = await fetch('https://getform.io/f/a646050b-6861-4df4-8b0d-c61f41b7205d', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
-      })
-      setIsSubmitted(true)
-        // .then((response) => {
-        //   // Handle the response from the form submission
-        //   console.log("Form submitted successfully");
-        //   setIsSubmitted(true)
-
-
-        //   // You can perform any necessary actions after successful form submission
-        // })
-        // .catch((error) => {
-        //   // Handle any errors that occur during form submission
-        //   console.error("Form submission error:", error);
-        //   // You can display an error message or perform any error handling
-        // });
-  
-      // Reset the form data
-      setFormData({
-        name: "",
-        email: "",
-        message: "",
-        errors: {},
       });
-    } else {
-      // Handle errors
-  
-      setFormData((prevData) => ({
-        ...prevData,
-        errors: { ...errors },
-        
-      }));
+
+      if (!response.ok) {
+        return;
+      }
+
+      setIsSubmitted(true);
+      setFormData(initialForm);
+    } catch (_error) {
+      // Network failures are intentionally not exposed with internal details.
     }
-
-    
   };
 
-  const handleAutoCapitalize = (e) => {
-    const { name, value } = e.target;
-    
-    const capitalizedValue = value === value.toUpperCase() || value.toLowerCase()
-    ? value.toLowerCase().replace(/(^|\s)\S/g, (char) => char.toUpperCase())
-    : value;
-
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: capitalizedValue
-    }));
-
-  }
-
-  const handleAutoLowerCase = (e) => {
-    const {name, value } = e.target;
-
-    const lowerValue = value === value.toUpperCase() || value.toLowerCase()
-    ? value.toLowerCase()
-    : value 
-
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: lowerValue
-    })) 
-  }
-
-  const handleAutoTextArea = (e) => {
-    const { name, value } = e.target;
-    const capitalizedValue = value.charAt(0).toUpperCase() + value.slice(1);
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: capitalizedValue,
-    }));
-  };
   return (
-    <div
-      name="contact"
-      className="h-screen w-full  p-4
-  "
-    >
-      <div className="flex flex-col p-4 justify-center max-w-screen-lg mx-auto h-full">
-        <div className="pb-8">
-          <p className="text-4xl font-bold inline border-b-4 border-gray-500">
-            Contact
-          </p>
-          <p className="py-6">Submit the form below to get in touch with me.</p>
-        </div>
-        <div className="flex justify-center items-center">
-        
+    <SectionContainer name="contact" title="Contact" subtitle="Let’s build something great together">
+      <div className="mx-auto max-w-xl">
+        {!isSubmitted ? (
+          <form className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900" onSubmit={handleSubmit} noValidate>
+            <div>
+              <input
+                className="w-full rounded-lg border border-slate-300 bg-transparent px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-400 dark:border-slate-700 dark:text-slate-100"
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                placeholder="Your name"
+                maxLength={60}
+                required
+              />
+              {errors.name ? <p className="mt-1 text-sm text-red-500">{errors.name}</p> : null}
+            </div>
 
-          {!isSubmitted 
-          ? (
-            <form   
-            className="flex flex-col w-full md:w-1/2"
-            onSubmit={handleFormSubmit}
-          >
-            <input
-              className="p-2 bg-transparent border-2 rounded-md focus:outline-none"
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              onBlur={handleAutoCapitalize}
-              placeholder=" Enter your name"
-            />
-            {formData.errors && formData.errors.name && (
-              <p className="text-red-500 text-sm">{formData.errors.name}</p>
-            )}
-            <input
-              className=" my-4 p-2 bg-transparent border-2 rounded-md  focus:outline-none"
-              type="text"
-              name="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              onBlur={handleAutoLowerCase}
-              placeholder=" Enter your email"
-            />
-            {
-              formData.errors && formData.errors.email && (
-                <p className="text-red-500 text-sm"> {formData.errors.email}</p>
-              )
-            }
-            <textarea
-              name="message"
-              value={formData.message}
-              onChange={handleTextArea}
-              onBlur={handleAutoTextArea}
-              rows="10"
-              placeholder="Enter your message"
-              className=" p-2 bg-transparent border-2 rounded-md focus:outline-none"
-            ></textarea>
+            <div>
+              <input
+                className="w-full rounded-lg border border-slate-300 bg-transparent px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-400 dark:border-slate-700 dark:text-slate-100"
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@example.com"
+                maxLength={120}
+                required
+              />
+              {errors.email ? <p className="mt-1 text-sm text-red-500">{errors.email}</p> : null}
+            </div>
 
-            {
-              formData.errors && formData.errors.message && (
-                <p className="text-red-500 text-sm"> {formData.errors.message}</p>
-              )
-            }
+            <div>
+              <textarea
+                name="message"
+                value={formData.message}
+                onChange={handleChange}
+                rows={7}
+                maxLength={800}
+                placeholder="Tell me about your project..."
+                className="w-full rounded-lg border border-slate-300 bg-transparent px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-400 dark:border-slate-700 dark:text-slate-100"
+                required
+              />
+              {errors.message ? <p className="mt-1 text-sm text-red-500">{errors.message}</p> : null}
+            </div>
 
             <button
-              className="text-white bg-gradient-to-b  from-cyan-500 to to-blue-500
-            px-6 my-8 py-3 mx-auto flex items-center rounded-md  hover:scale-110 duration-300"
+              type="submit"
+              className="w-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 px-6 py-3 font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/30"
             >
-              Let's Talk
+              Send Message
             </button>
-          </form> 
-
-          )
-
-          : (
-            <Success/>
-          )
-        }
-        </div>
+          </form>
+        ) : (
+          <Success />
+        )}
       </div>
-    </div>
+    </SectionContainer>
   );
 };
 
