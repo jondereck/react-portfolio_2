@@ -3,9 +3,10 @@ import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { experienceSchema } from '@/lib/validators';
 
-export async function GET() {
+export async function GET(request: Request) {
+  const includeDrafts = isAuthorizedMutation(request);
   const experience = await prisma.experience.findMany({
-    where: { isPublished: true },
+    where: includeDrafts ? undefined : { isPublished: true },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
   });
   return NextResponse.json(experience);

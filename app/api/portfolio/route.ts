@@ -23,9 +23,10 @@ const slugify = (value: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-export async function GET() {
+export async function GET(request: Request) {
+  const includeDrafts = isAuthorizedMutation(request);
   const projects = await prisma.portfolio.findMany({
-    where: { isPublished: true },
+    where: includeDrafts ? undefined : { isPublished: true },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
   });
   return NextResponse.json(projects);

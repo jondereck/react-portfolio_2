@@ -48,8 +48,10 @@ export default function FormDialog({ title, resourceKey, fields, formState, edit
   const isEditing = editingId !== null;
 
   const submitAndClose = async (event) => {
-    await onSubmit(event);
-    setOpen(false);
+    const saved = await onSubmit(event);
+    if (saved) {
+      setOpen(false);
+    }
   };
 
   return (
