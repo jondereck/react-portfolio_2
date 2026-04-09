@@ -4,7 +4,9 @@ import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { skillSchema } from '@/lib/validators';
 
 export async function GET() {
-  const skills = await prisma.skill.findMany();
+  const skills = await prisma.skill.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  });
   return NextResponse.json(skills);
 }
 

@@ -13,6 +13,23 @@ const resources = [
       { name: 'image', label: 'Image URL', type: 'url' },
       { name: 'link', label: 'Reference Link', type: 'url' },
       { name: 'category', label: 'Category', type: 'text' },
+      {
+        name: 'issuedAt',
+        label: 'Issued At',
+        type: 'date',
+        serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
+        deserialize: (value) => (value ? value.substring(0, 10) : ''),
+      },
+      {
+        name: 'expiresAt',
+        label: 'Expires At',
+        type: 'date',
+        serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
+        deserialize: (value) => (value ? value.substring(0, 10) : ''),
+      },
+      { name: 'credentialId', label: 'Credential ID', type: 'text' },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0' },
+      { name: 'isPublished', label: 'Published', type: 'checkbox' },
     ],
   },
   {
@@ -23,6 +40,9 @@ const resources = [
       { name: 'name', label: 'Name', type: 'text' },
       { name: 'level', label: 'Level (1-100)', type: 'number', placeholder: '50' },
       { name: 'category', label: 'Category', type: 'text' },
+      { name: 'description', label: 'Description', type: 'textarea', rows: 3 },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0' },
+      { name: 'isPublished', label: 'Published', type: 'checkbox' },
     ],
   },
   {
@@ -31,6 +51,7 @@ const resources = [
     endpoint: '/api/portfolio',
     fields: [
       { name: 'title', label: 'Project Title', type: 'text' },
+      { name: 'slug', label: 'Slug', type: 'text' },
       { name: 'description', label: 'Description', type: 'textarea', rows: 4 },
       {
         name: 'tech',
@@ -48,6 +69,11 @@ const resources = [
       { name: 'link', label: 'Project Link', type: 'url' },
       { name: 'image', label: 'Image URL', type: 'url' },
       { name: 'badge', label: 'Badge', type: 'text' },
+      { name: 'repoUrl', label: 'Repo URL', type: 'url' },
+      { name: 'demoUrl', label: 'Demo URL', type: 'url' },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0' },
+      { name: 'isFeatured', label: 'Featured', type: 'checkbox' },
+      { name: 'isPublished', label: 'Published', type: 'checkbox' },
     ],
   },
   {
@@ -58,6 +84,8 @@ const resources = [
       { name: 'title', label: 'Role Title', type: 'text' },
       { name: 'company', label: 'Company', type: 'text' },
       { name: 'description', label: 'Description', type: 'textarea', rows: 4 },
+      { name: 'location', label: 'Location', type: 'text' },
+      { name: 'employmentType', label: 'Employment Type', type: 'text' },
       {
         name: 'startDate',
         label: 'Start Date',
@@ -72,13 +100,16 @@ const resources = [
         serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
         deserialize: (value) => (value ? value.substring(0, 10) : ''),
       },
+      { name: 'isCurrent', label: 'Current role', type: 'checkbox' },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0' },
+      { name: 'isPublished', label: 'Published', type: 'checkbox' },
     ],
   },
 ];
 
 const defaultFormState = (fields) =>
   fields.reduce((state, field) => {
-    state[field.name] = '';
+    state[field.name] = field.type === 'checkbox' ? false : '';
     return state;
   }, {});
 
@@ -92,7 +123,12 @@ const buildPayload = (fields, formState) => {
     }
 
     if (field.type === 'number') {
-      payload[field.name] = rawValue === '' ? null : Number(rawValue);
+      payload[field.name] = rawValue === '' ? undefined : Number(rawValue);
+      return;
+    }
+
+    if (field.type === 'checkbox') {
+      payload[field.name] = Boolean(rawValue);
       return;
     }
 
@@ -111,6 +147,11 @@ const formatForForm = (fields, item) =>
 
     if (field.type === 'number') {
       state[field.name] = value ?? '';
+      return state;
+    }
+
+    if (field.type === 'checkbox') {
+      state[field.name] = Boolean(value);
       return state;
     }
 
@@ -250,7 +291,7 @@ function AdminSection({ resource, adminKey }) {
             onChange: (event) => setFormState((prev) => ({ ...prev, [field.name]: event.target.value })),
             className:
               'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100',
-            required: field.name !== 'endDate',
+            required: !['endDate', 'issuedAt', 'expiresAt'].includes(field.name) && field.type !== 'checkbox',
             placeholder: field.placeholder,
           };
 
@@ -259,6 +300,15 @@ function AdminSection({ resource, adminKey }) {
               {field.label}
               {field.type === 'textarea' ? (
                 <textarea {...commonProps} rows={field.rows || 3} />
+              ) : field.type === 'checkbox' ? (
+                <input
+                  type="checkbox"
+                  id={`${resource.key}-${field.name}`}
+                  name={field.name}
+                  checked={Boolean(formState[field.name])}
+                  onChange={(event) => setFormState((prev) => ({ ...prev, [field.name]: event.target.checked }))}
+                  className="mt-2 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
               ) : (
                 <input type={field.type} {...commonProps} />
               )}

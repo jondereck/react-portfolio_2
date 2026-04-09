@@ -4,7 +4,9 @@ import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { certificateSchema } from '@/lib/validators';
 
 export async function GET() {
-  const certificates = await prisma.certificate.findMany();
+  const certificates = await prisma.certificate.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+  });
   return NextResponse.json(certificates);
 }
 
@@ -20,7 +22,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const created = await prisma.certificate.create({ data: parsed.data });
+    const created = await prisma.certificate.create({
+      data: {
+        ...parsed.data,
+        issuedAt: parsed.data.issuedAt ? new Date(parsed.data.issuedAt) : null,
+        expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+      },
+    });
     return NextResponse.json(created, { status: 201 });
   } catch {
     return NextResponse.json({ error: 'Unable to create certificate' }, { status: 500 });
@@ -44,7 +52,14 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const updated = await prisma.certificate.update({ where: { id }, data: parsed.data });
+    const updated = await prisma.certificate.update({
+      where: { id },
+      data: {
+        ...parsed.data,
+        issuedAt: parsed.data.issuedAt ? new Date(parsed.data.issuedAt) : null,
+        expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+      },
+    });
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json({ error: 'Unable to update certificate' }, { status: 500 });

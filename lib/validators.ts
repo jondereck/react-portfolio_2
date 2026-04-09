@@ -2,11 +2,17 @@ import { z } from 'zod';
 
 const textField = (min: number, max: number) => z.string().trim().min(min).max(max);
 const urlField = (max: number) => z.string().trim().url().max(max);
+const optionalTextField = (max: number) => z.string().trim().max(max).nullable().optional();
+const optionalUrlField = (max: number) => z.string().trim().url().max(max).nullable().optional();
+const optionalIsoDateTime = z.string().datetime().nullable().optional();
 
 export const skillSchema = z.object({
   name: textField(1, 60),
   level: z.number().int().min(1).max(100),
   category: textField(1, 50),
+  description: optionalTextField(400),
+  sortOrder: z.number().int().min(0).max(10000).nullable().optional(),
+  isPublished: z.boolean().optional(),
 });
 
 export const experienceSchema = z.object({
@@ -15,6 +21,11 @@ export const experienceSchema = z.object({
   description: textField(5, 1000),
   startDate: z.string().datetime(),
   endDate: z.string().datetime().nullable(),
+  location: optionalTextField(120),
+  employmentType: optionalTextField(80),
+  isCurrent: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(10000).nullable().optional(),
+  isPublished: z.boolean().optional(),
 });
 
 export const certificateSchema = z.object({
@@ -23,6 +34,11 @@ export const certificateSchema = z.object({
   image: urlField(500),
   link: urlField(500),
   category: textField(1, 50),
+  issuedAt: optionalIsoDateTime,
+  expiresAt: optionalIsoDateTime,
+  credentialId: optionalTextField(120),
+  sortOrder: z.number().int().min(0).max(10000).nullable().optional(),
+  isPublished: z.boolean().optional(),
 });
 
 export const heroSchema = z.object({
@@ -52,9 +68,15 @@ export const aboutSchema = z.object({
 
 export const portfolioSchema = z.object({
   title: textField(1, 120),
+  slug: textField(1, 160),
   description: textField(10, 600),
   tech: z.array(textField(1, 40)).min(1).max(10),
   link: urlField(500),
   image: urlField(500),
   badge: textField(1, 60),
+  repoUrl: optionalUrlField(500),
+  demoUrl: optionalUrlField(500),
+  sortOrder: z.number().int().min(0).max(10000).nullable().optional(),
+  isFeatured: z.boolean().optional(),
+  isPublished: z.boolean().optional(),
 });
