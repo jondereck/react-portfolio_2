@@ -1,0 +1,55 @@
+import * as React from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { FiX } from 'react-icons/fi';
+import { cn } from '@/lib/utils';
+
+const Dialog = DialogPrimitive.Root;
+const DialogTrigger = DialogPrimitive.Trigger;
+const DialogPortal = DialogPrimitive.Portal;
+const DialogClose = DialogPrimitive.Close;
+
+const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPrimitive.Overlay ref={ref} className={cn('fixed inset-0 z-50 bg-black/60 backdrop-blur-sm', className)} {...props} />
+));
+DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
+
+const DialogContent = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPortal>
+    <DialogOverlay />
+    <DialogPrimitive.Content
+      ref={ref}
+      className={cn(
+        'fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-6 shadow-lg focus:outline-none dark:border-slate-800 dark:bg-slate-950',
+        className,
+      )}
+      {...props}
+    >
+      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-full border border-transparent p-1 text-slate-500 transition hover:border-slate-200 hover:text-slate-900 dark:hover:border-slate-700 dark:hover:text-slate-100">
+        <FiX className="h-4 w-4" />
+        <span className="sr-only">Close</span>
+      </DialogPrimitive.Close>
+      {props.children}
+    </DialogPrimitive.Content>
+  </DialogPortal>
+));
+DialogContent.displayName = DialogPrimitive.Content.displayName;
+
+const DialogHeader = ({ className, ...props }) => (
+  <div className={cn('flex flex-col space-y-1.5 text-center sm:text-left', className)} {...props} />
+);
+
+const DialogFooter = ({ className, ...props }) => (
+  <div className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)} {...props} />
+);
+
+const DialogTitle = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPrimitive.Title ref={ref} className={cn('text-lg font-semibold leading-none tracking-tight', className)} {...props} />
+));
+DialogTitle.displayName = DialogPrimitive.Title.displayName;
+
+const DialogDescription = React.forwardRef(({ className, ...props }, ref) => (
+  <DialogPrimitive.Description ref={ref} className={cn('text-sm text-slate-500 dark:text-slate-400', className)} {...props} />
+));
+DialogDescription.displayName = DialogPrimitive.Description.displayName;
+
+export { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogClose };

@@ -25,6 +25,7 @@ const slugify = (value: string): string =>
 
 export async function GET() {
   const projects = await prisma.portfolio.findMany({
+    where: { isPublished: true },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
   });
   return NextResponse.json(projects);

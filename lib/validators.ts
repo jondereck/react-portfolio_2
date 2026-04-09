@@ -2,30 +2,32 @@ import { z } from 'zod';
 
 const textField = (min: number, max: number) => z.string().trim().min(min).max(max);
 const urlField = (max: number) => z.string().trim().url().max(max);
-const optionalTextField = (max: number) => z.string().trim().max(max).nullable().optional();
-const optionalUrlField = (max: number) => z.string().trim().url().max(max).nullable().optional();
-const optionalIsoDateTime = z.string().datetime().nullable().optional();
+const emailField = () => z.string().trim().email().max(120);
+const orderField = (max = 9999) => z.number().int().min(0).max(max).optional().default(0);
+const publishField = () => z.boolean().optional().default(true);
 
 export const skillSchema = z.object({
   name: textField(1, 60),
   level: z.number().int().min(1).max(100),
   category: textField(1, 50),
-  description: optionalTextField(400),
-  sortOrder: z.number().int().min(0).max(10000).nullable().optional(),
-  isPublished: z.boolean().optional(),
+  description: textField(3, 400).optional(),
+  image: urlField(500).optional(),
+  sortOrder: orderField(),
+  isPublished: publishField(),
 });
 
 export const experienceSchema = z.object({
   title: textField(1, 100),
   company: textField(1, 100),
-  description: textField(5, 1000),
+  description: textField(5, 1200),
   startDate: z.string().datetime(),
   endDate: z.string().datetime().nullable(),
-  location: optionalTextField(120),
-  employmentType: optionalTextField(80),
-  isCurrent: z.boolean().optional(),
-  sortOrder: z.number().int().min(0).max(10000).nullable().optional(),
-  isPublished: z.boolean().optional(),
+  location: textField(1, 120).optional(),
+  employmentType: textField(1, 120).optional(),
+  image: urlField(500).optional(),
+  isCurrent: z.boolean().optional().default(false),
+  sortOrder: orderField(),
+  isPublished: publishField(),
 });
 
 export const certificateSchema = z.object({
@@ -34,11 +36,11 @@ export const certificateSchema = z.object({
   image: urlField(500),
   link: urlField(500),
   category: textField(1, 50),
-  issuedAt: optionalIsoDateTime,
-  expiresAt: optionalIsoDateTime,
-  credentialId: optionalTextField(120),
-  sortOrder: z.number().int().min(0).max(10000).nullable().optional(),
-  isPublished: z.boolean().optional(),
+  issuedAt: z.string().datetime().optional().nullable(),
+  expiresAt: z.string().datetime().optional().nullable(),
+  credentialId: textField(1, 120).optional(),
+  sortOrder: orderField(),
+  isPublished: publishField(),
 });
 
 export const heroSchema = z.object({
@@ -46,9 +48,9 @@ export const heroSchema = z.object({
   title: textField(5, 220),
   description: textField(20, 600),
   primaryCtaLabel: textField(1, 40),
-  primaryCtaHref: urlField(500),
+  primaryCtaHref: textField(1, 200),
   secondaryCtaLabel: textField(1, 40),
-  secondaryCtaHref: urlField(500),
+  secondaryCtaHref: textField(1, 200),
   image: urlField(500),
 });
 
@@ -66,6 +68,26 @@ export const aboutSchema = z.object({
     .max(6),
 });
 
+export const socialLinkSchema = z.object({
+  label: textField(1, 60),
+  url: urlField(500),
+});
+
+export const contactSchema = z.object({
+  email: emailField().optional(),
+  phone: textField(3, 60).optional(),
+  location: textField(1, 120).optional(),
+  calendarLink: urlField(500).optional(),
+  socialLinks: z.array(socialLinkSchema).max(6).optional(),
+});
+
+export const seoSchema = z.object({
+  title: textField(1, 120).optional(),
+  description: textField(10, 300).optional(),
+  ogImage: urlField(500).optional(),
+  keywords: z.array(textField(1, 30)).max(20).optional(),
+});
+
 export const portfolioSchema = z.object({
   title: textField(1, 120),
   slug: textField(1, 160),
@@ -74,9 +96,9 @@ export const portfolioSchema = z.object({
   link: urlField(500),
   image: urlField(500),
   badge: textField(1, 60),
-  repoUrl: optionalUrlField(500),
-  demoUrl: optionalUrlField(500),
-  sortOrder: z.number().int().min(0).max(10000).nullable().optional(),
-  isFeatured: z.boolean().optional(),
-  isPublished: z.boolean().optional(),
+  repoUrl: urlField(500).optional(),
+  demoUrl: urlField(500).optional(),
+  sortOrder: orderField(),
+  isFeatured: z.boolean().optional().default(false),
+  isPublished: publishField(),
 });

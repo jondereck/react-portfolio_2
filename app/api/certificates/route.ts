@@ -5,6 +5,7 @@ import { certificateSchema } from '@/lib/validators';
 
 export async function GET() {
   const certificates = await prisma.certificate.findMany({
+    where: { isPublished: true },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
   });
   return NextResponse.json(certificates);
