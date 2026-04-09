@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import About from './components/About';
 import Certificates from './components/Certificates';
@@ -7,7 +9,6 @@ import Hero from './components/Hero';
 import NavBar from './components/NavBar';
 import Projects from './components/Projects';
 import SocialLinks from './components/SocialLinks';
-import './index.css';
 
 function App() {
   const [darkMode, setDarkMode] = useState(true);
