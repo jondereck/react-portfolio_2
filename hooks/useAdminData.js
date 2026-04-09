@@ -1,12 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-
-const toast = {
-  success: () => {},
-  error: () => {},
-  message: () => {},
-};
+import { toast } from 'sonner';
 
 const defaultFormState = (fields) =>
   fields.reduce((state, field) => {
@@ -35,7 +30,12 @@ const buildPayload = (fields, formState) => {
       continue;
     }
 
-    payload[field.name] = rawValue === '' ? null : rawValue;
+    if (rawValue === '') {
+      payload[field.name] = field.required === false ? undefined : '';
+      continue;
+    }
+
+    payload[field.name] = rawValue;
   }
 
   return payload;
@@ -75,10 +75,16 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const loadItems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(endpoint, { cache: 'no-store' });
+      const response = await fetch(endpoint, {
+        cache: 'no-store',
+        headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
+      });
       if (!response.ok) throw new Error('Failed to load data');
 
       const data = await response.json();
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('RESPONSE:', { endpoint, method: 'GET', data });
+      }
       setItems(Array.isArray(data) ? data : []);
     } catch (error) {
       toast.error(`Unable to load ${title}`, {
@@ -87,7 +93,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
     } finally {
       setLoading(false);
     }
-  }, [endpoint, title]);
+  }, [adminKey, endpoint, title]);
 
   useEffect(() => {
     loadItems();
@@ -110,21 +116,24 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const handleSubmit = useCallback(
     async (event) => {
       event.preventDefault();
-      if (!adminKey) {
-        toast.error('Provide the admin API key to save changes.');
-        return;
-      }
 
       setSaving(true);
       try {
         const payload = buildPayload(fields, formState);
         const isUpdating = editingId !== null;
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('REQUEST:', {
+            endpoint,
+            method: isUpdating ? 'PUT' : 'POST',
+            payload: isUpdating ? { ...payload, id: editingId } : payload,
+          });
+        }
 
         const response = await fetch(endpoint, {
           method: isUpdating ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-key': adminKey,
+            ...(adminKey ? { 'x-admin-key': adminKey } : {}),
           },
           body: JSON.stringify(isUpdating ? { ...payload, id: editingId } : payload),
         });
@@ -132,6 +141,10 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(detail?.error || 'Request failed');
+        }
+        const data = await response.json();
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('RESPONSE:', { endpoint, method: isUpdating ? 'PUT' : 'POST', data });
         }
 
         toast.success(`${title} ${isUpdating ? 'updated' : 'created'}.`);
@@ -150,18 +163,16 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
   const handleDelete = useCallback(
     async (id) => {
-      if (!adminKey) {
-        toast.error('Provide the admin API key to delete entries.');
-        return;
-      }
-
       setDeletingId(id);
       try {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('REQUEST:', { endpoint, method: 'DELETE', payload: { id } });
+        }
         const response = await fetch(endpoint, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-key': adminKey,
+            ...(adminKey ? { 'x-admin-key': adminKey } : {}),
           },
           body: JSON.stringify({ id }),
         });
@@ -169,6 +180,10 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(detail?.error || 'Delete failed');
+        }
+        const data = await response.json();
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('RESPONSE:', { endpoint, method: 'DELETE', data });
         }
 
         toast.success(`${title} entry deleted.`);
