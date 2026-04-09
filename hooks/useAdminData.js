@@ -1,9 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { useCallback, useEffect, useState } from 'react';
 
-const createDefaultFormState = (fields) =>
+const toast = {
+  success: () => {},
+  error: () => {},
+  message: () => {},
+};
+
+const defaultFormState = (fields) =>
   fields.reduce((state, field) => {
     state[field.name] = field.type === 'checkbox' ? false : '';
     return state;
@@ -12,26 +17,26 @@ const createDefaultFormState = (fields) =>
 const buildPayload = (fields, formState) => {
   const payload = {};
 
-  fields.forEach((field) => {
+  for (const field of fields) {
     const rawValue = formState[field.name];
 
     if (field.serialize) {
       payload[field.name] = field.serialize(rawValue);
-      return;
+      continue;
     }
 
     if (field.type === 'number') {
       payload[field.name] = rawValue === '' ? undefined : Number(rawValue);
-      return;
+      continue;
     }
 
     if (field.type === 'checkbox') {
       payload[field.name] = Boolean(rawValue);
-      return;
+      continue;
     }
 
     payload[field.name] = rawValue === '' ? null : rawValue;
-  });
+  }
 
   return payload;
 };
@@ -57,14 +62,11 @@ const formatForForm = (fields, item) =>
 
     state[field.name] = value ?? '';
     return state;
-  }, createDefaultFormState(fields));
+  }, defaultFormState(fields));
 
-export function useAdminData(resource, adminKey) {
-  const { endpoint, fields, title } = resource;
-  const defaultFormState = useMemo(() => createDefaultFormState(fields), [fields]);
-
+export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [items, setItems] = useState([]);
-  const [formState, setFormState] = useState(defaultFormState);
+  const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -74,10 +76,7 @@ export function useAdminData(resource, adminKey) {
     try {
       setLoading(true);
       const response = await fetch(endpoint, { cache: 'no-store' });
-
-      if (!response.ok) {
-        throw new Error('Failed to load data');
-      }
+      if (!response.ok) throw new Error('Failed to load data');
 
       const data = await response.json();
       setItems(Array.isArray(data) ? data : []);
@@ -96,41 +95,38 @@ export function useAdminData(resource, adminKey) {
 
   const resetForm = useCallback(() => {
     setEditingId(null);
-    setFormState(defaultFormState);
-  }, [defaultFormState]);
+    setFormState(defaultFormState(fields));
+  }, [fields]);
 
-  const editItem = useCallback(
+  const handleEdit = useCallback(
     (item) => {
       setEditingId(item.id);
       setFormState(formatForForm(fields, item));
       toast.message(`Editing ${title.toLowerCase()} #${item.id}`);
     },
-    [fields, title],
+    [fields, title]
   );
 
-  const saveItem = useCallback(
+  const handleSubmit = useCallback(
     async (event) => {
       event.preventDefault();
-
       if (!adminKey) {
         toast.error('Provide the admin API key to save changes.');
         return;
       }
 
       setSaving(true);
-
       try {
         const payload = buildPayload(fields, formState);
-        const method = editingId ? 'PUT' : 'POST';
-        const body = editingId ? { ...payload, id: editingId } : payload;
+        const isUpdating = editingId !== null;
 
         const response = await fetch(endpoint, {
-          method,
+          method: isUpdating ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json',
             'x-admin-key': adminKey,
           },
-          body: JSON.stringify(body),
+          body: JSON.stringify(isUpdating ? { ...payload, id: editingId } : payload),
         });
 
         if (!response.ok) {
@@ -138,7 +134,7 @@ export function useAdminData(resource, adminKey) {
           throw new Error(detail?.error || 'Request failed');
         }
 
-        toast.success(`${title} ${editingId ? 'updated' : 'created'}.`);
+        toast.success(`${title} ${isUpdating ? 'updated' : 'created'}.`);
         await loadItems();
         resetForm();
       } catch (error) {
@@ -149,10 +145,10 @@ export function useAdminData(resource, adminKey) {
         setSaving(false);
       }
     },
-    [adminKey, editingId, endpoint, fields, formState, loadItems, resetForm, title],
+    [adminKey, editingId, endpoint, fields, formState, loadItems, resetForm, title]
   );
 
-  const deleteItem = useCallback(
+  const handleDelete = useCallback(
     async (id) => {
       if (!adminKey) {
         toast.error('Provide the admin API key to delete entries.');
@@ -160,7 +156,6 @@ export function useAdminData(resource, adminKey) {
       }
 
       setDeletingId(id);
-
       try {
         const response = await fetch(endpoint, {
           method: 'DELETE',
@@ -190,21 +185,21 @@ export function useAdminData(resource, adminKey) {
         setDeletingId(null);
       }
     },
-    [adminKey, editingId, endpoint, loadItems, resetForm, title],
+    [adminKey, editingId, endpoint, loadItems, resetForm, title]
   );
 
   return {
     items,
-    formState,
-    setFormState,
-    editingId,
     loading,
     saving,
     deletingId,
+    editingId,
+    formState,
+    setFormState,
     loadItems,
-    saveItem,
-    deleteItem,
-    editItem,
     resetForm,
+    handleEdit,
+    handleSubmit,
+    handleDelete,
   };
 }

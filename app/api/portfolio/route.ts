@@ -47,7 +47,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const created = await prisma.portfolio.create({ data: parsed.data });
+    const created = await prisma.portfolio.create({
+      data: {
+        title: parsed.data.title,
+        slug: parsed.data.slug,
+        description: parsed.data.description,
+        tech: parsed.data.tech,
+        link: parsed.data.link,
+        image: parsed.data.image,
+        badge: parsed.data.badge,
+        repoUrl: parsed.data.repoUrl ?? null,
+        demoUrl: parsed.data.demoUrl ?? null,
+        sortOrder: parsed.data.sortOrder ?? 0,
+        isFeatured: parsed.data.isFeatured ?? false,
+        isPublished: parsed.data.isPublished ?? true,
+      },
+    });
     return NextResponse.json(created, { status: 201 });
   } catch {
     return NextResponse.json({ error: 'Unable to create project' }, { status: 500 });
@@ -75,7 +90,23 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
-    const updated = await prisma.portfolio.update({ where: { id }, data: parsed.data });
+    const updated = await prisma.portfolio.update({
+      where: { id },
+      data: {
+        title: parsed.data.title,
+        slug: parsed.data.slug,
+        description: parsed.data.description,
+        tech: parsed.data.tech,
+        link: parsed.data.link,
+        image: parsed.data.image,
+        badge: parsed.data.badge,
+        repoUrl: parsed.data.repoUrl ?? null,
+        demoUrl: parsed.data.demoUrl ?? null,
+        sortOrder: parsed.data.sortOrder ?? 0,
+        isFeatured: parsed.data.isFeatured ?? false,
+        isPublished: parsed.data.isPublished ?? true,
+      },
+    });
     return NextResponse.json(updated);
   } catch {
     return NextResponse.json({ error: 'Unable to update project' }, { status: 500 });

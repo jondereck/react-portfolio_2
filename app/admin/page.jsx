@@ -4,12 +4,19 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminHeader from '@/components/AdminHeader';
 import DataTable from '@/components/DataTable';
 import FormDialog from '@/components/FormDialog';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { useAdminData } from '@/hooks/useAdminData';
-import { toast, Toaster } from 'sonner';
+
+const toast = {
+  success: () => {},
+  error: () => {},
+  message: () => {},
+};
+
+const cardStyles = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900';
+const buttonStyles =
+  'h-8 rounded-md bg-slate-900 px-3 text-sm text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900';
+const inputStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950';
+const textareaStyles = 'rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950';
 
 const resources = [
   {
@@ -142,42 +149,55 @@ const resources = [
 ];
 
 function AdminResourceSection({ resource, adminKey }) {
-  const adminData = useAdminData(resource, adminKey);
+  const { title, key, fields, listColumns } = resource;
+  const { items, loading, saving, deletingId, editingId, formState, setFormState, loadItems, resetForm, handleEdit, handleSubmit, handleDelete } =
+    useAdminData({
+      endpoint: resource.endpoint,
+      title,
+      fields,
+      adminKey,
+    });
+
+  const updateField = (fieldName, value) => {
+    setFormState((previous) => ({ ...previous, [fieldName]: value }));
+  };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4">
+    <section className={cardStyles}>
+      <div className="flex flex-col gap-2 border-b border-slate-100 p-6 md:flex-row md:items-center md:justify-between dark:border-slate-800">
         <div>
-          <CardTitle>{resource.title}</CardTitle>
-          <CardDescription>Manage {resource.title.toLowerCase()} entries, publish state, and metadata.</CardDescription>
+          <h2 className="text-xl font-semibold">{title}</h2>
+          <p className="text-sm text-slate-500">Manage {title.toLowerCase()} entries, publish state, and metadata.</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={adminData.loadItems} disabled={adminData.loading}>
-            {adminData.loading ? 'Refreshing…' : 'Refresh'}
-          </Button>
+          <button type="button" className="h-8 rounded-md px-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={loadItems} disabled={loading}>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
           <FormDialog
-            resource={resource}
-            formState={adminData.formState}
-            setFormState={adminData.setFormState}
-            editingId={adminData.editingId}
-            saving={adminData.saving}
-            onSubmit={adminData.saveItem}
-            onReset={adminData.resetForm}
+            title={title}
+            resourceKey={key}
+            fields={fields}
+            formState={formState}
+            editingId={editingId}
+            saving={saving}
+            onChange={updateField}
+            onSubmit={handleSubmit}
+            onReset={resetForm}
           />
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="p-6">
         <DataTable
-          title={resource.title}
-          listColumns={resource.listColumns}
-          items={adminData.items}
-          loading={adminData.loading}
-          deletingId={adminData.deletingId}
-          onEdit={adminData.editItem}
-          onDelete={adminData.deleteItem}
+          title={title}
+          listColumns={listColumns}
+          items={items}
+          loading={loading}
+          deletingId={deletingId}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
         />
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -291,30 +311,32 @@ function SiteContentSection({ adminKey }) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Site Content (Hero + About)</CardTitle>
-        <CardDescription>Centralized controls for the hero headline, CTA links, and about section.</CardDescription>
-      </CardHeader>
-      <CardContent>
+    <section className={cardStyles}>
+      <div className="border-b border-slate-100 p-6 dark:border-slate-800">
+        <h2 className="text-xl font-semibold">Site Content (Hero + About)</h2>
+        <p className="text-sm text-slate-500">Centralized controls for the hero headline, CTA links, and about section.</p>
+      </div>
+      <div className="p-6">
         <form onSubmit={submit} className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
             {Object.entries(hero).map(([field, value]) => (
               <label key={field} className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
                 {field}
                 {field === 'description' ? (
-                  <Textarea
+                  <textarea
                     value={value}
-                    onChange={(event) => setHero((prev) => ({ ...prev, [field]: event.target.value }))}
+                    onChange={(event) => setHero((previous) => ({ ...previous, [field]: event.target.value }))}
                     rows={4}
                     required
+                    className={textareaStyles}
                   />
                 ) : (
-                  <Input
+                  <input
                     type={field === 'image' ? 'url' : 'text'}
                     value={value}
-                    onChange={(event) => setHero((prev) => ({ ...prev, [field]: event.target.value }))}
+                    onChange={(event) => setHero((previous) => ({ ...previous, [field]: event.target.value }))}
                     required
+                    className={inputStyles}
                   />
                 )}
               </label>
@@ -324,41 +346,43 @@ function SiteContentSection({ adminKey }) {
           <div className="grid gap-4">
             <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               About title
-              <Input
+              <input
                 type="text"
                 value={about.title}
-                onChange={(event) => setAbout((prev) => ({ ...prev, title: event.target.value }))}
+                onChange={(event) => setAbout((previous) => ({ ...previous, title: event.target.value }))}
                 required
+                className={inputStyles}
               />
             </label>
             <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               About body
-              <Textarea
+              <textarea
                 value={about.body}
-                onChange={(event) => setAbout((prev) => ({ ...prev, body: event.target.value }))}
+                onChange={(event) => setAbout((previous) => ({ ...previous, body: event.target.value }))}
                 rows={4}
                 required
+                className={textareaStyles}
               />
             </label>
             <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               Highlights JSON
-              <Textarea
+              <textarea
                 value={about.highlights}
-                onChange={(event) => setAbout((prev) => ({ ...prev, highlights: event.target.value }))}
+                onChange={(event) => setAbout((previous) => ({ ...previous, highlights: event.target.value }))}
                 rows={6}
-                className="font-mono"
+                className={`${textareaStyles} font-mono`}
                 required
               />
               <span className="text-xs text-slate-500 dark:text-slate-400">Provide an array of {'{ label, value }'} objects.</span>
             </label>
           </div>
 
-          <Button type="submit" disabled={saving || loading}>
+          <button type="submit" disabled={saving || loading} className={buttonStyles}>
             {saving ? 'Saving…' : 'Update Site Content'}
-          </Button>
+          </button>
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
@@ -367,9 +391,9 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
-      <Toaster position="top-right" richColors />
       <div className="mx-auto max-w-6xl space-y-8">
-        <AdminHeader adminKey={adminKey} setAdminKey={setAdminKey} />
+        <AdminHeader adminKey={adminKey} onAdminKeyChange={setAdminKey} />
+
         <div className="space-y-6">
           <SiteContentSection adminKey={adminKey} />
           {resources.map((resource) => (

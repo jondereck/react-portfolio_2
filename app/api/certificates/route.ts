@@ -25,7 +25,14 @@ export async function POST(request: Request) {
 
     const created = await prisma.certificate.create({
       data: {
-        ...parsed.data,
+        title: parsed.data.title,
+        issuer: parsed.data.issuer,
+        image: parsed.data.image,
+        link: parsed.data.link,
+        category: parsed.data.category,
+        credentialId: parsed.data.credentialId ?? null,
+        sortOrder: parsed.data.sortOrder ?? 0,
+        isPublished: parsed.data.isPublished ?? true,
         issuedAt: parsed.data.issuedAt ? new Date(parsed.data.issuedAt) : null,
         expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
       },
@@ -56,7 +63,14 @@ export async function PUT(request: Request) {
     const updated = await prisma.certificate.update({
       where: { id },
       data: {
-        ...parsed.data,
+        title: parsed.data.title,
+        issuer: parsed.data.issuer,
+        image: parsed.data.image,
+        link: parsed.data.link,
+        category: parsed.data.category,
+        credentialId: parsed.data.credentialId ?? null,
+        sortOrder: parsed.data.sortOrder ?? 0,
+        isPublished: parsed.data.isPublished ?? true,
         issuedAt: parsed.data.issuedAt ? new Date(parsed.data.issuedAt) : null,
         expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
       },

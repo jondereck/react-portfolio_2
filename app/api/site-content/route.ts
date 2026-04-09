@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { aboutSchema, heroSchema, contactSchema, seoSchema } from '@/lib/validators';
 import { defaultSiteContent } from '@/lib/siteContentDefaults';
 
-type UpdatePayload = {
+type UpdateRequestPayload = {
   hero?: Record<string, unknown>;
   about?: Record<string, unknown>;
   contact?: Record<string, unknown>;
@@ -38,19 +39,19 @@ export async function PUT(request: Request) {
 
   try {
     await ensureSiteContent();
-    const payload = (await request.json()) as UpdatePayload;
+    const payload = (await request.json()) as UpdateRequestPayload;
     if (!payload.hero && !payload.about && !payload.contact && !payload.seo) {
       return NextResponse.json({ error: 'Provide hero, about, contact, or seo payload.' }, { status: 400 });
     }
 
-    const updates: UpdatePayload = {};
+    const updates: Prisma.SiteContentUpdateInput = {};
 
     if (payload.hero) {
       const parsedHero = heroSchema.partial().safeParse(payload.hero);
       if (!parsedHero.success) {
         return NextResponse.json({ error: 'Invalid hero payload' }, { status: 400 });
       }
-      updates.hero = { ...parsedHero.data };
+      updates.hero = parsedHero.data as Prisma.InputJsonObject;
     }
 
     if (payload.about) {
@@ -58,7 +59,7 @@ export async function PUT(request: Request) {
       if (!parsedAbout.success) {
         return NextResponse.json({ error: 'Invalid about payload' }, { status: 400 });
       }
-      updates.about = { ...parsedAbout.data };
+      updates.about = parsedAbout.data as Prisma.InputJsonObject;
     }
 
     if (payload.contact) {
@@ -66,7 +67,7 @@ export async function PUT(request: Request) {
       if (!parsedContact.success) {
         return NextResponse.json({ error: 'Invalid contact payload' }, { status: 400 });
       }
-      updates.contact = { ...parsedContact.data };
+      updates.contact = parsedContact.data as Prisma.InputJsonObject;
     }
 
     if (payload.seo) {
@@ -74,7 +75,7 @@ export async function PUT(request: Request) {
       if (!parsedSeo.success) {
         return NextResponse.json({ error: 'Invalid SEO payload' }, { status: 400 });
       }
-      updates.seo = { ...parsedSeo.data };
+      updates.seo = parsedSeo.data as Prisma.InputJsonObject;
     }
 
     const result = await prisma.siteContent.update({ where: { id: 1 }, data: updates });
