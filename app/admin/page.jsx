@@ -226,6 +226,7 @@ function SiteContentSection({ adminKey }) {
       const response = await fetch('/api/site-content', { cache: 'no-store' });
       if (!response.ok) throw new Error('Failed to load site content');
       const data = await response.json();
+
       setHero({
         eyebrow: data?.hero?.eyebrow ?? '',
         title: data?.hero?.title ?? '',
@@ -256,12 +257,14 @@ function SiteContentSection({ adminKey }) {
 
   const submit = async (event) => {
     event.preventDefault();
+
     if (!adminKey) {
       toast.error('Provide the admin API key to update site content.');
       return;
     }
 
     let parsedHighlights = [];
+
     try {
       parsedHighlights = JSON.parse(about.highlights);
       if (!Array.isArray(parsedHighlights)) {
@@ -273,6 +276,7 @@ function SiteContentSection({ adminKey }) {
     }
 
     setSaving(true);
+
     try {
       const response = await fetch('/api/site-content', {
         method: 'PUT',
