@@ -1,12 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-
-const toast = {
-  success: () => {},
-  error: () => {},
-  message: () => {},
-};
+import { toast } from 'sonner';
 
 const defaultFormState = (fields) =>
   fields.reduce((state, field) => {
@@ -121,10 +116,6 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const handleSubmit = useCallback(
     async (event) => {
       event.preventDefault();
-      if (!adminKey) {
-        toast.error('Provide the admin API key to save changes.');
-        return;
-      }
 
       setSaving(true);
       try {
@@ -142,7 +133,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
           method: isUpdating ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-key': adminKey,
+            ...(adminKey ? { 'x-admin-key': adminKey } : {}),
           },
           body: JSON.stringify(isUpdating ? { ...payload, id: editingId } : payload),
         });
@@ -172,11 +163,6 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
   const handleDelete = useCallback(
     async (id) => {
-      if (!adminKey) {
-        toast.error('Provide the admin API key to delete entries.');
-        return;
-      }
-
       setDeletingId(id);
       try {
         if (process.env.NODE_ENV !== 'production') {
@@ -186,7 +172,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-key': adminKey,
+            ...(adminKey ? { 'x-admin-key': adminKey } : {}),
           },
           body: JSON.stringify({ id }),
         });

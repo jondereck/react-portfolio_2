@@ -5,12 +5,7 @@ import AdminHeader from '@/components/AdminHeader';
 import DataTable from '@/components/DataTable';
 import FormDialog from '@/components/FormDialog';
 import { useAdminData } from '@/hooks/useAdminData';
-
-const toast = {
-  success: () => {},
-  error: () => {},
-  message: () => {},
-};
+import { Toaster, toast } from 'sonner';
 
 const cardStyles = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900';
 const buttonStyles =
@@ -391,6 +386,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
+      <Toaster richColors position="top-right" />
       <div className="mx-auto max-w-6xl space-y-8">
         <AdminHeader adminKey={adminKey} onAdminKeyChange={setAdminKey} />
 
