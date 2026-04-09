@@ -2,9 +2,23 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { aboutSchema, heroSchema } from '@/lib/validators';
+import { defaultSiteContent } from '@/lib/siteContentDefaults';
+
+async function ensureSiteContent() {
+  await prisma.siteContent.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      id: 1,
+      hero: defaultSiteContent.hero,
+      about: defaultSiteContent.about,
+    },
+  });
+}
 
 export async function GET() {
-  const siteContent = await prisma.siteContent.get();
+  await ensureSiteContent();
+  const siteContent = await prisma.siteContent.findUnique({ where: { id: 1 } });
   return NextResponse.json(siteContent);
 }
 
@@ -14,6 +28,7 @@ export async function PUT(request: Request) {
   }
 
   try {
+    await ensureSiteContent();
     const payload = await request.json();
     if (!payload.hero && !payload.about) {
       return NextResponse.json({ error: 'Provide hero or about payload.' }, { status: 400 });
@@ -37,9 +52,10 @@ export async function PUT(request: Request) {
       updates.about = parsedAbout.data;
     }
 
-    const result = await prisma.siteContent.update(updates);
+    const result = await prisma.siteContent.update({ where: { id: 1 }, data: updates });
     return NextResponse.json(result);
-  } catch {
+  } catch (error) {
+    console.error('Failed to update site content', error);
     return NextResponse.json({ error: 'Unable to update site content' }, { status: 500 });
   }
 }

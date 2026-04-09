@@ -7,6 +7,14 @@
       "category": "Information",
       "createdAt": "2026-04-09T08:55:52.529Z",
       "updatedAt": "2026-04-09T08:55:52.529Z"
+    },
+    {
+      "id": 2,
+      "name": "fsfasf",
+      "level": 100,
+      "category": "sfasf",
+      "createdAt": "2026-04-09T09:54:01.606Z",
+      "updatedAt": "2026-04-09T09:54:01.606Z"
     }
   ],
   "experience": [],
@@ -15,11 +23,42 @@
       "id": 1,
       "title": "test",
       "issuer": "test",
-      "image": "https://chatgpt.com/c/69d761c2-b440-8321-9a88-7e4d5daebdc4",
-      "link": "https://chatgpt.com/c/69d761c2-b440-8321-9a88-7e4d5daebdc4",
+      "image": "https://4.img-dpreview.com/files/p/E~C667x0S5333x4000T1200x900~articles/3925134721/0266554465.jpeg",
+      "link": "https://4.img-dpreview.com/files/p/E~C667x0S5333x4000T1200x900~articles/3925134721/0266554465.jpeg",
       "category": "tes",
       "createdAt": "2026-04-09T08:54:50.181Z",
-      "updatedAt": "2026-04-09T08:54:50.181Z"
+      "updatedAt": "2026-04-09T09:25:57.372Z"
     }
-  ]
+  ],
+  "portfolio": [],
+  "siteContent": {
+    "hero": {
+      "eyebrow": "Frontend Engineering",
+      "title": "Front-End Developer building scalable, high-performance web apps",
+      "description": "I design polished web experiences with React, Next.js, Tailwind CSS, and Prisma—focused on performance, maintainable architecture, and business impact.",
+      "primaryCtaLabel": "View Projects",
+      "primaryCtaHref": "#portfolio",
+      "secondaryCtaLabel": "Download Resume",
+      "secondaryCtaHref": "/resume.pdf",
+      "image": "/heroImage.jpg"
+    },
+    "about": {
+      "title": "About",
+      "body": "A quick snapshot of how I think, build, and deliver as a developer.",
+      "highlights": [
+        {
+          "label": "Core stack",
+          "value": "React, Next.js, TypeScript, Tailwind CSS"
+        },
+        {
+          "label": "Data layer",
+          "value": "Prisma, REST APIs, GraphQL fundamentals"
+        },
+        {
+          "label": "Workflow",
+          "value": "GitHub, CI-ready quality, iterative delivery"
+        }
+      ]
+    }
+  }
 }
