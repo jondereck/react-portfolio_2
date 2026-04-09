@@ -1,7 +1,8 @@
 import React from 'react';
+import { useEffect, useState } from 'react';
 import SectionContainer from './SectionContainer';
 
-const aboutCards = [
+const fallbackAboutCards = [
   {
     title: 'Who I Am',
     points: [
@@ -29,10 +30,45 @@ const aboutCards = [
 ];
 
 const About = () => {
+  const [cards, setCards] = useState(fallbackAboutCards);
+  const [subtitle, setSubtitle] = useState('A quick snapshot of how I think, build, and deliver as a developer.');
+
+  useEffect(() => {
+    const loadSiteContent = async () => {
+      const response = await fetch('/api/site-content', { cache: 'no-store' });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const about = payload?.about;
+      if (!about || typeof about !== 'object') return;
+
+      if (typeof about.body === 'string') {
+        setSubtitle(about.body);
+      }
+
+      if (Array.isArray(about.highlights) && about.highlights.length > 0) {
+        const normalized = about.highlights
+          .map((highlight) => {
+            if (!highlight || typeof highlight !== 'object') return null;
+            const label = typeof highlight.label === 'string' ? highlight.label : '';
+            const value = typeof highlight.value === 'string' ? highlight.value : '';
+            if (!label || !value) return null;
+            return { title: label, points: [value] };
+          })
+          .filter(Boolean);
+
+        if (normalized.length > 0) {
+          setCards(normalized);
+        }
+      }
+    };
+
+    loadSiteContent();
+  }, []);
+
   return (
-    <SectionContainer name="about" title="About" subtitle="A quick snapshot of how I think, build, and deliver as a developer.">
+    <SectionContainer name="about" title="About" subtitle={subtitle}>
       <div className="grid gap-5 md:grid-cols-3">
-        {aboutCards.map((card) => (
+        {cards.map((card) => (
           <article
             key={card.title}
             className="rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900/70"

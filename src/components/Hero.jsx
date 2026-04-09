@@ -1,9 +1,41 @@
 import React from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-scroll';
 import heroImage from '../assets/heroImage.jpg';
 
+const fallbackHero = {
+  eyebrow: 'Frontend Engineering',
+  title: 'Front-End Developer building scalable, high-performance web apps',
+  description:
+    'I design polished web experiences with React, Next.js, Tailwind CSS, and Prisma—focused on performance, maintainable architecture, and business impact.',
+  primaryCtaLabel: 'View Projects',
+  secondaryCtaLabel: 'Download Resume',
+};
+
 const Hero = () => {
+  const [content, setContent] = useState(fallbackHero);
+
+  useEffect(() => {
+    const loadSiteContent = async () => {
+      const response = await fetch('/api/site-content', { cache: 'no-store' });
+      if (!response.ok) return;
+      const payload = await response.json();
+      const hero = payload?.hero;
+      if (!hero || typeof hero !== 'object') return;
+      setContent((prev) => ({
+        eyebrow: typeof hero.eyebrow === 'string' ? hero.eyebrow : prev.eyebrow,
+        title: typeof hero.title === 'string' ? hero.title : prev.title,
+        description: typeof hero.description === 'string' ? hero.description : prev.description,
+        primaryCtaLabel: typeof hero.primaryCtaLabel === 'string' ? hero.primaryCtaLabel : prev.primaryCtaLabel,
+        secondaryCtaLabel:
+          typeof hero.secondaryCtaLabel === 'string' ? hero.secondaryCtaLabel : prev.secondaryCtaLabel,
+      }));
+    };
+
+    loadSiteContent();
+  }, []);
+
   return (
     <section name="home" className="w-full px-4 pb-16 pt-28 md:pb-24 md:pt-36">
       <div className="mx-auto grid w-full max-w-6xl items-center gap-12 md:grid-cols-2">
@@ -13,14 +45,11 @@ const Hero = () => {
           transition={{ duration: 0.7, ease: 'easeOut' }}
           className="space-y-6"
         >
-          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-500">Frontend Engineering</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-cyan-500">{content.eyebrow}</p>
           <h1 className="text-4xl font-bold leading-tight text-slate-900 dark:text-slate-100 md:text-5xl lg:text-6xl">
-            Front-End Developer building scalable, high-performance web apps
+            {content.title}
           </h1>
-          <p className="max-w-xl text-base text-slate-600 dark:text-slate-300 md:text-lg">
-            I design polished web experiences with React, Next.js, Tailwind CSS, and Prisma—focused on performance,
-            maintainable architecture, and business impact.
-          </p>
+          <p className="max-w-xl text-base text-slate-600 dark:text-slate-300 md:text-lg">{content.description}</p>
           <div className="flex flex-wrap items-center gap-4">
             <Link
               to="portfolio"
@@ -28,14 +57,14 @@ const Hero = () => {
               duration={550}
               className="cursor-pointer rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 transition hover:-translate-y-0.5 hover:shadow-cyan-500/50"
             >
-              View Projects
+              {content.primaryCtaLabel}
             </Link>
             <a
               href="/resume.pdf"
               download
               className="rounded-full border border-slate-300 px-7 py-3 text-sm font-semibold text-slate-700 transition hover:border-cyan-400 hover:text-cyan-500 dark:border-slate-700 dark:text-slate-100 dark:hover:border-cyan-300"
             >
-              Download Resume
+              {content.secondaryCtaLabel}
             </a>
           </div>
         </motion.div>
