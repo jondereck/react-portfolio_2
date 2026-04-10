@@ -23,50 +23,22 @@ const inputStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-
 export default function ImageUpload({ id, label, value, adminKey, onChange, className }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
-
-  const uploadFile = async (file: File): Promise<string | null> => {
-    if (!adminKey) {
-      setUploadError('Provide admin API key before uploading.');
-      return null;
-    }
-
-    setUploadError('');
-    setUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        headers: {
-          'x-admin-key': adminKey,
-        },
-        body: formData,
-      });
-
-      const payload: { secure_url?: string; error?: string } = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setUploadError(typeof payload.error === 'string' ? payload.error : 'Image upload failed');
-        return null;
-      }
-
-      return typeof payload.secure_url === 'string' && payload.secure_url.length > 0 ? payload.secure_url : null;
-    } catch {
-      setUploadError('Image upload failed');
-      return null;
-    } finally {
-      setUploading(false);
-    }
-  };
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
   return (
     <label className={`flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200 ${className ?? ''}`}>
       {label}
       <input id={`${id}-url`} type="url" value={value} readOnly className={inputStyles} />
       <CldUploadWidget
-        uploadHandler={uploadFile}
+        uploadPreset={uploadPreset}
+        options={{
+          cropping: true,
+          croppingAspectRatio: 1,
+          croppingShowDimensions: true,
+          multiple: false,
+        }}
         onSuccess={(result: UploadResult) => {
+          setUploading(false);
           const uploadedUrl = result.info?.secure_url;
           if (typeof uploadedUrl === 'string' && uploadedUrl.length > 0) {
             onChange(uploadedUrl);
@@ -74,10 +46,30 @@ export default function ImageUpload({ id, label, value, adminKey, onChange, clas
             setUploadError('Image upload failed');
           }
         }}
-        onError={() => setUploadError('Image upload failed')}
+        onError={() => {
+          setUploading(false);
+          setUploadError('Image upload failed');
+        }}
       >
         {({ open }) => (
-          <button type="button" onClick={open} disabled={uploading} className={`${inputStyles} text-left`}>
+          <button
+            type="button"
+            onClick={() => {
+              if (!uploadPreset) {
+                setUploadError('Missing NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET.');
+                return;
+              }
+              if (!process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME) {
+                setUploadError('Missing NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME.');
+                return;
+              }
+              setUploadError('');
+              setUploading(true);
+              open();
+            }}
+            disabled={uploading}
+            className={`${inputStyles} text-left`}
+          >
             {uploading ? 'Uploading image…' : 'Choose image'}
           </button>
         )}

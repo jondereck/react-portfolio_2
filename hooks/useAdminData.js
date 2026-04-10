@@ -79,6 +79,8 @@ const fetcher = (url, adminKey) =>
     return response.json();
   });
 
+const realtimeKeys = ['/api/projects', '/api/certificates', '/api/experience', '/api/skills', '/api/portfolio'];
+
 export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
@@ -180,11 +182,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
         await requestPromise;
         await refreshItems();
-        await mutate('/api/projects');
-        await mutate('/api/certificates');
-        await mutate('/api/experience');
-        await mutate('/api/skills');
-        await mutate('/api/portfolio');
+        await Promise.all(realtimeKeys.map((key) => mutate(key)));
         resetForm();
       } catch (requestError) {
         const message = requestError instanceof Error ? requestError.message : `Unable to save ${title}`;
@@ -223,11 +221,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
         await requestPromise;
         await refreshItems();
-        await mutate('/api/projects');
-        await mutate('/api/certificates');
-        await mutate('/api/experience');
-        await mutate('/api/skills');
-        await mutate('/api/portfolio');
+        await Promise.all(realtimeKeys.map((key) => mutate(key)));
 
         if (editingId === id) {
           resetForm();

@@ -49,7 +49,13 @@ declare module 'next-cloudinary' {
     children: (helpers: { open: () => void }) => ReactNode;
     onSuccess?: (result: UploadResult) => void;
     onError?: (error: Error) => void;
-    uploadHandler?: (file: File) => Promise<string | null>;
+    uploadPreset?: string;
+    options?: {
+      cropping?: boolean;
+      croppingAspectRatio?: number;
+      croppingShowDimensions?: boolean;
+      multiple?: boolean;
+    };
   };
 
   export function CldUploadWidget(props: CldUploadWidgetProps): JSX.Element;
