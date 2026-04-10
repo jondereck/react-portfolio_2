@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import AdminHeader from '@/components/AdminHeader';
 import DataTable from '@/components/DataTable';
 import FormDialog from '@/components/FormDialog';
@@ -633,26 +634,43 @@ function SiteConfigSection({ adminKey }) {
 }
 
 export default function AdminPage() {
+  const router = useRouter();
   const [adminKey, setAdminKey] = useState('');
-  const [isAuthorized, setIsAuthorized] = useState(false);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     const isAuth = localStorage.getItem('admin-auth');
+    const storedKey = localStorage.getItem('admin-key');
+
     if (!isAuth) {
-      window.location.href = '/';
+      router.replace('/');
       return;
     }
-    setIsAuthorized(true);
-  }, []);
 
-  if (!isAuthorized) {
+    if (storedKey) {
+      setAdminKey(storedKey);
+      setIsReady(true);
+      return;
+    }
+
+    localStorage.removeItem('admin-auth');
+    router.replace('/');
+  }, [router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('admin-auth');
+    localStorage.removeItem('admin-key');
+    router.push('/');
+  };
+
+  if (!isReady) {
     return null;
   }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       <div className="mx-auto max-w-6xl space-y-8">
-        <AdminHeader adminKey={adminKey} onAdminKeyChange={setAdminKey} />
+        <AdminHeader onLogout={handleLogout} />
 
         <div className="space-y-6">
           <SiteConfigSection adminKey={adminKey} />

@@ -37,6 +37,7 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
     }
 
     localStorage.setItem('admin-auth', 'true');
+    localStorage.setItem('admin-key', normalizedKey);
     setKey('');
     setError('');
     onOpenChange(false);
