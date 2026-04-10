@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { portfolioSchema } from '@/lib/validators';
+import { parseMultipartOrJson } from '@/lib/server/request-parsing';
+import { uploadImageFile } from '@/lib/server/uploads';
+import { toErrorResponse } from '@/lib/server/api-responses';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -23,12 +26,43 @@ const normalizeTech = (value: unknown): string[] => {
   return [];
 };
 
+const normalizeDescriptions = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split('\n')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const fallbackSummary = (data: Record<string, unknown>) => {
+  if (typeof data.summary === 'string' && data.summary.trim()) {
+    return data.summary;
+  }
+  if (typeof data.description === 'string' && data.description.trim()) {
+    return data.description;
+  }
+  return '';
+};
+
 const slugify = (value: string): string =>
   value
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+
+const serializePortfolio = (project: Record<string, unknown>) => ({
+  ...project,
+  summary: typeof project.description === 'string' ? project.description : '',
+  descriptions: normalizeDescriptions(project.descriptions),
+  description: typeof project.description === 'string' ? project.description : '',
+  tech: normalizeTech(project.tech),
+});
 
 export async function GET(request: Request, context: RouteContext) {
   const { id: idParam } = await context.params;
@@ -44,7 +78,7 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json(project);
+  return NextResponse.json(serializePortfolio(project));
 }
 
 export async function PUT(request: Request, context: RouteContext) {
@@ -59,36 +93,40 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
-    const payload = await request.json();
-    const parsed = portfolioSchema.safeParse({
-      ...payload,
-      slug: slugify(String(payload.slug || payload.title || '')),
-      tech: normalizeTech(payload.tech),
+    const { data, imageFile } = await parseMultipartOrJson(request);
+    const image =
+      imageFile ? await uploadImageFile(imageFile, 'portfolio/projects') : typeof data.image === 'string' ? data.image : undefined;
+    const parsed = portfolioSchema.parse({
+      ...data,
+      summary: fallbackSummary(data),
+      descriptions: normalizeDescriptions(data.descriptions),
+      slug: slugify(String(data.slug || data.title || '')),
+      tech: normalizeTech(data.tech),
+      image,
     });
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-    }
+
+    const updateData: Record<string, unknown> = {
+      title: parsed.title,
+      slug: parsed.slug,
+      description: parsed.summary,
+      descriptions: parsed.descriptions.length > 0 ? parsed.descriptions : null,
+      tech: parsed.tech,
+      image: parsed.image,
+      badge: parsed.badge,
+      repoUrl: parsed.repoUrl ?? null,
+      demoUrl: parsed.demoUrl ?? null,
+      sortOrder: parsed.sortOrder ?? 0,
+      isFeatured: parsed.isFeatured ?? false,
+      isPublished: parsed.isPublished ?? true,
+    };
 
     const updated = await prisma.portfolio.update({
       where: { id },
-      data: {
-        title: parsed.data.title,
-        slug: parsed.data.slug,
-        description: parsed.data.description,
-        tech: parsed.data.tech,
-        link: parsed.data.link,
-        image: parsed.data.image,
-        badge: parsed.data.badge,
-        repoUrl: parsed.data.repoUrl ?? null,
-        demoUrl: parsed.data.demoUrl ?? null,
-        sortOrder: parsed.data.sortOrder ?? 0,
-        isFeatured: parsed.data.isFeatured ?? false,
-        isPublished: parsed.data.isPublished ?? true,
-      },
+      data: updateData as never,
     });
 
-    return NextResponse.json(updated);
-  } catch {
-    return NextResponse.json({ error: 'Unable to update project' }, { status: 500 });
+    return NextResponse.json(serializePortfolio(updated));
+  } catch (error) {
+    return toErrorResponse(error, 'Unable to update portfolio entry.');
   }
 }

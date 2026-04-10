@@ -96,9 +96,9 @@ export const seoSchema = z.object({
 export const portfolioSchema = z.object({
   title: textField(1, 120),
   slug: textField(1, 160),
-  description: textField(10, 600),
+  summary: textField(10, 600),
+  descriptions: z.array(textField(1, 320)).max(12).optional().default([]),
   tech: z.array(textField(1, 40)).min(1).max(10),
-  link: urlField(500),
   image: urlField(500),
   badge: textField(1, 60),
   repoUrl: urlField(500).optional(),

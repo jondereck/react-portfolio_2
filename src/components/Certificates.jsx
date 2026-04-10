@@ -4,15 +4,24 @@ import SectionContainer from './SectionContainer';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Dialog, DialogContent } from './ui/dialog';
 import AdminLoginDialog from './AdminLoginDialog';
+import useSWR from 'swr';
+
+const fetcher = (url) =>
+  fetch(url, { cache: 'no-store' }).then((response) => {
+    if (!response.ok) {
+      throw new Error('Unable to load certificates');
+    }
+    return response.json();
+  });
 
 const Certificates = () => {
-  const [items, setItems] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedImage, setSelectedImage] = useState('');
-  const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const itemsPerPage = 6;
+  const { data, error } = useSWR('/api/certificates', fetcher);
+  const items = Array.isArray(data) ? data : [];
 
   const categories = useMemo(() => {
     const unique = new Set(items.map((item) => item.category));
@@ -32,25 +41,6 @@ const Certificates = () => {
     setPage(1);
   }, [activeCategory, items.length]);
 
-  const loadCertificates = async () => {
-    try {
-      const response = await fetch('/api/certificates', { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error('Unable to load certificates');
-      }
-      const data = await response.json();
-      setItems(Array.isArray(data) ? data : []);
-      setError('');
-    } catch (loadError) {
-      setItems([]);
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load certificates');
-    }
-  };
-
-  useEffect(() => {
-    loadCertificates();
-  }, []);
-
   return (
     <SectionContainer
       name="certificates"
@@ -59,7 +49,7 @@ const Certificates = () => {
     >
 
 
-      {error ? <p className="mb-4 text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
+      {error ? <p className="mb-4 text-sm text-rose-600 dark:text-rose-300">{error instanceof Error ? error.message : 'Unable to load certificates'}</p> : null}
 
       <div className="mb-8 flex flex-wrap gap-2">
         {categories.map((category) => (

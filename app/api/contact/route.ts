@@ -12,9 +12,9 @@ export async function POST(req: Request) {
 
     await resend.emails.send({
       from: 'Portfolio <onboarding@resend.dev>', // default works
-      to: 'your@email.com', // 🔥 change to your email
+      to: 'jonderecknifas@gmail.com', // 🔥 change to your email
       subject: `New Contact from ${name}`,
-      reply_to: email,
+      replyTo: email,
       html: `
         <p><strong>Name:</strong> ${name}</p>
         <p><strong>Email:</strong> ${email}</p>

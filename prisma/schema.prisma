@@ -68,8 +68,8 @@ model Portfolio {
   title       String
   slug        String   @unique
   description String
+  descriptions Json?
   tech        Json
-  link        String
   image       String
   badge       String
   repoUrl     String?

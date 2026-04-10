@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import SectionContainer from './SectionContainer';
 import Success from './Success';
+import { toast } from 'sonner';
 
 const initialForm = { name: '', email: '', message: '' };
 
@@ -10,6 +11,7 @@ const Contact = () => {
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState(initialForm);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const validateForm = ({ name, email, message }) => {
     const nextErrors = { ...initialForm };
@@ -42,21 +44,38 @@ const Contact = () => {
       return;
     }
 
+    setLoading(true);
     try {
-      const response = await fetch('https://getform.io/f/a646050b-6861-4df4-8b0d-c61f41b7205d', {
+      const promise = fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
+      }).then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error('Failed to send message');
+        }
+        return data;
       });
 
-      if (!response.ok) {
-        return;
-      }
+      toast.promise(promise, {
+        loading: 'Sending message...',
+        success: (data) => {
+          if (data.success) return 'Message sent successfully!';
+          throw new Error('Failed');
+        },
+        error: 'Failed to send message',
+      });
 
-      setIsSubmitted(true);
-      setFormData(initialForm);
+      const data = await promise;
+      if (data.success) {
+        setIsSubmitted(true);
+        setFormData(initialForm);
+      }
     } catch (_error) {
-      // Network failures are intentionally not exposed with internal details.
+      // Toast already handles error state.
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -109,9 +128,10 @@ const Contact = () => {
 
             <button
               type="submit"
+              disabled={loading}
               className="w-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 px-6 py-3 font-semibold text-white transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-500/30"
             >
-              Send Message
+              {loading ? 'Sending...' : 'Send Message'}
             </button>
           </form>
         ) : (

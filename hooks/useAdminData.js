@@ -1,14 +1,24 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import useSWR, { mutate } from 'swr';
+import useSWR from 'swr';
 import { toast } from 'sonner';
 import { handleRequest } from '@/lib/handleRequest';
-import { useLoadingStore } from '@/store/loading';
+import { notifyRealtimeUpdate, revalidatePublicData } from '@/lib/realtime';
 
 const defaultFormState = (fields) =>
   fields.reduce((state, field) => {
-    state[field.name] = field.type === 'checkbox' ? false : '';
+    if (field.type === 'checkbox') {
+      state[field.name] = false;
+      return state;
+    }
+
+    if (field.type === 'string-array') {
+      state[field.name] = [];
+      return state;
+    }
+
+    state[field.name] = '';
     return state;
   }, {});
 
@@ -33,6 +43,13 @@ const buildPayload = (fields, formState) => {
       continue;
     }
 
+    if (field.type === 'string-array') {
+      payload[field.name] = Array.isArray(rawValue)
+        ? rawValue.map((item) => (typeof item === 'string' ? item.trim() : '')).filter(Boolean)
+        : [];
+      continue;
+    }
+
     if (rawValue === '') {
       payload[field.name] = field.required === false ? undefined : '';
       continue;
@@ -42,6 +59,13 @@ const buildPayload = (fields, formState) => {
   }
 
   return payload;
+};
+
+const buildRequestConfig = (fields, formState) => {
+  return {
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(buildPayload(fields, formState)),
+  };
 };
 
 const formatForForm = (fields, item) =>
@@ -63,6 +87,11 @@ const formatForForm = (fields, item) =>
       return state;
     }
 
+    if (field.type === 'string-array') {
+      state[field.name] = Array.isArray(value) ? value.map((item) => String(item)) : [];
+      return state;
+    }
+
     state[field.name] = value ?? '';
     return state;
   }, defaultFormState(fields));
@@ -79,8 +108,6 @@ const fetcher = (url, adminKey) =>
     return response.json();
   });
 
-const realtimeKeys = ['/api/projects', '/api/certificates', '/api/experience', '/api/skills', '/api/portfolio'];
-
 export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
@@ -90,13 +117,8 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState('');
 
-  const setGlobalLoading = useLoadingStore((state) => state.setLoading);
   const { data, error: swrError, isLoading, mutate: refreshItems } = useSWR(endpoint, (url) => fetcher(url, adminKey));
   const items = Array.isArray(data) ? data : [];
-
-  useEffect(() => {
-    setGlobalLoading(isLoading);
-  }, [isLoading, setGlobalLoading]);
 
   useEffect(() => {
     if (!swrError) {
@@ -131,7 +153,6 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const openEdit = useCallback(
     async (id) => {
       setError('');
-      setGlobalLoading(true);
       try {
         const item = await handleRequest(() =>
           fetch(`${endpoint}/${id}`, {
@@ -148,11 +169,9 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         const message = requestError instanceof Error ? requestError.message : `Unable to load ${title} entry`;
         setError(message);
         toast.error(`Unable to load ${title} entry`, { description: message });
-      } finally {
-        setGlobalLoading(false);
       }
     },
-    [adminKey, endpoint, fields, setGlobalLoading, title],
+    [adminKey, endpoint, fields, title],
   );
 
   const handleSubmit = useCallback(
@@ -160,21 +179,20 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
       event.preventDefault();
       setError('');
       setSaving(true);
-      setGlobalLoading(true);
 
-      const payload = buildPayload(fields, formState);
       const isUpdating = editingId !== null;
       const requestEndpoint = isUpdating ? `${endpoint}/${editingId}` : endpoint;
+      const requestConfig = buildRequestConfig(fields, formState);
 
       try {
         const requestPromise = handleRequest(() =>
           fetch(requestEndpoint, {
             method: isUpdating ? 'PUT' : 'POST',
             headers: {
-              'Content-Type': 'application/json',
+              ...requestConfig.headers,
               ...(adminKey ? { 'x-admin-key': adminKey } : {}),
             },
-            body: JSON.stringify(payload),
+            body: requestConfig.body,
           }),
         );
 
@@ -186,24 +204,23 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
         await requestPromise;
         await refreshItems();
-        await Promise.all(realtimeKeys.map((key) => mutate(key)));
+        await revalidatePublicData();
+        notifyRealtimeUpdate();
         resetForm();
       } catch (requestError) {
         const message = requestError instanceof Error ? requestError.message : `Unable to save ${title}`;
         setError(message);
       } finally {
         setSaving(false);
-        setGlobalLoading(false);
       }
     },
-    [adminKey, editingId, endpoint, fields, formState, refreshItems, resetForm, setGlobalLoading, title],
+    [adminKey, editingId, endpoint, fields, formState, refreshItems, resetForm, title],
   );
 
   const handleDelete = useCallback(
     async (id) => {
       setError('');
       setDeletingId(id);
-      setGlobalLoading(true);
 
       try {
         const requestPromise = handleRequest(() =>
@@ -225,7 +242,8 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
         await requestPromise;
         await refreshItems();
-        await Promise.all(realtimeKeys.map((key) => mutate(key)));
+        await revalidatePublicData();
+        notifyRealtimeUpdate();
 
         if (editingId === id) {
           resetForm();
@@ -235,10 +253,9 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setError(message);
       } finally {
         setDeletingId(null);
-        setGlobalLoading(false);
       }
     },
-    [adminKey, editingId, endpoint, refreshItems, resetForm, setGlobalLoading, title],
+    [adminKey, editingId, endpoint, refreshItems, resetForm, title],
   );
 
   return {

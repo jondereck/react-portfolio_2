@@ -14,6 +14,7 @@ type WidgetProps = {
   onSuccess?: (result: WidgetResults) => void;
   onError?: (error: Error) => void;
   onClose?: () => void;
+  onEvent?: (event: string) => void;
   uploadPreset?: string;
   options?: {
     cropping?: boolean;
@@ -91,7 +92,7 @@ const loadCloudinaryScript = async (): Promise<CloudinaryGlobal> => {
   return window.cloudinary;
 };
 
-export function CldUploadWidget({ children, onSuccess, onError, onClose, uploadPreset, options }: WidgetProps) {
+export function CldUploadWidget({ children, onSuccess, onError, onClose, onEvent, uploadPreset, options }: WidgetProps) {
   const open = useCallback(async () => {
     try {
       const cloudinary = await loadCloudinaryScript();
@@ -116,6 +117,8 @@ export function CldUploadWidget({ children, onSuccess, onError, onClose, uploadP
             return;
           }
 
+          onEvent?.(String(result.event));
+
           if (result.event === 'success') {
             onSuccess?.({ info: result.info });
             return;
@@ -131,7 +134,7 @@ export function CldUploadWidget({ children, onSuccess, onError, onClose, uploadP
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error('Image upload failed'));
     }
-  }, [onClose, onError, onSuccess, options?.cropping, options?.croppingAspectRatio, options?.croppingShowDimensions, options?.multiple, uploadPreset]);
+  }, [onClose, onError, onEvent, onSuccess, options?.cropping, options?.croppingAspectRatio, options?.croppingShowDimensions, options?.multiple, uploadPreset]);
 
   return <>{children({ open })}</>;
 }

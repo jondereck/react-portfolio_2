@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { skillSchema } from '@/lib/validators';
+import { parseMultipartOrJson } from '@/lib/server/request-parsing';
+import { uploadImageFile } from '@/lib/server/uploads';
+import { toErrorResponse } from '@/lib/server/api-responses';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -39,27 +42,29 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
-    const payload = await request.json();
-    const parsed = skillSchema.safeParse(payload);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-    }
+    const { data, imageFile } = await parseMultipartOrJson(request);
+    const image =
+      imageFile ? await uploadImageFile(imageFile, 'portfolio/skills') : typeof data.image === 'string' ? data.image : undefined;
+    const parsed = skillSchema.parse({
+      ...data,
+      image,
+    });
 
     const updated = await prisma.skill.update({
       where: { id },
       data: {
-        name: parsed.data.name,
-        level: parsed.data.level,
-        category: parsed.data.category,
-        description: parsed.data.description ?? null,
-        image: parsed.data.image ?? null,
-        sortOrder: parsed.data.sortOrder ?? 0,
-        isPublished: parsed.data.isPublished ?? true,
+        name: parsed.name,
+        level: parsed.level,
+        category: parsed.category,
+        description: parsed.description ?? null,
+        image: parsed.image ?? null,
+        sortOrder: parsed.sortOrder ?? 0,
+        isPublished: parsed.isPublished ?? true,
       },
     });
 
     return NextResponse.json(updated);
-  } catch {
-    return NextResponse.json({ error: 'Unable to update skill' }, { status: 500 });
+  } catch (error) {
+    return toErrorResponse(error, 'Unable to update skill.');
   }
 }

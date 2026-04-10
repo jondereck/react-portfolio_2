@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { certificateSchema } from '@/lib/validators';
+import { parseMultipartOrJson } from '@/lib/server/request-parsing';
+import { uploadImageFile } from '@/lib/server/uploads';
+import { toErrorResponse } from '@/lib/server/api-responses';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -9,6 +12,27 @@ const parseId = (value: string) => {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
 };
+
+const normalizeOptionalText = (value: unknown) => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const normalizeCertificatePayload = (data: Record<string, unknown>) => ({
+  title: typeof data.title === 'string' ? data.title.trim() : data.title,
+  issuer: typeof data.issuer === 'string' ? data.issuer.trim() : data.issuer,
+  image: typeof data.image === 'string' ? data.image.trim() : data.image,
+  link: typeof data.link === 'string' ? data.link.trim() : data.link,
+  category: typeof data.category === 'string' ? data.category.trim() : data.category,
+  issuedAt: data.issuedAt === '' ? null : data.issuedAt,
+  expiresAt: data.expiresAt === '' ? null : data.expiresAt,
+  credentialId: normalizeOptionalText(data.credentialId),
+  sortOrder: data.sortOrder,
+  isPublished: data.isPublished,
+});
 
 export async function GET(request: Request, context: RouteContext) {
   const { id: idParam } = await context.params;
@@ -39,30 +63,32 @@ export async function PUT(request: Request, context: RouteContext) {
   }
 
   try {
-    const payload = await request.json();
-    const parsed = certificateSchema.safeParse(payload);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-    }
+    const { data, imageFile } = await parseMultipartOrJson(request);
+    const image =
+      imageFile ? await uploadImageFile(imageFile, 'portfolio/certificates') : typeof data.image === 'string' ? data.image : undefined;
+    const parsed = certificateSchema.parse({
+      ...normalizeCertificatePayload(data),
+      image,
+    });
 
     const updated = await prisma.certificate.update({
       where: { id },
       data: {
-        title: parsed.data.title,
-        issuer: parsed.data.issuer,
-        image: parsed.data.image,
-        link: parsed.data.link,
-        category: parsed.data.category,
-        credentialId: parsed.data.credentialId ?? null,
-        sortOrder: parsed.data.sortOrder ?? 0,
-        isPublished: parsed.data.isPublished ?? true,
-        issuedAt: parsed.data.issuedAt ? new Date(parsed.data.issuedAt) : null,
-        expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+        title: parsed.title,
+        issuer: parsed.issuer,
+        image: parsed.image,
+        link: parsed.link,
+        category: parsed.category,
+        credentialId: parsed.credentialId ?? null,
+        sortOrder: parsed.sortOrder ?? 0,
+        isPublished: parsed.isPublished ?? true,
+        issuedAt: parsed.issuedAt ? new Date(parsed.issuedAt) : null,
+        expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
       },
     });
 
     return NextResponse.json(updated);
-  } catch {
-    return NextResponse.json({ error: 'Unable to update certificate' }, { status: 500 });
+  } catch (error) {
+    return toErrorResponse(error, 'Unable to update certificate.');
   }
 }

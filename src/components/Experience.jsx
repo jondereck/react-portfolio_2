@@ -1,7 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
+import useSWR from 'swr';
+
+const fetcher = (url) =>
+  fetch(url, { cache: 'no-store' }).then((response) => {
+    if (!response.ok) {
+      throw new Error('Unable to load experience data');
+    }
+    return response.json();
+  });
 
 const toIsoDate = (value) => {
   if (!value) return '';
@@ -30,39 +39,12 @@ const renderAvatar = (src, alt, shapeClass = 'rounded-full') => (
 );
 
 const Experience = () => {
-  const [skills, setSkills] = useState([]);
-  const [experienceItems, setExperienceItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const [skillsRes, experienceRes] = await Promise.all([
-          fetch('/api/skills', { cache: 'no-store' }),
-          fetch('/api/experience', { cache: 'no-store' }),
-        ]);
-
-        if (!skillsRes.ok || !experienceRes.ok) {
-          throw new Error('Unable to load experience data');
-        }
-
-        const [skillsData, experienceData] = await Promise.all([skillsRes.json(), experienceRes.json()]);
-        setSkills(Array.isArray(skillsData) ? skillsData : []);
-        setExperienceItems(Array.isArray(experienceData) ? experienceData : []);
-        setError('');
-      } catch (loadError) {
-        setSkills([]);
-        setExperienceItems([]);
-        setError(loadError instanceof Error ? loadError.message : 'Unable to load experience data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
+  const { data: skillsData, error: skillsError, isLoading: skillsLoading } = useSWR('/api/skills', fetcher);
+  const { data: experienceData, error: experienceError, isLoading: experienceLoading } = useSWR('/api/experience', fetcher);
+  const skills = Array.isArray(skillsData) ? skillsData : [];
+  const experienceItems = Array.isArray(experienceData) ? experienceData : [];
+  const loading = skillsLoading || experienceLoading;
+  const error = skillsError || experienceError;
 
   return (
     <SectionContainer
@@ -71,7 +53,7 @@ const Experience = () => {
       subtitle="Technologies and hands-on work delivered in production-ready products."
     >
       {loading ? <p className="mb-6 text-sm text-slate-500">Loading experience data…</p> : null}
-      {error ? <p className="mb-6 text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
+      {error ? <p className="mb-6 text-sm text-rose-600 dark:text-rose-300">{error instanceof Error ? error.message : 'Unable to load experience data'}</p> : null}
 
       <h3 className="mb-4 text-xl font-semibold">Skills</h3>
       <div className="mb-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -90,7 +72,6 @@ const Experience = () => {
                 </p>
               </div>
             </div>
-            {skill.description && <p className="mb-3 text-sm text-slate-500 dark:text-slate-300">{skill.description}</p>}
             <div className="h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-700">
               <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${skill.level}%` }} />
             </div>

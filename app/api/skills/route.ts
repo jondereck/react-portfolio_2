@@ -2,6 +2,19 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { skillSchema } from '@/lib/validators';
+import { parseMultipartOrJson } from '@/lib/server/request-parsing';
+import { uploadImageFile } from '@/lib/server/uploads';
+import { toErrorResponse } from '@/lib/server/api-responses';
+
+const buildSkillInput = async (data: Record<string, unknown>, imageFile?: File) => {
+  const image =
+    imageFile ? await uploadImageFile(imageFile, 'portfolio/skills') : typeof data.image === 'string' ? data.image : undefined;
+
+  return skillSchema.parse({
+    ...data,
+    image,
+  });
+};
 
 export async function GET(request: Request) {
   const canViewDrafts = isAuthorizedMutation(request);
@@ -18,26 +31,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    const payload = await request.json();
-    const parsed = skillSchema.safeParse(payload);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-    }
+    const { data, imageFile } = await parseMultipartOrJson(request);
+    const parsed = await buildSkillInput(data, imageFile);
 
     const created = await prisma.skill.create({
       data: {
-        name: parsed.data.name,
-        level: parsed.data.level,
-        category: parsed.data.category,
-        description: parsed.data.description ?? null,
-        image: parsed.data.image ?? null,
-        sortOrder: parsed.data.sortOrder ?? 0,
-        isPublished: parsed.data.isPublished ?? true,
+        name: parsed.name,
+        level: parsed.level,
+        category: parsed.category,
+        description: parsed.description ?? null,
+        image: parsed.image ?? null,
+        sortOrder: parsed.sortOrder ?? 0,
+        isPublished: parsed.isPublished ?? true,
       },
     });
     return NextResponse.json(created, { status: 201 });
-  } catch {
-    return NextResponse.json({ error: 'Unable to create skill' }, { status: 500 });
+  } catch (error) {
+    return toErrorResponse(error, 'Unable to create skill.');
   }
 }
 
@@ -47,32 +57,29 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const payload = await request.json();
-    const id = Number(payload?.id);
+    const { data, imageFile } = await parseMultipartOrJson(request);
+    const id = Number(data?.id);
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
 
-    const parsed = skillSchema.safeParse(payload);
-    if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
-    }
+    const parsed = await buildSkillInput(data, imageFile);
 
     const updated = await prisma.skill.update({
       where: { id },
       data: {
-        name: parsed.data.name,
-        level: parsed.data.level,
-        category: parsed.data.category,
-        description: parsed.data.description ?? null,
-        image: parsed.data.image ?? null,
-        sortOrder: parsed.data.sortOrder ?? 0,
-        isPublished: parsed.data.isPublished ?? true,
+        name: parsed.name,
+        level: parsed.level,
+        category: parsed.category,
+        description: parsed.description ?? null,
+        image: parsed.image ?? null,
+        sortOrder: parsed.sortOrder ?? 0,
+        isPublished: parsed.isPublished ?? true,
       },
     });
     return NextResponse.json(updated);
-  } catch {
-    return NextResponse.json({ error: 'Unable to update skill' }, { status: 500 });
+  } catch (error) {
+    return toErrorResponse(error, 'Unable to update skill.');
   }
 }
 
@@ -90,7 +97,7 @@ export async function DELETE(request: Request) {
 
     await prisma.skill.delete({ where: { id } });
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: 'Unable to delete skill' }, { status: 500 });
+  } catch (error) {
+    return toErrorResponse(error, 'Unable to delete skill.');
   }
 }

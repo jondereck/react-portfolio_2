@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import useSWR from 'swr';
 import About from './components/About';
 import Certificates from './components/Certificates';
 import Contact from './components/Contact';
@@ -9,7 +10,7 @@ import Hero from './components/Hero';
 import NavBar from './components/NavBar';
 import Projects from './components/Projects';
 import SocialLinks from './components/SocialLinks';
-import { useLoadingStore } from '@/store/loading';
+import { REALTIME_EVENT, REALTIME_SIGNAL_KEY, revalidatePublicData } from '@/lib/realtime';
 
 const sanitizeText = (value) => (typeof value === 'string' ? value : '');
 
@@ -25,77 +26,75 @@ const normalizeHighlights = (value) => {
         typeof item?.value === 'string'
           ? item.value
           : Array.isArray(item?.value)
-            ? item.value.filter((line) => typeof line === 'string').join(' ')
+            ? item.value.filter((line) => typeof line === 'string').join(', ')
             : '',
     }))
     .filter((item) => item.label.length > 0 && item.value.length > 0);
 };
 
+const fetcher = (url) =>
+  fetch(url, { cache: 'no-store' }).then((response) => {
+    if (!response.ok) {
+      throw new Error('Unable to load homepage content.');
+    }
+    return response.json();
+  });
+
 function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [showThemeFade, setShowThemeFade] = useState(false);
-  const [siteContent, setSiteContent] = useState(null);
-  const [siteConfig, setSiteConfig] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
-  const setGlobalLoading = useLoadingStore((state) => state.setLoading);
+  const {
+    data: siteContentData,
+    error: siteContentError,
+    isLoading: siteContentLoading,
+  } = useSWR('/api/site-content', fetcher);
+  const {
+    data: siteConfigData,
+    error: siteConfigError,
+    isLoading: siteConfigLoading,
+  } = useSWR('/api/site-config', fetcher);
+
+  const siteContent = useMemo(
+    () => ({
+      hero: siteContentData?.hero && typeof siteContentData.hero === 'object' ? siteContentData.hero : null,
+      about:
+        siteContentData?.about && typeof siteContentData.about === 'object'
+          ? {
+              title: sanitizeText(siteContentData.about.title),
+              body: sanitizeText(siteContentData.about.body),
+              highlights: normalizeHighlights(siteContentData.about.highlights),
+            }
+          : null,
+    }),
+    [siteContentData],
+  );
+
+  const siteConfig = useMemo(
+    () => (siteConfigData && typeof siteConfigData === 'object' ? siteConfigData : null),
+    [siteConfigData],
+  );
+
+  const loading = siteContentLoading || siteConfigLoading;
+  const loadError = siteContentError || siteConfigError;
 
   useEffect(() => {
-    const loadPageData = async () => {
-      try {
-        setGlobalLoading(true);
-        setLoading(true);
-        setLoadError('');
-
-        const [contentResponse, configResponse] = await Promise.all([
-          fetch('/api/site-content', { cache: 'no-store' }),
-          fetch('/api/site-config', { cache: 'no-store' }),
-        ]);
-
-        if (!contentResponse.ok || !configResponse.ok) {
-          throw new Error('Unable to load homepage content.');
-        }
-
-        const contentPayload = await contentResponse.json();
-        const configPayload = await configResponse.json();
-
-        setSiteContent({
-          hero: contentPayload?.hero && typeof contentPayload.hero === 'object' ? contentPayload.hero : null,
-          about:
-            contentPayload?.about && typeof contentPayload.about === 'object'
-              ? {
-                  title: sanitizeText(contentPayload.about.title),
-                  body: sanitizeText(contentPayload.about.body),
-                  highlights: normalizeHighlights(contentPayload.about.highlights),
-                }
-              : null,
-        });
-        setSiteConfig(configPayload && typeof configPayload === 'object' ? configPayload : null);
-      } catch (error) {
-        setLoadError(error instanceof Error ? error.message : 'Unable to load homepage content.');
-      } finally {
-        setLoading(false);
-        setGlobalLoading(false);
+    const handleRefresh = () => {
+      revalidatePublicData();
+    };
+    const handleStorage = (event) => {
+      if (event.key === REALTIME_SIGNAL_KEY) {
+        handleRefresh();
       }
     };
 
-    loadPageData();
-
-    const handleRefresh = () => {
-      loadPageData();
-    };
-
-    window.addEventListener('site-content-updated', handleRefresh);
-    window.addEventListener('site-config-updated', handleRefresh);
-    window.addEventListener('data-updated', handleRefresh);
+    window.addEventListener(REALTIME_EVENT, handleRefresh);
+    window.addEventListener('storage', handleStorage);
 
     return () => {
-      window.removeEventListener('site-content-updated', handleRefresh);
-      window.removeEventListener('site-config-updated', handleRefresh);
-      window.removeEventListener('data-updated', handleRefresh);
+      window.removeEventListener(REALTIME_EVENT, handleRefresh);
+      window.removeEventListener('storage', handleStorage);
     };
-  }, [setGlobalLoading]);
-
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -158,7 +157,7 @@ function App() {
   }
 
   if (loadError) {
-    return <div className="p-6 text-sm text-red-600 dark:text-red-400">{loadError}</div>;
+    return <div className="p-6 text-sm text-red-600 dark:text-red-400">{loadError instanceof Error ? loadError.message : 'Unable to load homepage content.'}</div>;
   }
 
   return (
