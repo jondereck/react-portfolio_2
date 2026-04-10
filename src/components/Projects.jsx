@@ -92,13 +92,21 @@ const Projects = () => {
     const loadProjects = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/projects', { cache: 'no-store' });
+        const response = await fetch('/api/portfolio', { cache: 'no-store' });
+        console.log('STATUS:', response.status);
+
         if (!response.ok) {
-          throw new Error('Unable to load projects');
+          const text = await response.text();
+          console.error('API ERROR:', text);
+          setError('Unable to load projects');
+          setProjects([]);
+          return;
         }
+
         const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setProjects(data);
+        const projectData = Array.isArray(data) ? data : Array.isArray(data?.projects) ? data.projects : [];
+        if (projectData.length > 0) {
+          setProjects(projectData);
         } else {
           setProjects([]);
         }

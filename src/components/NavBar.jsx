@@ -6,7 +6,7 @@ import { Link as ScrollLink } from 'react-scroll';
 
 const links = ['home', 'about', 'portfolio', 'experience', 'certificates', 'contact'];
 
-const NavBar = ({ darkMode, setDarkMode, config }) => {
+const NavBar = ({ darkMode, onToggleDark, config }) => {
   const [nav, setNav] = useState(false);
   const logoText = typeof config?.logoText === 'string' && config.logoText.trim().length > 0 ? config.logoText : 'Jon';
   const logoImage = typeof config?.logoImage === 'string' ? config.logoImage : '';
@@ -43,7 +43,7 @@ const NavBar = ({ darkMode, setDarkMode, config }) => {
           </Link>
           <button
             type="button"
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={onToggleDark}
             className="rounded-full p-2 text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
             aria-label="Toggle theme"
           >
