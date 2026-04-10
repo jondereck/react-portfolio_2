@@ -35,3 +35,34 @@ declare module 'clsx' {
 declare module 'tailwind-merge' {
   export function twMerge(...classLists: string[]): string;
 }
+
+declare module 'next-cloudinary' {
+  import type { ReactNode } from 'react';
+
+  type UploadResult = {
+    info?: {
+      secure_url?: string;
+    };
+  };
+
+  type CldUploadWidgetProps = {
+    children: (helpers: { open: () => void }) => ReactNode;
+    onSuccess?: (result: UploadResult) => void;
+    onError?: (error: Error) => void;
+    uploadHandler?: (file: File) => Promise<string | null>;
+  };
+
+  export function CldUploadWidget(props: CldUploadWidgetProps): JSX.Element;
+}
+
+declare module 'swr' {
+  type SWRResponse<T> = {
+    data: T | undefined;
+    error: unknown;
+    isLoading: boolean;
+    mutate: () => Promise<void>;
+  };
+
+  export default function useSWR<T>(key: string, fetcher: (key: string) => Promise<T>): SWRResponse<T>;
+  export function mutate(key: string): Promise<void>;
+}

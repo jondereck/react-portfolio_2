@@ -1,55 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import ImageUpload from '@/components/ImageUpload';
 
 function FieldInput({ resourceKey, field, value, onChange, adminKey }) {
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-
-  const handleFileUpload = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    if (!adminKey) {
-      setUploadError('Admin key is required before uploading.');
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('file', file);
-    setUploadError('');
-    setUploading(true);
-
-    try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        headers: {
-          'x-admin-key': adminKey,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        setUploadError(typeof payload?.error === 'string' ? payload.error : 'Image upload failed.');
-        return;
-      }
-
-      const payload = await response.json();
-      if (typeof payload?.secure_url === 'string' && payload.secure_url.length > 0) {
-        onChange(payload.secure_url);
-      } else {
-        setUploadError('Image upload failed.');
-      }
-    } catch {
-      setUploadError('Image upload failed.');
-    } finally {
-      setUploading(false);
-      event.target.value = '';
-    }
-  };
 
   if (field.type === 'checkbox') {
     return (
@@ -62,6 +15,20 @@ function FieldInput({ resourceKey, field, value, onChange, adminKey }) {
 
   const className = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950';
   const colSpan = field.type === 'textarea' ? 'md:col-span-2' : '';
+
+
+  if (field.type === 'url' && field.name.toLowerCase().includes('image')) {
+    return (
+      <ImageUpload
+        id={`${resourceKey}-${field.name}`}
+        label={field.label}
+        value={value ?? ''}
+        adminKey={adminKey}
+        onChange={onChange}
+        className={colSpan}
+      />
+    );
+  }
 
   return (
     <label className={`flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200 ${colSpan}`}>
@@ -76,13 +43,6 @@ function FieldInput({ resourceKey, field, value, onChange, adminKey }) {
           rows={field.rows || 3}
           className={`rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950`}
         />
-      ) : field.type === 'url' && field.name.toLowerCase().includes('image') ? (
-        <div className="space-y-2">
-          <input id={`${resourceKey}-${field.name}`} type="url" value={value ?? ''} readOnly className={className} />
-          <input id={`${resourceKey}-${field.name}-file`} type="file" accept="image/*" onChange={handleFileUpload} className={className} />
-          {uploading ? <p className="text-xs text-slate-500">Uploading image…</p> : null}
-          {uploadError ? <p className="text-xs text-rose-600">{uploadError}</p> : null}
-        </div>
       ) : (
         <input
           id={`${resourceKey}-${field.name}`}
