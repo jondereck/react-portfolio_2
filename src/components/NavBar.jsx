@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';
-import Link from 'next/link';
 import { Link as ScrollLink } from 'react-scroll';
+import AdminLoginDialog from './AdminLoginDialog';
 
 const links = ['home', 'about', 'portfolio', 'experience', 'certificates', 'contact'];
 
 const NavBar = ({ darkMode, onToggleDark, config }) => {
   const [nav, setNav] = useState(false);
+  const [open, setOpen] = useState(false);
   const logoText = typeof config?.logoText === 'string' && config.logoText.trim().length > 0 ? config.logoText : 'Jon';
   const logoImage = typeof config?.logoImage === 'string' ? config.logoImage : '';
 
@@ -38,9 +39,13 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
         </nav>
 
         <div className="flex items-center gap-2">
-          <Link href="/admin" className="inline-flex h-9 items-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex h-9 items-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
             Admin
-          </Link>
+          </button>
           <button
             type="button"
             onClick={onToggleDark}
@@ -78,6 +83,8 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
           ))}
         </ul>
       ) : null}
+
+      <AdminLoginDialog open={open} onOpenChange={setOpen} />
     </header>
   );
 };
