@@ -2,7 +2,7 @@
 
 import ImageUpload from '@/components/ImageUpload';
 
-function FieldInput({ resourceKey, field, value, onChange, adminKey }) {
+function FieldInput({ resourceKey, field, value, onChange, shouldRenderImageField }) {
 
   if (field.type === 'checkbox') {
     return (
@@ -17,13 +17,18 @@ function FieldInput({ resourceKey, field, value, onChange, adminKey }) {
   const colSpan = field.type === 'textarea' ? 'md:col-span-2' : '';
 
 
-  if (field.type === 'url' && field.name.toLowerCase().includes('image')) {
+  const isImageField = field.type === 'url' && field.name.toLowerCase().includes('image');
+
+  if (isImageField && !shouldRenderImageField) {
+    return null;
+  }
+
+  if (isImageField) {
     return (
       <ImageUpload
         id={`${resourceKey}-${field.name}`}
         label={field.label}
         value={value ?? ''}
-        adminKey={adminKey}
         onChange={onChange}
         className={colSpan}
       />
@@ -58,8 +63,9 @@ function FieldInput({ resourceKey, field, value, onChange, adminKey }) {
   );
 }
 
-export default function FormDialog({ title, resourceKey, fields, formState, editingId, saving, open, onOpenChange, onChange, onSubmit, onReset, adminKey }) {
+export default function FormDialog({ title, resourceKey, fields, formState, editingId, editingItem, saving, open, onOpenChange, onChange, onSubmit, onReset, adminKey }) {
   const isEditing = editingId !== null;
+  const shouldRenderImageField = editingItem !== null;
 
   return (
     <>
@@ -75,7 +81,7 @@ export default function FormDialog({ title, resourceKey, fields, formState, edit
                   resourceKey={resourceKey}
                   field={field}
                   value={formState[field.name]}
-                  adminKey={adminKey}
+                  shouldRenderImageField={shouldRenderImageField}
                   onChange={(value) => onChange(field.name, value)}
                 />
               ))}

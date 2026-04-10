@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CldUploadWidget } from 'next-cloudinary';
+import { toast } from 'sonner';
 
 type UploadResult = {
   info?: {
@@ -13,24 +14,29 @@ type ImageUploadProps = {
   id: string;
   label: string;
   value: string;
-  adminKey?: string;
   onChange: (url: string) => void;
   className?: string;
 };
+const buttonStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-left text-sm dark:border-slate-700 dark:bg-slate-950';
 
-const inputStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950';
-
-export default function ImageUpload({ id, label, value, adminKey, onChange, className }: ImageUploadProps) {
-  const [uploading, setUploading] = useState(false);
+export default function ImageUpload({ id, label, value, onChange, className }: ImageUploadProps) {
   const [uploadError, setUploadError] = useState('');
+  const uploadToastIdRef = useRef<string | number | null>(null);
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+  const dismissUploadToast = () => {
+    if (uploadToastIdRef.current !== null) {
+      toast.dismiss(uploadToastIdRef.current);
+      uploadToastIdRef.current = null;
+    }
+  };
 
   return (
     <label className={`flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200 ${className ?? ''}`}>
       {label}
-      <input id={`${id}-url`} type="url" value={value} readOnly className={inputStyles} />
+      {value ? <img src={value} alt="preview" className="h-40 w-full rounded object-cover" /> : null}
       <CldUploadWidget
-        uploadPreset={uploadPreset}
+        uploadPreset={uploadPreset ?? ''}
         options={{
           cropping: true,
           croppingAspectRatio: 1,
@@ -38,18 +44,21 @@ export default function ImageUpload({ id, label, value, adminKey, onChange, clas
           multiple: false,
         }}
         onSuccess={(result: UploadResult) => {
-          setUploading(false);
+          dismissUploadToast();
           const uploadedUrl = result.info?.secure_url;
           if (typeof uploadedUrl === 'string' && uploadedUrl.length > 0) {
             onChange(uploadedUrl);
           } else {
             setUploadError('Image upload failed');
+            toast.error('Image upload failed');
           }
         }}
         onError={() => {
-          setUploading(false);
+          dismissUploadToast();
           setUploadError('Image upload failed');
+          toast.error('Image upload failed');
         }}
+        onClose={dismissUploadToast}
       >
         {({ open }) => (
           <button
@@ -64,13 +73,13 @@ export default function ImageUpload({ id, label, value, adminKey, onChange, clas
                 return;
               }
               setUploadError('');
-              setUploading(true);
+              dismissUploadToast();
+              uploadToastIdRef.current = toast.loading('Uploading image...');
               open();
             }}
-            disabled={uploading}
-            className={`${inputStyles} text-left`}
+            className={buttonStyles}
           >
-            {uploading ? 'Uploading image…' : 'Choose image'}
+            Upload Image
           </button>
         )}
       </CldUploadWidget>

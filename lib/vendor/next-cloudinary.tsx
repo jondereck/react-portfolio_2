@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
+import { useCallback } from 'react';
 
 type WidgetResults = {
   info?: {
@@ -12,6 +13,7 @@ type WidgetProps = {
   children: (helpers: { open: () => void }) => ReactNode;
   onSuccess?: (result: WidgetResults) => void;
   onError?: (error: Error) => void;
+  onClose?: () => void;
   uploadPreset?: string;
   options?: {
     cropping?: boolean;
@@ -21,55 +23,115 @@ type WidgetProps = {
   };
 };
 
-export function CldUploadWidget({ children, onSuccess, onError, uploadPreset, options }: WidgetProps) {
-  const open = () => {
-    if (typeof document === 'undefined') {
-      return;
-    }
+type CloudinaryWidgetError = {
+  message?: string;
+};
 
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.multiple = options?.multiple === true;
-    input.onchange = async () => {
-      const file = input.files?.[0];
+type CloudinaryWidgetEvent = 'success' | 'error' | 'close' | string;
+
+type CloudinaryWidget = {
+  open: () => void;
+};
+
+type CloudinaryGlobal = {
+  createUploadWidget: (
+    config: {
+      cloudName?: string;
+      uploadPreset?: string;
+      cropping?: boolean;
+      croppingAspectRatio?: number;
+      croppingShowDimensions?: boolean;
+      multiple?: boolean;
+    },
+    callback: (error: CloudinaryWidgetError | null, result: { event: CloudinaryWidgetEvent; info?: WidgetResults['info'] }) => void,
+  ) => CloudinaryWidget;
+};
+
+declare global {
+  interface Window {
+    cloudinary?: CloudinaryGlobal;
+  }
+}
+
+const CLOUDINARY_WIDGET_SCRIPT_ID = 'cloudinary-upload-widget-script';
+const CLOUDINARY_WIDGET_SCRIPT_SRC = 'https://upload-widget.cloudinary.com/global/all.js';
+
+const loadCloudinaryScript = async (): Promise<CloudinaryGlobal> => {
+  if (typeof window === 'undefined') {
+    throw new Error('Image upload unavailable');
+  }
+
+  if (window.cloudinary) {
+    return window.cloudinary;
+  }
+
+  const existingScript = document.getElementById(CLOUDINARY_WIDGET_SCRIPT_ID) as HTMLScriptElement | null;
+
+  if (existingScript) {
+    await new Promise<void>((resolve, reject) => {
+      existingScript.addEventListener('load', () => resolve(), { once: true });
+      existingScript.addEventListener('error', () => reject(new Error('Image upload unavailable')), { once: true });
+    });
+  } else {
+    const script = document.createElement('script');
+    script.id = CLOUDINARY_WIDGET_SCRIPT_ID;
+    script.src = CLOUDINARY_WIDGET_SCRIPT_SRC;
+    script.async = true;
+    await new Promise<void>((resolve, reject) => {
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Image upload unavailable'));
+      document.body.appendChild(script);
+    });
+  }
+
+  if (!window.cloudinary) {
+    throw new Error('Image upload unavailable');
+  }
+
+  return window.cloudinary;
+};
+
+export function CldUploadWidget({ children, onSuccess, onError, onClose, uploadPreset, options }: WidgetProps) {
+  const open = useCallback(async () => {
+    try {
+      const cloudinary = await loadCloudinaryScript();
       const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-
-      if (!file || !cloudName || !uploadPreset) {
+      if (!cloudName || !uploadPreset) {
         onError?.(new Error('Image upload failed'));
         return;
       }
 
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', uploadPreset);
+      const widget = cloudinary.createUploadWidget(
+        {
+          cloudName,
+          uploadPreset,
+          cropping: options?.cropping,
+          croppingAspectRatio: options?.croppingAspectRatio,
+          croppingShowDimensions: options?.croppingShowDimensions,
+          multiple: options?.multiple,
+        },
+        (error, result) => {
+          if (error) {
+            onError?.(new Error(error.message || 'Image upload failed'));
+            return;
+          }
 
-        const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-          method: 'POST',
-          body: formData,
-        });
+          if (result.event === 'success') {
+            onSuccess?.({ info: result.info });
+            return;
+          }
 
-        if (!response.ok) {
-          onError?.(new Error('Image upload failed'));
-          return;
-        }
+          if (result.event === 'close') {
+            onClose?.();
+          }
+        },
+      );
 
-        const payload = (await response.json()) as WidgetResults['info'] | null;
-        const secureUrl = payload?.secure_url;
-        if (typeof secureUrl === 'string' && secureUrl.length > 0) {
-          onSuccess?.({ info: { secure_url: secureUrl } });
-          return;
-        }
-
-        onError?.(new Error('Image upload failed'));
-      } catch (error) {
-        onError?.(error instanceof Error ? error : new Error('Image upload failed'));
-      }
-    };
-
-    input.click();
-  };
+      widget.open();
+    } catch (error) {
+      onError?.(error instanceof Error ? error : new Error('Image upload failed'));
+    }
+  }, [onClose, onError, onSuccess, options?.cropping, options?.croppingAspectRatio, options?.croppingShowDimensions, options?.multiple, uploadPreset]);
 
   return <>{children({ open })}</>;
 }
