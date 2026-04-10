@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
+import useSWR from 'swr';
 import Blog from '../assets/portfolio/Blog.jpg';
 import RestApi from '../assets/portfolio/RestApi.jpg';
 import Stay from '../assets/portfolio/Stay.jpg';
 import Homestay from '../assets/portfolio/hs.png';
 import Jdnp from '../assets/portfolio/pt.png';
 import Genio from '../assets/portfolio/Genio.png';
+
+const fetcher = (url) => fetch(url).then((res) => res.json());
 
 const fallbackProjects = [
   {
@@ -84,42 +87,9 @@ const normalizeTech = (value) => {
 };
 
 const Projects = () => {
-  const [projects, setProjects] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const loadProjects = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch('/api/portfolio', { cache: 'no-store' });
-        console.log('STATUS:', response.status);
-
-        if (!response.ok) {
-          const text = await response.text();
-          console.error('API ERROR:', text);
-          setError('Unable to load projects');
-          setProjects([]);
-          return;
-        }
-
-        const data = await response.json();
-        const projectData = Array.isArray(data) ? data : Array.isArray(data?.projects) ? data.projects : [];
-        if (projectData.length > 0) {
-          setProjects(projectData);
-        } else {
-          setProjects([]);
-        }
-        setError('');
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to load projects');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadProjects();
-  }, []);
+  const { data, error, isLoading } = useSWR('/api/portfolio', fetcher);
+  const projects = Array.isArray(data) ? data : Array.isArray(data?.projects) ? data.projects : [];
+  const loading = isLoading;
 
   const projectList = projects.length > 0 ? projects : fallbackProjects;
 
@@ -127,7 +97,7 @@ const Projects = () => {
     <SectionContainer name="portfolio" title="Portfolio" subtitle="Selected projects that combine design quality, performance, and product thinking.">
       {error && (
         <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
-          {error}. Showing fallback projects instead.
+          Unable to load projects. Showing fallback projects instead.
         </p>
       )}
       {loading && <p className="mb-4 text-sm text-slate-500">Loading projects…</p>}

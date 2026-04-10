@@ -4,7 +4,9 @@
 
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "swr": ["./lib/swr"],
+      "next-cloudinary": ["./lib/next-cloudinary"]
     },
 
     "lib": ["dom", "dom.iterable", "esnext"],

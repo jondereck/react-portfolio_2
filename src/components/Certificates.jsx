@@ -1,14 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Dialog } from '@headlessui/react';
 import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
 import Link from 'next/link';
+import useSWR from 'swr';
+
+const fetcher = (url) => fetch(url).then((res) => res.json());
 
 const Certificates = () => {
-  const [items, setItems] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedImage, setSelectedImage] = useState('');
-  const [error, setError] = useState('');
+  const { data, error } = useSWR('/api/certificates', fetcher);
+
+  const items = Array.isArray(data) ? data : [];
 
   const categories = useMemo(() => {
     const unique = new Set(items.map((item) => item.category));
@@ -21,25 +25,6 @@ const Certificates = () => {
     }
     return items.filter((item) => item.category === activeCategory);
   }, [activeCategory, items]);
-
-  const loadCertificates = async () => {
-    try {
-      const response = await fetch('/api/certificates', { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error('Unable to load certificates');
-      }
-      const data = await response.json();
-      setItems(Array.isArray(data) ? data : []);
-      setError('');
-    } catch (loadError) {
-      setItems([]);
-      setError(loadError instanceof Error ? loadError.message : 'Unable to load certificates');
-    }
-  };
-
-  useEffect(() => {
-    loadCertificates();
-  }, []);
 
   return (
     <SectionContainer
@@ -56,7 +41,7 @@ const Certificates = () => {
         </Link>
       </div>
 
-      {error ? <p className="mb-4 text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
+      {error ? <p className="mb-4 text-sm text-rose-600 dark:text-rose-300">Unable to load certificates</p> : null}
 
       <div className="mb-8 flex flex-wrap gap-2">
         {categories.map((category) => (
