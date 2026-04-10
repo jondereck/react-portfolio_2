@@ -66,9 +66,9 @@ const Certificates = () => {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredCertificates.map((item) => (
+       {filteredCertificates.map((item, index) => (
           <motion.article
-            key={item.id}
+           key={`${item.id ?? 'cert'}-${item.title}-${index}`}
             whileHover={{ y: -6 }}
             className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
           >

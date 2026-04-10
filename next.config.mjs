@@ -9,6 +9,7 @@ const nextConfig = {
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' },
       { protocol: 'https', hostname: '*.googleusercontent.com' },
       { protocol: 'https', hostname: '*.githubusercontent.com' },
+      { protocol: 'https', hostname: 'scontent.fbag1-2.fna.fbcdn.net' },
     ],
   },
 };
