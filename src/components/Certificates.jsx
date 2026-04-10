@@ -1,19 +1,16 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
-import { useRouter } from 'next/navigation';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from './ui/dialog';
+import AdminLoginDialog from './AdminLoginDialog';
 
 const Certificates = () => {
-  const router = useRouter();
   const [items, setItems] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedImage, setSelectedImage] = useState('');
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
-  const [key, setKey] = useState('');
-  const [authError, setAuthError] = useState('');
   const [page, setPage] = useState(1);
   const itemsPerPage = 6;
 
@@ -34,19 +31,6 @@ const Certificates = () => {
   useEffect(() => {
     setPage(1);
   }, [activeCategory, items.length]);
-
-  const handleLogin = () => {
-    if (key.trim() === 'admin123') {
-      localStorage.setItem('admin-auth', 'true');
-      setOpen(false);
-      setKey('');
-      setAuthError('');
-      router.push('/admin');
-      return;
-    }
-
-    setAuthError('Invalid credentials');
-  };
 
   const loadCertificates = async () => {
     try {
@@ -158,33 +142,10 @@ const Certificates = () => {
         </Pagination>
       ) : null}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="space-y-4">
-          <input
-            type="password"
-            placeholder="Enter admin key"
-            value={key}
-            onChange={(event) => {
-              setKey(event.target.value);
-              if (authError) {
-                setAuthError('');
-              }
-            }}
-            className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 outline-none focus:border-cyan-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          />
-          {authError ? <p className="text-sm text-red-500">{authError}</p> : null}
-          <button
-            type="button"
-            onClick={handleLogin}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-          >
-            Login
-          </button>
-        </DialogContent>
-      </Dialog>
+      <AdminLoginDialog open={open} onOpenChange={setOpen} />
 
       <Dialog open={Boolean(selectedImage)} onOpenChange={(isOpen) => setSelectedImage(isOpen ? selectedImage : '')}>
-        <DialogContent className="max-w-4xl bg-white p-3 dark:bg-slate-900" showCloseButton={false}>
+        <DialogContent className="max-w-4xl bg-white p-3 dark:bg-slate-900">
           <img src={selectedImage} alt="Certificate preview" className="max-h-[80vh] w-full object-contain" />
         </DialogContent>
       </Dialog>

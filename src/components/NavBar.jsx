@@ -2,31 +2,15 @@ import React, { useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';
 import { Link as ScrollLink } from 'react-scroll';
-import { useRouter } from 'next/navigation';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import AdminLoginDialog from './AdminLoginDialog';
 
 const links = ['home', 'about', 'portfolio', 'experience', 'certificates', 'contact'];
 
 const NavBar = ({ darkMode, onToggleDark, config }) => {
-  const router = useRouter();
   const [nav, setNav] = useState(false);
   const [open, setOpen] = useState(false);
-  const [key, setKey] = useState('');
-  const [error, setError] = useState('');
   const logoText = typeof config?.logoText === 'string' && config.logoText.trim().length > 0 ? config.logoText : 'Jon';
   const logoImage = typeof config?.logoImage === 'string' ? config.logoImage : '';
-  const handleLogin = () => {
-    if (key.trim() === 'admin123') {
-      localStorage.setItem('admin-auth', 'true');
-      setOpen(false);
-      setKey('');
-      setError('');
-      router.push('/admin');
-      return;
-    }
-
-    setError('Invalid credentials');
-  };
 
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
@@ -100,30 +84,7 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
         </ul>
       ) : null}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="space-y-4">
-          <input
-            type="password"
-            placeholder="Enter admin key"
-            value={key}
-            onChange={(event) => {
-              setKey(event.target.value);
-              if (error) {
-                setError('');
-              }
-            }}
-            className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 outline-none focus:border-cyan-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-          />
-          {error ? <p className="text-sm text-red-500">{error}</p> : null}
-          <button
-            type="button"
-            onClick={handleLogin}
-            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
-          >
-            Login
-          </button>
-        </DialogContent>
-      </Dialog>
+      <AdminLoginDialog open={open} onOpenChange={setOpen} />
     </header>
   );
 };
