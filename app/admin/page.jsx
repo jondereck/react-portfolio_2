@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import AdminHeader from '@/components/AdminHeader';
 import DataTable from '@/components/DataTable';
 import FormDialog from '@/components/FormDialog';
@@ -8,6 +8,8 @@ import { useAdminData } from '@/hooks/useAdminData';
 import { toast } from 'sonner';
 import { handleRequest } from '@/lib/handleRequest';
 import { useLoadingStore } from '@/store/loading';
+import ImageUpload from '@/components/ImageUpload';
+import useSWR from 'swr';
 
 const cardStyles = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900';
 const buttonStyles =
@@ -15,65 +17,14 @@ const buttonStyles =
 const inputStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950';
 const textareaStyles = 'rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950';
 
-function ImageUploadField({ id, label, value, adminKey, onUploaded }) {
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-
-  const uploadFile = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
+const fetcher = (url) =>
+  fetch(url, { cache: 'no-store' }).then((response) => {
+    if (!response.ok) {
+      throw new Error('Request failed');
     }
 
-    if (!adminKey) {
-      setUploadError('Provide admin API key before uploading.');
-      return;
-    }
-
-    setUploadError('');
-    setUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        headers: {
-          'x-admin-key': adminKey,
-        },
-        body: formData,
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const message = typeof payload?.error === 'string' ? payload.error : 'Image upload failed';
-        setUploadError(message);
-        return;
-      }
-
-      if (typeof payload?.secure_url === 'string' && payload.secure_url.length > 0) {
-        onUploaded(payload.secure_url);
-      } else {
-        setUploadError('Image upload failed');
-      }
-    } catch {
-      setUploadError('Image upload failed');
-    } finally {
-      setUploading(false);
-      event.target.value = '';
-    }
-  };
-
-  return (
-    <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-      {label}
-      <input id={`${id}-url`} type="url" value={value} readOnly className={inputStyles} />
-      <input id={`${id}-file`} type="file" accept="image/*" onChange={uploadFile} className={inputStyles} />
-      {uploading ? <span className="text-xs text-slate-500">Uploading image…</span> : null}
-      {uploadError ? <span className="text-xs text-red-600">{uploadError}</span> : null}
-    </label>
-  );
-}
+    return response.json();
+  });
 
 const resources = [
   {
@@ -301,58 +252,57 @@ function SiteContentSection({ adminKey }) {
     body: '',
     highlights: [{ ...emptyHighlight }],
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const setGlobalLoading = useLoadingStore((state) => state.setLoading);
-
-  const loadSiteContent = useCallback(async () => {
-    try {
-      setError('');
-      setLoading(true);
-      setGlobalLoading(true);
-      const data = await handleRequest(() => fetch('/api/site-content', { cache: 'no-store' }));
-
-      setHero({
-        eyebrow: data?.hero?.eyebrow ?? '',
-        title: data?.hero?.title ?? '',
-        description: data?.hero?.description ?? '',
-        primaryCtaLabel: data?.hero?.primaryCtaLabel ?? '',
-        primaryCtaHref: data?.hero?.primaryCtaHref ?? '',
-        secondaryCtaLabel: data?.hero?.secondaryCtaLabel ?? '',
-        secondaryCtaHref: data?.hero?.secondaryCtaHref ?? '',
-        image: data?.hero?.image ?? '',
-      });
-      setAbout({
-        title: data?.about?.title ?? '',
-        body: data?.about?.body ?? '',
-        highlights:
-          Array.isArray(data?.about?.highlights) && data.about.highlights.length > 0
-            ? data.about.highlights.map((item) => ({
-                label: typeof item?.label === 'string' ? item.label : '',
-                value:
-                  typeof item?.value === 'string'
-                    ? item.value
-                    : Array.isArray(item?.value)
-                      ? item.value.filter((line) => typeof line === 'string').join(' ')
-                      : '',
-              }))
-            : [{ ...emptyHighlight }],
-      });
-
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : 'Unable to load hero/about content';
-      setError(message);
-      toast.error('Unable to load hero/about content', { description: message });
-    } finally {
-      setLoading(false);
-      setGlobalLoading(false);
-    }
-  }, [setGlobalLoading]);
+  const { data: siteContent, error: siteContentError, isLoading: loading, mutate: mutateSiteContent } = useSWR('/api/site-content', fetcher);
 
   useEffect(() => {
-    loadSiteContent();
-  }, [loadSiteContent]);
+    setGlobalLoading(loading);
+  }, [loading, setGlobalLoading]);
+
+  useEffect(() => {
+    if (!siteContent) {
+      return;
+    }
+
+    setHero({
+      eyebrow: siteContent?.hero?.eyebrow ?? '',
+      title: siteContent?.hero?.title ?? '',
+      description: siteContent?.hero?.description ?? '',
+      primaryCtaLabel: siteContent?.hero?.primaryCtaLabel ?? '',
+      primaryCtaHref: siteContent?.hero?.primaryCtaHref ?? '',
+      secondaryCtaLabel: siteContent?.hero?.secondaryCtaLabel ?? '',
+      secondaryCtaHref: siteContent?.hero?.secondaryCtaHref ?? '',
+      image: siteContent?.hero?.image ?? '',
+    });
+    setAbout({
+      title: siteContent?.about?.title ?? '',
+      body: siteContent?.about?.body ?? '',
+      highlights:
+        Array.isArray(siteContent?.about?.highlights) && siteContent.about.highlights.length > 0
+          ? siteContent.about.highlights.map((item) => ({
+              label: typeof item?.label === 'string' ? item.label : '',
+              value:
+                typeof item?.value === 'string'
+                  ? item.value
+                  : Array.isArray(item?.value)
+                    ? item.value.filter((line) => typeof line === 'string').join(' ')
+                    : '',
+            }))
+          : [{ ...emptyHighlight }],
+    });
+    setError('');
+  }, [siteContent]);
+
+  useEffect(() => {
+    if (!siteContentError) {
+      return;
+    }
+    const message = siteContentError instanceof Error ? siteContentError.message : 'Unable to load hero/about content';
+    setError(message);
+    toast.error('Unable to load hero/about content', { description: message });
+  }, [siteContentError]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -408,7 +358,7 @@ function SiteContentSection({ adminKey }) {
         window.dispatchEvent(new Event('site-content-updated'));
         window.dispatchEvent(new Event('data-updated'));
       }
-      await loadSiteContent();
+      await mutateSiteContent();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to update site content');
     } finally {
@@ -430,13 +380,13 @@ function SiteContentSection({ adminKey }) {
             {Object.entries(hero).map(([field, value]) => {
               if (field === 'image') {
                 return (
-                  <ImageUploadField
+                  <ImageUpload
                     key={field}
                     id={`hero-${field}`}
                     label={field}
                     value={value}
                     adminKey={adminKey}
-                    onUploaded={(uploadedUrl) => setHero((previous) => ({ ...previous, [field]: uploadedUrl }))}
+                    onChange={(uploadedUrl) => setHero((previous) => ({ ...previous, [field]: uploadedUrl }))}
                   />
                 );
               }
@@ -568,34 +518,35 @@ function SiteConfigSection({ adminKey }) {
     logoText: '',
     logoImage: '',
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const setGlobalLoading = useLoadingStore((state) => state.setLoading);
-
-  const loadSiteConfig = useCallback(async () => {
-    try {
-      setError('');
-      setLoading(true);
-      setGlobalLoading(true);
-      const configData = await handleRequest(() => fetch('/api/site-config', { cache: 'no-store' }));
-      setSiteConfig({
-        logoText: typeof configData?.logoText === 'string' ? configData.logoText : '',
-        logoImage: typeof configData?.logoImage === 'string' ? configData.logoImage : '',
-      });
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : 'Unable to load site configuration';
-      setError(message);
-      toast.error('Unable to load site configuration', { description: message });
-    } finally {
-      setLoading(false);
-      setGlobalLoading(false);
-    }
-  }, [setGlobalLoading]);
+  const { data: siteConfigData, error: siteConfigError, isLoading: loading, mutate: mutateSiteConfig } = useSWR('/api/site-config', fetcher);
 
   useEffect(() => {
-    loadSiteConfig();
-  }, [loadSiteConfig]);
+    setGlobalLoading(loading);
+  }, [loading, setGlobalLoading]);
+
+  useEffect(() => {
+    if (!siteConfigData) {
+      return;
+    }
+
+    setSiteConfig({
+      logoText: typeof siteConfigData?.logoText === 'string' ? siteConfigData.logoText : '',
+      logoImage: typeof siteConfigData?.logoImage === 'string' ? siteConfigData.logoImage : '',
+    });
+    setError('');
+  }, [siteConfigData]);
+
+  useEffect(() => {
+    if (!siteConfigError) {
+      return;
+    }
+    const message = siteConfigError instanceof Error ? siteConfigError.message : 'Unable to load site configuration';
+    setError(message);
+    toast.error('Unable to load site configuration', { description: message });
+  }, [siteConfigError]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -635,7 +586,7 @@ function SiteConfigSection({ adminKey }) {
         window.dispatchEvent(new Event('site-config-updated'));
         window.dispatchEvent(new Event('data-updated'));
       }
-      await loadSiteConfig();
+      await mutateSiteConfig();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to update site config');
     } finally {
@@ -663,12 +614,12 @@ function SiteConfigSection({ adminKey }) {
                 className={inputStyles}
               />
             </label>
-            <ImageUploadField
+            <ImageUpload
               id="site-config-logo-image"
               label="Logo image"
               value={siteConfig.logoImage}
               adminKey={adminKey}
-              onUploaded={(uploadedUrl) => setSiteConfig((previous) => ({ ...previous, logoImage: uploadedUrl }))}
+              onChange={(uploadedUrl) => setSiteConfig((previous) => ({ ...previous, logoImage: uploadedUrl }))}
             />
           </div>
           <button type="submit" disabled={saving || loading} className={buttonStyles}>

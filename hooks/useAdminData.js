@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import useSWR, { mutate } from 'swr';
 import { toast } from 'sonner';
 import { handleRequest } from '@/lib/handleRequest';
 import { useLoadingStore } from '@/store/loading';
@@ -66,44 +67,47 @@ const formatForForm = (fields, item) =>
     return state;
   }, defaultFormState(fields));
 
+const fetcher = (url, adminKey) =>
+  fetch(url, {
+    cache: 'no-store',
+    headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
+  }).then((response) => {
+    if (!response.ok) {
+      throw new Error(`Unable to load ${url}`);
+    }
+
+    return response.json();
+  });
+
 export function useAdminData({ endpoint, title, fields, adminKey }) {
-  const [items, setItems] = useState([]);
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState('');
 
   const setGlobalLoading = useLoadingStore((state) => state.setLoading);
-
-  const loadItems = useCallback(async () => {
-    setError('');
-    setLoading(true);
-    setGlobalLoading(true);
-
-    try {
-      const data = await handleRequest(() =>
-        fetch(endpoint, {
-          cache: 'no-store',
-          headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
-        }),
-      );
-      setItems(Array.isArray(data) ? data : []);
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : `Unable to load ${title}`;
-      setError(message);
-      toast.error(`Unable to load ${title}`, { description: message });
-    } finally {
-      setLoading(false);
-      setGlobalLoading(false);
-    }
-  }, [adminKey, endpoint, setGlobalLoading, title]);
+  const { data, error: swrError, isLoading, mutate: refreshItems } = useSWR(endpoint, (url) => fetcher(url, adminKey));
+  const items = Array.isArray(data) ? data : [];
 
   useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+    setGlobalLoading(isLoading);
+  }, [isLoading, setGlobalLoading]);
+
+  useEffect(() => {
+    if (!swrError) {
+      return;
+    }
+
+    const message = swrError instanceof Error ? swrError.message : `Unable to load ${title}`;
+    setError(message);
+    toast.error(`Unable to load ${title}`, { description: message });
+  }, [swrError, title]);
+
+  const loadItems = useCallback(async () => {
+    await refreshItems();
+  }, [refreshItems]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -175,7 +179,12 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         });
 
         await requestPromise;
-        await loadItems();
+        await refreshItems();
+        await mutate('/api/projects');
+        await mutate('/api/certificates');
+        await mutate('/api/experience');
+        await mutate('/api/skills');
+        await mutate('/api/portfolio');
         resetForm();
       } catch (requestError) {
         const message = requestError instanceof Error ? requestError.message : `Unable to save ${title}`;
@@ -185,7 +194,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setGlobalLoading(false);
       }
     },
-    [adminKey, editingId, endpoint, fields, formState, loadItems, resetForm, setGlobalLoading, title],
+    [adminKey, editingId, endpoint, fields, formState, refreshItems, resetForm, setGlobalLoading, title],
   );
 
   const handleDelete = useCallback(
@@ -213,7 +222,12 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         });
 
         await requestPromise;
-        await loadItems();
+        await refreshItems();
+        await mutate('/api/projects');
+        await mutate('/api/certificates');
+        await mutate('/api/experience');
+        await mutate('/api/skills');
+        await mutate('/api/portfolio');
 
         if (editingId === id) {
           resetForm();
@@ -226,12 +240,12 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setGlobalLoading(false);
       }
     },
-    [adminKey, editingId, endpoint, loadItems, resetForm, setGlobalLoading, title],
+    [adminKey, editingId, endpoint, refreshItems, resetForm, setGlobalLoading, title],
   );
 
   return {
     items,
-    loading,
+    loading: isLoading,
     saving,
     deletingId,
     editingId,

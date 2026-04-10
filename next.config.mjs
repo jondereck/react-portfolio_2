@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
@@ -11,6 +13,15 @@ const nextConfig = {
       { protocol: 'https', hostname: '*.githubusercontent.com' },
       { protocol: 'https', hostname: 'scontent.fbag1-2.fna.fbcdn.net' },
     ],
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      swr: path.resolve('./lib/vendor/swr.ts'),
+      'next-cloudinary': path.resolve('./lib/vendor/next-cloudinary.tsx'),
+    };
+
+    return config;
   },
 };
 
