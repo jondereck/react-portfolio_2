@@ -94,4 +94,11 @@ model SiteContent {
   updatedAt DateTime @updatedAt
 }
 
+model SiteConfig {
+  id        Int      @id @default(1)
+  logoText  String?
+  logoImage String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 

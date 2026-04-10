@@ -61,11 +61,16 @@ export const aboutSchema = z.object({
     .array(
       z.object({
         label: textField(1, 60),
-        value: textField(1, 60),
+        value: textField(1, 2000),
       }),
     )
     .min(1)
     .max(6),
+});
+
+export const siteConfigSchema = z.object({
+  logoText: textField(1, 80).optional(),
+  logoImage: urlField(500).optional(),
 });
 
 export const socialLinkSchema = z.object({

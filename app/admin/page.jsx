@@ -240,6 +240,10 @@ function SiteContentSection({ adminKey }) {
     body: '',
     highlights: [{ ...emptyHighlight }],
   });
+  const [siteConfig, setSiteConfig] = useState({
+    logoText: '',
+    logoImage: '',
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -269,9 +273,20 @@ function SiteContentSection({ adminKey }) {
           Array.isArray(data?.about?.highlights) && data.about.highlights.length > 0
             ? data.about.highlights.map((item) => ({
                 label: typeof item?.label === 'string' ? item.label : '',
-                value: typeof item?.value === 'string' ? item.value : '',
+                value:
+                  typeof item?.value === 'string'
+                    ? item.value
+                    : Array.isArray(item?.value)
+                      ? item.value.filter((line) => typeof line === 'string').join(' ')
+                      : '',
               }))
             : [{ ...emptyHighlight }],
+      });
+
+      const configData = await handleRequest(() => fetch('/api/site-config', { cache: 'no-store' }));
+      setSiteConfig({
+        logoText: typeof configData?.logoText === 'string' ? configData.logoText : '',
+        logoImage: typeof configData?.logoImage === 'string' ? configData.logoImage : '',
       });
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Unable to load hero/about content';
@@ -312,7 +327,7 @@ function SiteContentSection({ adminKey }) {
     setGlobalLoading(true);
 
     try {
-      const requestPromise = handleRequest(() =>
+      const siteContentPromise = handleRequest(() =>
         fetch('/api/site-content', {
           method: 'PUT',
           headers: {
@@ -329,14 +344,31 @@ function SiteContentSection({ adminKey }) {
           }),
         }),
       );
+      const siteConfigPromise = handleRequest(() =>
+        fetch('/api/site-config', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-key': adminKey,
+          },
+          body: JSON.stringify({
+            logoText: siteConfig.logoText.trim() || undefined,
+            logoImage: siteConfig.logoImage.trim() || undefined,
+          }),
+        }),
+      );
 
-      toast.promise(requestPromise, {
+      toast.promise(Promise.all([siteContentPromise, siteConfigPromise]), {
         loading: 'Saving site content...',
         success: 'Site content updated.',
         error: 'Unable to update site content',
       });
 
-      await requestPromise;
+      await Promise.all([siteContentPromise, siteConfigPromise]);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('site-content-updated'));
+        window.dispatchEvent(new Event('site-config-updated'));
+      }
       await loadSiteContent();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to update site content');
@@ -381,6 +413,26 @@ function SiteContentSection({ adminKey }) {
           </div>
 
           <div className="grid gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                Logo text
+                <input
+                  type="text"
+                  value={siteConfig.logoText}
+                  onChange={(event) => setSiteConfig((previous) => ({ ...previous, logoText: event.target.value }))}
+                  className={inputStyles}
+                />
+              </label>
+              <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                Logo image URL
+                <input
+                  type="url"
+                  value={siteConfig.logoImage}
+                  onChange={(event) => setSiteConfig((previous) => ({ ...previous, logoImage: event.target.value }))}
+                  className={inputStyles}
+                />
+              </label>
+            </div>
             <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               About title
               <input
@@ -421,8 +473,7 @@ function SiteContentSection({ adminKey }) {
                       required
                       className={inputStyles}
                     />
-                    <input
-                      type="text"
+                    <textarea
                       value={highlight.value}
                       onChange={(event) =>
                         setAbout((previous) => ({
@@ -434,7 +485,8 @@ function SiteContentSection({ adminKey }) {
                       }
                       placeholder="Value"
                       required
-                      className={inputStyles}
+                      rows={3}
+                      className={textareaStyles}
                     />
                     <button
                       type="button"
