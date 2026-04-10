@@ -68,6 +68,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [items, setItems] = useState([]);
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -102,15 +103,39 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const resetForm = useCallback(() => {
     setEditingId(null);
     setFormState(defaultFormState(fields));
+    setDialogOpen(false);
   }, [fields]);
 
-  const handleEdit = useCallback(
-    (item) => {
-      setEditingId(item.id);
-      setFormState(formatForForm(fields, item));
-      toast.message(`Editing ${title.toLowerCase()} #${item.id}`);
+  const openCreate = useCallback(() => {
+    setEditingId(null);
+    setFormState(defaultFormState(fields));
+    setDialogOpen(true);
+  }, [fields]);
+
+  const openEdit = useCallback(
+    async (id) => {
+      try {
+        const response = await fetch(`${endpoint}/${id}`, {
+          cache: 'no-store',
+          headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
+        });
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          throw new Error(detail?.error || 'Failed to load item');
+        }
+
+        const item = await response.json();
+        setEditingId(item.id);
+        setFormState(formatForForm(fields, item));
+        setDialogOpen(true);
+        toast.message(`Editing ${title.toLowerCase()} #${item.id}`);
+      } catch (error) {
+        toast.error(`Unable to load ${title} entry`, {
+          description: error instanceof Error ? error.message : undefined,
+        });
+      }
     },
-    [fields, title]
+    [adminKey, endpoint, fields, title]
   );
 
   const handleSubmit = useCallback(
@@ -121,21 +146,22 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
       try {
         const payload = buildPayload(fields, formState);
         const isUpdating = editingId !== null;
+        const requestEndpoint = isUpdating ? `${endpoint}/${editingId}` : endpoint;
         if (process.env.NODE_ENV !== 'production') {
           console.log('REQUEST:', {
-            endpoint,
+            endpoint: requestEndpoint,
             method: isUpdating ? 'PUT' : 'POST',
-            payload: isUpdating ? { ...payload, id: editingId } : payload,
+            payload,
           });
         }
 
-        const response = await fetch(endpoint, {
+        const response = await fetch(requestEndpoint, {
           method: isUpdating ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(adminKey ? { 'x-admin-key': adminKey } : {}),
           },
-          body: JSON.stringify(isUpdating ? { ...payload, id: editingId } : payload),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -209,11 +235,14 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
     saving,
     deletingId,
     editingId,
+    dialogOpen,
     formState,
     setFormState,
     loadItems,
+    setDialogOpen,
+    openCreate,
+    openEdit,
     resetForm,
-    handleEdit,
     handleSubmit,
     handleDelete,
   };

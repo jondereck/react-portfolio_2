@@ -69,7 +69,7 @@ export default function DataTable({ title, listColumns, items, loading, deleting
                   <button
                     type="button"
                     className="h-7 rounded-md px-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-800"
-                    onClick={() => onEdit(item)}
+                    onClick={() => onEdit(item.id)}
                   >
                     Edit
                   </button>
