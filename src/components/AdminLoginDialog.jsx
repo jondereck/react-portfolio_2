@@ -4,14 +4,12 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 
-const ADMIN_LOGIN_KEY = 'admin123';
-
 const AdminLoginDialog = ({ open, onOpenChange }) => {
   const router = useRouter();
   const [key, setKey] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     const normalizedKey = key.trim();
 
@@ -20,8 +18,21 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
       return;
     }
 
-    if (normalizedKey !== ADMIN_LOGIN_KEY) {
-      setError('Invalid credentials');
+    try {
+      const response = await fetch('/api/admin/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ key: normalizedKey }),
+      });
+
+      if (!response.ok) {
+        setError('Invalid credentials');
+        return;
+      }
+    } catch {
+      setError('Unable to validate credentials');
       return;
     }
 
