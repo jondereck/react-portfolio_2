@@ -13,14 +13,12 @@ type ImageUploadProps = {
   id: string;
   label: string;
   value: string;
-  adminKey?: string;
   onChange: (url: string) => void;
   className?: string;
 };
+const buttonStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-left text-sm dark:border-slate-700 dark:bg-slate-950';
 
-const inputStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950';
-
-export default function ImageUpload({ id, label, value, adminKey, onChange, className }: ImageUploadProps) {
+export default function ImageUpload({ id, label, value, onChange, className }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
@@ -28,9 +26,9 @@ export default function ImageUpload({ id, label, value, adminKey, onChange, clas
   return (
     <label className={`flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200 ${className ?? ''}`}>
       {label}
-      <input id={`${id}-url`} type="url" value={value} readOnly className={inputStyles} />
+      {value ? <img src={value} alt="preview" className="h-40 w-full rounded object-cover" /> : null}
       <CldUploadWidget
-        uploadPreset={uploadPreset}
+        uploadPreset={uploadPreset ?? ''}
         options={{
           cropping: true,
           croppingAspectRatio: 1,
@@ -68,9 +66,9 @@ export default function ImageUpload({ id, label, value, adminKey, onChange, clas
               open();
             }}
             disabled={uploading}
-            className={`${inputStyles} text-left`}
+            className={buttonStyles}
           >
-            {uploading ? 'Uploading image…' : 'Choose image'}
+            {uploading ? 'Uploading image…' : 'Upload Image'}
           </button>
         )}
       </CldUploadWidget>

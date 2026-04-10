@@ -84,6 +84,7 @@ const realtimeKeys = ['/api/projects', '/api/certificates', '/api/experience', '
 export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -113,6 +114,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
   const resetForm = useCallback(() => {
     setEditingId(null);
+    setEditingItem(null);
     setFormState(defaultFormState(fields));
     setDialogOpen(false);
     setError('');
@@ -120,6 +122,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
   const openCreate = useCallback(() => {
     setEditingId(null);
+    setEditingItem(null);
     setFormState(defaultFormState(fields));
     setDialogOpen(true);
     setError('');
@@ -138,6 +141,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         );
 
         setEditingId(item.id);
+        setEditingItem(item);
         setFormState(formatForForm(fields, item));
         setDialogOpen(true);
       } catch (requestError) {
@@ -243,6 +247,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
     saving,
     deletingId,
     editingId,
+    editingItem,
     dialogOpen,
     formState,
     error,

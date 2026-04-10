@@ -164,6 +164,7 @@ function AdminResourceSection({ resource, adminKey }) {
     saving,
     deletingId,
     editingId,
+    editingItem,
     dialogOpen,
     formState,
     setFormState,
@@ -207,6 +208,7 @@ function AdminResourceSection({ resource, adminKey }) {
             fields={fields}
             formState={formState}
             editingId={editingId}
+            editingItem={editingItem}
             saving={saving}
             open={dialogOpen}
             onOpenChange={setDialogOpen}
@@ -385,7 +387,6 @@ function SiteContentSection({ adminKey }) {
                     id={`hero-${field}`}
                     label={field}
                     value={value}
-                    adminKey={adminKey}
                     onChange={(uploadedUrl) => setHero((previous) => ({ ...previous, [field]: uploadedUrl }))}
                   />
                 );
@@ -618,9 +619,9 @@ function SiteConfigSection({ adminKey }) {
               id="site-config-logo-image"
               label="Logo image"
               value={siteConfig.logoImage}
-              adminKey={adminKey}
               onChange={(uploadedUrl) => setSiteConfig((previous) => ({ ...previous, logoImage: uploadedUrl }))}
             />
+            {siteConfig.logoImage ? <img src={siteConfig.logoImage} alt="logo preview" className="h-12 w-12 object-contain" /> : null}
           </div>
           <button type="submit" disabled={saving || loading} className={buttonStyles}>
             {saving ? 'Saving…' : 'Update Site Config'}
