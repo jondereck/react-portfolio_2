@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CldUploadWidget } from 'next-cloudinary';
+import { toast } from 'sonner';
 
 type UploadResult = {
   info?: {
@@ -19,8 +20,8 @@ type ImageUploadProps = {
 const buttonStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-left text-sm dark:border-slate-700 dark:bg-slate-950';
 
 export default function ImageUpload({ id, label, value, onChange, className }: ImageUploadProps) {
-  const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [uploadToastId, setUploadToastId] = useState<string | number | null>(null);
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
   return (
@@ -36,17 +37,31 @@ export default function ImageUpload({ id, label, value, onChange, className }: I
           multiple: false,
         }}
         onSuccess={(result: UploadResult) => {
-          setUploading(false);
+          if (uploadToastId !== null) {
+            toast.dismiss(uploadToastId);
+            setUploadToastId(null);
+          }
           const uploadedUrl = result.info?.secure_url;
           if (typeof uploadedUrl === 'string' && uploadedUrl.length > 0) {
             onChange(uploadedUrl);
           } else {
             setUploadError('Image upload failed');
+            toast.error('Image upload failed');
           }
         }}
         onError={() => {
-          setUploading(false);
+          if (uploadToastId !== null) {
+            toast.dismiss(uploadToastId);
+            setUploadToastId(null);
+          }
           setUploadError('Image upload failed');
+          toast.error('Image upload failed');
+        }}
+        onClose={() => {
+          if (uploadToastId !== null) {
+            toast.dismiss(uploadToastId);
+            setUploadToastId(null);
+          }
         }}
       >
         {({ open }) => (
@@ -62,13 +77,12 @@ export default function ImageUpload({ id, label, value, onChange, className }: I
                 return;
               }
               setUploadError('');
-              setUploading(true);
+              setUploadToastId(toast.loading('Uploading image...'));
               open();
             }}
-            disabled={uploading}
             className={buttonStyles}
           >
-            {uploading ? 'Uploading image…' : 'Upload Image'}
+            Upload Image
           </button>
         )}
       </CldUploadWidget>

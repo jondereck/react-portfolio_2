@@ -13,6 +13,7 @@ type WidgetProps = {
   children: (helpers: { open: () => void }) => ReactNode;
   onSuccess?: (result: WidgetResults) => void;
   onError?: (error: Error) => void;
+  onClose?: () => void;
   uploadPreset?: string;
   options?: {
     cropping?: boolean;
@@ -90,7 +91,7 @@ const loadCloudinaryScript = async (): Promise<CloudinaryGlobal> => {
   return window.cloudinary;
 };
 
-export function CldUploadWidget({ children, onSuccess, onError, uploadPreset, options }: WidgetProps) {
+export function CldUploadWidget({ children, onSuccess, onError, onClose, uploadPreset, options }: WidgetProps) {
   const open = useCallback(async () => {
     try {
       const cloudinary = await loadCloudinaryScript();
@@ -117,6 +118,11 @@ export function CldUploadWidget({ children, onSuccess, onError, uploadPreset, op
 
           if (result.event === 'success') {
             onSuccess?.({ info: result.info });
+            return;
+          }
+
+          if (result.event === 'close') {
+            onClose?.();
           }
         },
       );
@@ -125,7 +131,7 @@ export function CldUploadWidget({ children, onSuccess, onError, uploadPreset, op
     } catch (error) {
       onError?.(error instanceof Error ? error : new Error('Image upload failed'));
     }
-  }, [onError, onSuccess, options?.cropping, options?.croppingAspectRatio, options?.croppingShowDimensions, options?.multiple, uploadPreset]);
+  }, [onClose, onError, onSuccess, options?.cropping, options?.croppingAspectRatio, options?.croppingShowDimensions, options?.multiple, uploadPreset]);
 
   return <>{children({ open })}</>;
 }

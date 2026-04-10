@@ -49,6 +49,7 @@ declare module 'next-cloudinary' {
     children: (helpers: { open: () => void }) => ReactNode;
     onSuccess?: (result: UploadResult) => void;
     onError?: (error: Error) => void;
+    onClose?: () => void;
     uploadPreset?: string;
     options?: {
       cropping?: boolean;
