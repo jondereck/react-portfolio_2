@@ -145,7 +145,23 @@ const resources = [
 
 function AdminResourceSection({ resource, adminKey }) {
   const { title, key, fields, listColumns } = resource;
-  const { items, loading, saving, deletingId, editingId, formState, setFormState, loadItems, resetForm, handleEdit, handleSubmit, handleDelete } =
+  const {
+    items,
+    loading,
+    saving,
+    deletingId,
+    editingId,
+    dialogOpen,
+    formState,
+    setFormState,
+    loadItems,
+    setDialogOpen,
+    openCreate,
+    openEdit,
+    resetForm,
+    handleSubmit,
+    handleDelete,
+  } =
     useAdminData({
       endpoint: resource.endpoint,
       title,
@@ -168,6 +184,9 @@ function AdminResourceSection({ resource, adminKey }) {
           <button type="button" className="h-8 rounded-md px-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={loadItems} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
+          <button type="button" className="h-8 rounded-md bg-slate-900 px-3 text-sm text-white dark:bg-slate-100 dark:text-slate-900" onClick={openCreate}>
+            Add {title}
+          </button>
           <FormDialog
             title={title}
             resourceKey={key}
@@ -175,6 +194,8 @@ function AdminResourceSection({ resource, adminKey }) {
             formState={formState}
             editingId={editingId}
             saving={saving}
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
             onChange={updateField}
             onSubmit={handleSubmit}
             onReset={resetForm}
@@ -188,7 +209,7 @@ function AdminResourceSection({ resource, adminKey }) {
           items={items}
           loading={loading}
           deletingId={deletingId}
-          onEdit={handleEdit}
+          onEdit={openEdit}
           onDelete={handleDelete}
         />
       </div>
@@ -197,6 +218,7 @@ function AdminResourceSection({ resource, adminKey }) {
 }
 
 function SiteContentSection({ adminKey }) {
+  const emptyHighlight = { label: '', value: '' };
   const [hero, setHero] = useState({
     eyebrow: '',
     title: '',
@@ -210,7 +232,7 @@ function SiteContentSection({ adminKey }) {
   const [about, setAbout] = useState({
     title: '',
     body: '',
-    highlights: '[]',
+    highlights: [{ ...emptyHighlight }],
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -235,7 +257,13 @@ function SiteContentSection({ adminKey }) {
       setAbout({
         title: data?.about?.title ?? '',
         body: data?.about?.body ?? '',
-        highlights: Array.isArray(data?.about?.highlights) ? JSON.stringify(data.about.highlights, null, 2) : '[]',
+        highlights:
+          Array.isArray(data?.about?.highlights) && data.about.highlights.length > 0
+            ? data.about.highlights.map((item) => ({
+                label: typeof item?.label === 'string' ? item.label : '',
+                value: typeof item?.value === 'string' ? item.value : '',
+              }))
+            : [{ ...emptyHighlight }],
       });
     } catch (error) {
       toast.error('Unable to load hero/about content', {
@@ -258,15 +286,15 @@ function SiteContentSection({ adminKey }) {
       return;
     }
 
-    let parsedHighlights = [];
+    const parsedHighlights = about.highlights
+      .map((item) => ({
+        label: item.label.trim(),
+        value: item.value.trim(),
+      }))
+      .filter((item) => item.label && item.value);
 
-    try {
-      parsedHighlights = JSON.parse(about.highlights);
-      if (!Array.isArray(parsedHighlights)) {
-        throw new Error('Highlights must be an array');
-      }
-    } catch {
-      toast.error('Highlights must be valid JSON array.');
+    if (parsedHighlights.length === 0) {
+      toast.error('Add at least one highlight with both label and value.');
       return;
     }
 
@@ -360,15 +388,68 @@ function SiteContentSection({ adminKey }) {
               />
             </label>
             <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              Highlights JSON
-              <textarea
-                value={about.highlights}
-                onChange={(event) => setAbout((previous) => ({ ...previous, highlights: event.target.value }))}
-                rows={6}
-                className={`${textareaStyles} font-mono`}
-                required
-              />
-              <span className="text-xs text-slate-500 dark:text-slate-400">Provide an array of {'{ label, value }'} objects.</span>
+              Highlights
+              <div className="space-y-2">
+                {about.highlights.map((highlight, index) => (
+                  <div key={`highlight-${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                    <input
+                      type="text"
+                      value={highlight.label}
+                      onChange={(event) =>
+                        setAbout((previous) => ({
+                          ...previous,
+                          highlights: previous.highlights.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, label: event.target.value } : item,
+                          ),
+                        }))
+                      }
+                      placeholder="Label"
+                      required
+                      className={inputStyles}
+                    />
+                    <input
+                      type="text"
+                      value={highlight.value}
+                      onChange={(event) =>
+                        setAbout((previous) => ({
+                          ...previous,
+                          highlights: previous.highlights.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, value: event.target.value } : item,
+                          ),
+                        }))
+                      }
+                      placeholder="Value"
+                      required
+                      className={inputStyles}
+                    />
+                    <button
+                      type="button"
+                      className="h-10 rounded-md border border-slate-300 px-3 text-sm hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
+                      onClick={() =>
+                        setAbout((previous) => ({
+                          ...previous,
+                          highlights: previous.highlights.length > 1 ? previous.highlights.filter((_, itemIndex) => itemIndex !== index) : previous.highlights,
+                        }))
+                      }
+                      disabled={about.highlights.length === 1}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  className="h-9 rounded-md border border-slate-300 px-3 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                  onClick={() =>
+                    setAbout((previous) => ({
+                      ...previous,
+                      highlights: [...previous.highlights, { ...emptyHighlight }],
+                    }))
+                  }
+                >
+                  + Add Highlight
+                </button>
+              </div>
             </label>
           </div>
 
