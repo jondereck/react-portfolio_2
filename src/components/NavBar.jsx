@@ -6,13 +6,19 @@ import { Link as ScrollLink } from 'react-scroll';
 
 const links = ['home', 'about', 'portfolio', 'experience', 'certificates', 'contact'];
 
-const NavBar = ({ darkMode, setDarkMode }) => {
+const NavBar = ({ darkMode, setDarkMode, config }) => {
   const [nav, setNav] = useState(false);
+  const logoText = typeof config?.logoText === 'string' && config.logoText.trim().length > 0 ? config.logoText : 'Jon';
+  const logoImage = typeof config?.logoImage === 'string' ? config.logoImage : '';
 
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
       <div className="mx-auto flex h-20 w-full max-w-6xl items-center justify-between">
-        <h1 className="text-4xl font-signature text-slate-900 dark:text-slate-100">Jon</h1>
+        {logoImage ? (
+          <img src={logoImage} alt={logoText} className="h-8 w-auto rounded object-contain" />
+        ) : (
+          <h1 className="text-4xl font-signature text-slate-900 dark:text-slate-100">{logoText}</h1>
+        )}
 
         <nav className="hidden md:block">
           <ul className="flex items-center gap-2">

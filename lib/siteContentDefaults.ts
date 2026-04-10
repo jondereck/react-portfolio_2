@@ -17,27 +17,18 @@ export const defaultAbout = {
   highlights: [
     {
       label: 'Who I Am',
-      value: [
-        'Full-stack engineer focused on building reliable products for real users.',
-        'Translate complex business goals into intuitive, production-ready interfaces.',
-        'Committed to clean code, accessibility, and measurable outcomes.',
-      ],
+      value:
+        'Full-stack engineer focused on building reliable products for real users. Translate complex goals into intuitive interfaces. Committed to clean code and measurable outcomes.',
     },
     {
       label: 'What I Do',
-      value: [
-        'Build responsive UIs with React and Next.js using component-driven architecture.',
-        'Implement scalable design systems with Tailwind CSS and reusable patterns.',
-        'Ship performant features with testing, optimization, and continuous improvements.',
-      ],
+      value:
+        'Build responsive UIs with React and Next.js. Implement scalable design systems with Tailwind CSS. Ship performant features with testing and continuous improvements.',
     },
     {
       label: 'Tech Focus',
-      value: [
-        'Core stack: React, Next.js, TypeScript, Tailwind CSS.',
-        'Data layer: Prisma, REST APIs, GraphQL fundamentals.',
-        'Workflow: GitHub, CI-ready code quality, and iterative product delivery.',
-      ],
+      value:
+        'Core stack: React, Next.js, TypeScript, Tailwind CSS. Data layer: Prisma and REST APIs. Workflow: GitHub, CI-ready quality, and iterative delivery.',
     },
   ],
 };
@@ -65,4 +56,9 @@ export const defaultSiteContent = {
   about: defaultAbout,
   contact: defaultContact,
   seo: defaultSeo,
+};
+
+export const defaultSiteConfig = {
+  logoText: 'Jon',
+  logoImage: '',
 };

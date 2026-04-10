@@ -1,52 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-scroll';
 import heroFallbackImage from '../assets/heroImage.jpg';
 
-const fallbackHero = {
-  eyebrow: 'Frontend Engineering',
-  title: 'Front-End Developer building scalable, high-performance web apps',
-  description:
-    'I design polished web experiences with React, Next.js, Tailwind CSS, and Prisma—focused on performance, maintainable architecture, and business impact.',
-  primaryCtaLabel: 'View Projects',
-  primaryCtaHref: '#portfolio',
-  secondaryCtaLabel: 'Download Resume',
-  secondaryCtaHref: '/resume.pdf',
-  image: '',
-};
+const Hero = ({ hero }) => {
+  if (!hero) {
+    return null;
+  }
 
-const useHeroContent = () => {
-  const [content, setContent] = useState(fallbackHero);
-
-  useEffect(() => {
-    const loadSiteContent = async () => {
-      const response = await fetch('/api/site-content', { cache: 'no-store' });
-      if (!response.ok) return;
-      const payload = await response.json();
-      const hero = payload?.hero;
-      if (!hero || typeof hero !== 'object') return;
-      setContent((prev) => ({
-        eyebrow: typeof hero.eyebrow === 'string' ? hero.eyebrow : prev.eyebrow,
-        title: typeof hero.title === 'string' ? hero.title : prev.title,
-        description: typeof hero.description === 'string' ? hero.description : prev.description,
-        primaryCtaLabel: typeof hero.primaryCtaLabel === 'string' ? hero.primaryCtaLabel : prev.primaryCtaLabel,
-        primaryCtaHref: typeof hero.primaryCtaHref === 'string' ? hero.primaryCtaHref : prev.primaryCtaHref,
-        secondaryCtaLabel:
-          typeof hero.secondaryCtaLabel === 'string' ? hero.secondaryCtaLabel : prev.secondaryCtaLabel,
-        secondaryCtaHref:
-          typeof hero.secondaryCtaHref === 'string' ? hero.secondaryCtaHref : prev.secondaryCtaHref,
-        image: typeof hero.image === 'string' ? hero.image : prev.image,
-      }));
-    };
-
-    loadSiteContent();
-  }, []);
-
-  return content;
-};
-
-const Hero = () => {
-  const content = useHeroContent();
+  const content = hero;
 
   const heroImageSrc = content.image?.length ? content.image : heroFallbackImage;
 
