@@ -33,6 +33,7 @@ const normalizeHighlights = (value) => {
 
 function App() {
   const [darkMode, setDarkMode] = useState(true);
+  const [showThemeFade, setShowThemeFade] = useState(false);
   const [siteContent, setSiteContent] = useState(null);
   const [siteConfig, setSiteConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -86,12 +87,38 @@ function App() {
 
     window.addEventListener('site-content-updated', handleRefresh);
     window.addEventListener('site-config-updated', handleRefresh);
+    window.addEventListener('data-updated', handleRefresh);
 
     return () => {
       window.removeEventListener('site-content-updated', handleRefresh);
       window.removeEventListener('site-config-updated', handleRefresh);
+      window.removeEventListener('data-updated', handleRefresh);
     };
   }, [setGlobalLoading]);
+
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    document.documentElement.classList.toggle('dark', darkMode);
+  }, [darkMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    setShowThemeFade(true);
+    const timer = window.setTimeout(() => {
+      setShowThemeFade(false);
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [darkMode]);
 
   if (loading) {
     return null;
@@ -102,7 +129,8 @@ function App() {
   }
 
   return (
-    <div className={darkMode ? 'dark' : ''}>
+    <div>
+      {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
       <NavBar darkMode={darkMode} setDarkMode={setDarkMode} config={siteConfig} />
       <main className="bg-slate-50 text-black transition duration-500 dark:bg-slate-950 dark:text-white">
         <Hero hero={siteContent?.hero} />
