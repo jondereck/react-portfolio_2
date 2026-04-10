@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminHeader from '@/components/AdminHeader';
 import DataTable from '@/components/DataTable';
 import FormDialog from '@/components/FormDialog';
+import ImageUpload from '@/components/ImageUpload';
 import { useAdminData } from '@/hooks/useAdminData';
 import { toast } from 'sonner';
 import { handleRequest } from '@/lib/handleRequest';
@@ -14,66 +15,6 @@ const buttonStyles =
   'h-8 rounded-md bg-slate-900 px-3 text-sm text-white transition hover:bg-slate-800 disabled:opacity-50 dark:bg-slate-100 dark:text-slate-900';
 const inputStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950';
 const textareaStyles = 'rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950';
-
-function ImageUploadField({ id, label, value, adminKey, onUploaded }) {
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
-
-  const uploadFile = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-
-    if (!adminKey) {
-      setUploadError('Provide admin API key before uploading.');
-      return;
-    }
-
-    setUploadError('');
-    setUploading(true);
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        headers: {
-          'x-admin-key': adminKey,
-        },
-        body: formData,
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        const message = typeof payload?.error === 'string' ? payload.error : 'Image upload failed';
-        setUploadError(message);
-        return;
-      }
-
-      if (typeof payload?.secure_url === 'string' && payload.secure_url.length > 0) {
-        onUploaded(payload.secure_url);
-      } else {
-        setUploadError('Image upload failed');
-      }
-    } catch {
-      setUploadError('Image upload failed');
-    } finally {
-      setUploading(false);
-      event.target.value = '';
-    }
-  };
-
-  return (
-    <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-      {label}
-      <input id={`${id}-url`} type="url" value={value} readOnly className={inputStyles} />
-      <input id={`${id}-file`} type="file" accept="image/*" onChange={uploadFile} className={inputStyles} />
-      {uploading ? <span className="text-xs text-slate-500">Uploading image…</span> : null}
-      {uploadError ? <span className="text-xs text-red-600">{uploadError}</span> : null}
-    </label>
-  );
-}
 
 const resources = [
   {
@@ -262,7 +203,6 @@ function AdminResourceSection({ resource, adminKey }) {
             onChange={updateField}
             onSubmit={handleSubmit}
             onReset={resetForm}
-            adminKey={adminKey}
           />
         </div>
       </div>
@@ -430,13 +370,11 @@ function SiteContentSection({ adminKey }) {
             {Object.entries(hero).map(([field, value]) => {
               if (field === 'image') {
                 return (
-                  <ImageUploadField
+                  <ImageUpload
                     key={field}
-                    id={`hero-${field}`}
-                    label={field}
                     value={value}
-                    adminKey={adminKey}
-                    onUploaded={(uploadedUrl) => setHero((previous) => ({ ...previous, [field]: uploadedUrl }))}
+                    onChange={(uploadedUrl) => setHero((previous) => ({ ...previous, [field]: uploadedUrl }))}
+                    label={field}
                   />
                 );
               }
@@ -663,12 +601,10 @@ function SiteConfigSection({ adminKey }) {
                 className={inputStyles}
               />
             </label>
-            <ImageUploadField
-              id="site-config-logo-image"
-              label="Logo image"
+            <ImageUpload
               value={siteConfig.logoImage}
-              adminKey={adminKey}
-              onUploaded={(uploadedUrl) => setSiteConfig((previous) => ({ ...previous, logoImage: uploadedUrl }))}
+              onChange={(uploadedUrl) => setSiteConfig((previous) => ({ ...previous, logoImage: uploadedUrl }))}
+              label="Logo image"
             />
           </div>
           <button type="submit" disabled={saving || loading} className={buttonStyles}>

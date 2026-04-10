@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import useSWR, { mutate } from 'swr';
 import { toast } from 'sonner';
 import { handleRequest } from '@/lib/handleRequest';
 import { useLoadingStore } from '@/store/loading';
@@ -66,44 +67,54 @@ const formatForForm = (fields, item) =>
     return state;
   }, defaultFormState(fields));
 
+const adminResourceEndpoints = ['/api/projects', '/api/portfolio', '/api/certificates', '/api/experience', '/api/skills'];
+
 export function useAdminData({ endpoint, title, fields, adminKey }) {
-  const [items, setItems] = useState([]);
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState('');
 
   const setGlobalLoading = useLoadingStore((state) => state.setLoading);
 
-  const loadItems = useCallback(async () => {
-    setError('');
-    setLoading(true);
-    setGlobalLoading(true);
-
-    try {
-      const data = await handleRequest(() =>
-        fetch(endpoint, {
+  const fetcher = useCallback(
+    async (url) =>
+      handleRequest(() =>
+        fetch(url, {
           cache: 'no-store',
           headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
         }),
-      );
-      setItems(Array.isArray(data) ? data : []);
+      ),
+    [adminKey],
+  );
+  const { data, error: swrError, isLoading, isValidating } = useSWR(endpoint, fetcher);
+  const items = useMemo(() => (Array.isArray(data) ? data : []), [data]);
+  const loading = isLoading || isValidating;
+
+  const loadItems = useCallback(async () => {
+    setError('');
+    setGlobalLoading(true);
+    try {
+      await mutate(endpoint);
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : `Unable to load ${title}`;
       setError(message);
       toast.error(`Unable to load ${title}`, { description: message });
     } finally {
-      setLoading(false);
       setGlobalLoading(false);
     }
-  }, [adminKey, endpoint, setGlobalLoading, title]);
+  }, [endpoint, setGlobalLoading, title]);
 
   useEffect(() => {
-    loadItems();
-  }, [loadItems]);
+    if (!swrError) {
+      return;
+    }
+    const message = swrError instanceof Error ? swrError.message : `Unable to load ${title}`;
+    setError(message);
+    toast.error(`Unable to load ${title}`, { description: message });
+  }, [swrError, title]);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
@@ -175,7 +186,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         });
 
         await requestPromise;
-        await loadItems();
+        await Promise.all(adminResourceEndpoints.map((path) => mutate(path)));
         resetForm();
       } catch (requestError) {
         const message = requestError instanceof Error ? requestError.message : `Unable to save ${title}`;
@@ -185,7 +196,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setGlobalLoading(false);
       }
     },
-    [adminKey, editingId, endpoint, fields, formState, loadItems, resetForm, setGlobalLoading, title],
+    [adminKey, editingId, endpoint, fields, formState, resetForm, setGlobalLoading, title],
   );
 
   const handleDelete = useCallback(
@@ -213,7 +224,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         });
 
         await requestPromise;
-        await loadItems();
+        await Promise.all(adminResourceEndpoints.map((path) => mutate(path)));
 
         if (editingId === id) {
           resetForm();
@@ -226,7 +237,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setGlobalLoading(false);
       }
     },
-    [adminKey, editingId, endpoint, loadItems, resetForm, setGlobalLoading, title],
+    [adminKey, editingId, endpoint, resetForm, setGlobalLoading, title],
   );
 
   return {
