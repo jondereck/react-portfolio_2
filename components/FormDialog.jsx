@@ -1,7 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-
 function FieldInput({ resourceKey, field, value, onChange }) {
   if (field.type === 'checkbox') {
     return (
@@ -26,7 +24,7 @@ function FieldInput({ resourceKey, field, value, onChange }) {
           placeholder={field.placeholder}
           required={field.required !== false}
           rows={field.rows || 3}
-          className={`rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950`}
+          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
         />
       ) : (
         <input
@@ -43,19 +41,25 @@ function FieldInput({ resourceKey, field, value, onChange }) {
   );
 }
 
-export default function FormDialog({ title, resourceKey, fields, formState, editingId, saving, onChange, onSubmit, onReset }) {
-  const [open, setOpen] = useState(false);
-  const isEditing = editingId !== null;
-
-  const submitAndClose = async (event) => {
-    await onSubmit(event);
-    setOpen(false);
-  };
+export default function FormDialog({
+  title,
+  resourceKey,
+  fields,
+  formState,
+  mode,
+  open,
+  saving,
+  onOpenCreate,
+  onClose,
+  onChange,
+  onSubmit,
+}) {
+  const isEditing = mode === 'edit';
 
   return (
     <>
-      <button type="button" className="h-8 rounded-md bg-slate-900 px-3 text-sm text-white dark:bg-slate-100 dark:text-slate-900" onClick={() => setOpen(true)}>
-        {isEditing ? `Editing #${editingId}` : `Add ${title}`}
+      <button type="button" className="h-8 rounded-md bg-slate-900 px-3 text-sm text-white dark:bg-slate-100 dark:text-slate-900" onClick={onOpenCreate}>
+        Add {title}
       </button>
 
       {open ? (
@@ -63,7 +67,7 @@ export default function FormDialog({ title, resourceKey, fields, formState, edit
           <div className="w-full max-w-2xl rounded-xl bg-white p-6 dark:bg-slate-900">
             <h3 className="text-lg font-semibold">{isEditing ? `Edit ${title}` : `Create ${title}`}</h3>
             <p className="mt-1 text-sm text-slate-500">Update fields and save to publish changes in the admin API.</p>
-            <form onSubmit={submitAndClose} className="mt-4 grid gap-4 md:grid-cols-2">
+            <form onSubmit={onSubmit} className="mt-4 grid gap-4 md:grid-cols-2">
               {fields.map((field) => (
                 <FieldInput
                   key={field.name}
@@ -74,14 +78,7 @@ export default function FormDialog({ title, resourceKey, fields, formState, edit
                 />
               ))}
               <div className="md:col-span-2 mt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="h-9 rounded-md px-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
-                  onClick={() => {
-                    onReset();
-                    setOpen(false);
-                  }}
-                >
+                <button type="button" className="h-9 rounded-md px-3 text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={onClose}>
                   Cancel
                 </button>
                 <button
