@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { CldUploadWidget } from 'next-cloudinary';
 import { toast } from 'sonner';
 
@@ -21,8 +21,15 @@ const buttonStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text
 
 export default function ImageUpload({ id, label, value, onChange, className }: ImageUploadProps) {
   const [uploadError, setUploadError] = useState('');
-  const [uploadToastId, setUploadToastId] = useState<string | number | null>(null);
+  const uploadToastIdRef = useRef<string | number | null>(null);
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+  const dismissUploadToast = () => {
+    if (uploadToastIdRef.current !== null) {
+      toast.dismiss(uploadToastIdRef.current);
+      uploadToastIdRef.current = null;
+    }
+  };
 
   return (
     <label className={`flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200 ${className ?? ''}`}>
@@ -37,10 +44,7 @@ export default function ImageUpload({ id, label, value, onChange, className }: I
           multiple: false,
         }}
         onSuccess={(result: UploadResult) => {
-          if (uploadToastId !== null) {
-            toast.dismiss(uploadToastId);
-            setUploadToastId(null);
-          }
+          dismissUploadToast();
           const uploadedUrl = result.info?.secure_url;
           if (typeof uploadedUrl === 'string' && uploadedUrl.length > 0) {
             onChange(uploadedUrl);
@@ -50,19 +54,11 @@ export default function ImageUpload({ id, label, value, onChange, className }: I
           }
         }}
         onError={() => {
-          if (uploadToastId !== null) {
-            toast.dismiss(uploadToastId);
-            setUploadToastId(null);
-          }
+          dismissUploadToast();
           setUploadError('Image upload failed');
           toast.error('Image upload failed');
         }}
-        onClose={() => {
-          if (uploadToastId !== null) {
-            toast.dismiss(uploadToastId);
-            setUploadToastId(null);
-          }
-        }}
+        onClose={dismissUploadToast}
       >
         {({ open }) => (
           <button
@@ -77,7 +73,8 @@ export default function ImageUpload({ id, label, value, onChange, className }: I
                 return;
               }
               setUploadError('');
-              setUploadToastId(toast.loading('Uploading image...'));
+              dismissUploadToast();
+              uploadToastIdRef.current = toast.loading('Uploading image...');
               open();
             }}
             className={buttonStyles}
