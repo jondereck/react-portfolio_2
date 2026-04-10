@@ -8,6 +8,7 @@ const Certificates = () => {
   const [items, setItems] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedImage, setSelectedImage] = useState('');
+  const [error, setError] = useState('');
 
   const categories = useMemo(() => {
     const unique = new Set(items.map((item) => item.category));
@@ -22,10 +23,17 @@ const Certificates = () => {
   }, [activeCategory, items]);
 
   const loadCertificates = async () => {
-    const response = await fetch('/api/certificates', { cache: 'no-store' });
-    if (response.ok) {
-      const certificateData = await response.json();
-      setItems(certificateData);
+    try {
+      const response = await fetch('/api/certificates', { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error('Unable to load certificates');
+      }
+      const data = await response.json();
+      setItems(Array.isArray(data) ? data : []);
+      setError('');
+    } catch (loadError) {
+      setItems([]);
+      setError(loadError instanceof Error ? loadError.message : 'Unable to load certificates');
     }
   };
 
@@ -47,6 +55,8 @@ const Certificates = () => {
           Go to Admin Page
         </Link>
       </div>
+
+      {error ? <p className="mb-4 text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
 
       <div className="mb-8 flex flex-wrap gap-2">
         {categories.map((category) => (

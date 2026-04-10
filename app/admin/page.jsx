@@ -240,10 +240,6 @@ function SiteContentSection({ adminKey }) {
     body: '',
     highlights: [{ ...emptyHighlight }],
   });
-  const [siteConfig, setSiteConfig] = useState({
-    logoText: '',
-    logoImage: '',
-  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -283,11 +279,6 @@ function SiteContentSection({ adminKey }) {
             : [{ ...emptyHighlight }],
       });
 
-      const configData = await handleRequest(() => fetch('/api/site-config', { cache: 'no-store' }));
-      setSiteConfig({
-        logoText: typeof configData?.logoText === 'string' ? configData.logoText : '',
-        logoImage: typeof configData?.logoImage === 'string' ? configData.logoImage : '',
-      });
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'Unable to load hero/about content';
       setError(message);
@@ -344,30 +335,17 @@ function SiteContentSection({ adminKey }) {
           }),
         }),
       );
-      const siteConfigPromise = handleRequest(() =>
-        fetch('/api/site-config', {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-admin-key': adminKey,
-          },
-          body: JSON.stringify({
-            logoText: siteConfig.logoText.trim() || undefined,
-            logoImage: siteConfig.logoImage.trim() || undefined,
-          }),
-        }),
-      );
 
-      toast.promise(Promise.all([siteContentPromise, siteConfigPromise]), {
+      toast.promise(siteContentPromise, {
         loading: 'Saving site content...',
         success: 'Site content updated.',
         error: 'Unable to update site content',
       });
 
-      await Promise.all([siteContentPromise, siteConfigPromise]);
+      await siteContentPromise;
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('site-content-updated'));
-        window.dispatchEvent(new Event('site-config-updated'));
+        window.dispatchEvent(new Event('data-updated'));
       }
       await loadSiteContent();
     } catch (requestError) {
@@ -413,26 +391,6 @@ function SiteContentSection({ adminKey }) {
           </div>
 
           <div className="grid gap-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                Logo text
-                <input
-                  type="text"
-                  value={siteConfig.logoText}
-                  onChange={(event) => setSiteConfig((previous) => ({ ...previous, logoText: event.target.value }))}
-                  className={inputStyles}
-                />
-              </label>
-              <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                Logo image URL
-                <input
-                  type="url"
-                  value={siteConfig.logoImage}
-                  onChange={(event) => setSiteConfig((previous) => ({ ...previous, logoImage: event.target.value }))}
-                  className={inputStyles}
-                />
-              </label>
-            </div>
             <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               About title
               <input
@@ -528,6 +486,126 @@ function SiteContentSection({ adminKey }) {
   );
 }
 
+
+function SiteConfigSection({ adminKey }) {
+  const [siteConfig, setSiteConfig] = useState({
+    logoText: '',
+    logoImage: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const setGlobalLoading = useLoadingStore((state) => state.setLoading);
+
+  const loadSiteConfig = useCallback(async () => {
+    try {
+      setError('');
+      setLoading(true);
+      setGlobalLoading(true);
+      const configData = await handleRequest(() => fetch('/api/site-config', { cache: 'no-store' }));
+      setSiteConfig({
+        logoText: typeof configData?.logoText === 'string' ? configData.logoText : '',
+        logoImage: typeof configData?.logoImage === 'string' ? configData.logoImage : '',
+      });
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Unable to load site configuration';
+      setError(message);
+      toast.error('Unable to load site configuration', { description: message });
+    } finally {
+      setLoading(false);
+      setGlobalLoading(false);
+    }
+  }, [setGlobalLoading]);
+
+  useEffect(() => {
+    loadSiteConfig();
+  }, [loadSiteConfig]);
+
+  const submit = async (event) => {
+    event.preventDefault();
+
+    if (!adminKey) {
+      toast.error('Provide the admin API key to update site config.');
+      return;
+    }
+
+    setError('');
+    setSaving(true);
+    setGlobalLoading(true);
+
+    try {
+      const updatePromise = handleRequest(() =>
+        fetch('/api/site-config', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-key': adminKey,
+          },
+          body: JSON.stringify({
+            logoText: siteConfig.logoText.trim(),
+            logoImage: siteConfig.logoImage.trim(),
+          }),
+        }),
+      );
+
+      toast.promise(updatePromise, {
+        loading: 'Saving site config...',
+        success: 'Site config updated.',
+        error: 'Unable to update site config',
+      });
+
+      await updatePromise;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('site-config-updated'));
+        window.dispatchEvent(new Event('data-updated'));
+      }
+      await loadSiteConfig();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update site config');
+    } finally {
+      setSaving(false);
+      setGlobalLoading(false);
+    }
+  };
+
+  return (
+    <section className={cardStyles}>
+      <div className="border-b border-slate-100 p-6 dark:border-slate-800">
+        <h2 className="text-xl font-semibold">Site Config</h2>
+        <p className="text-sm text-slate-500">Manage logo text and logo image URL used in the navbar.</p>
+      </div>
+      <div className="p-6">
+        <form onSubmit={submit} className="space-y-4">
+          {error && <div className="rounded bg-red-100 p-3 text-red-700">{error}</div>}
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              Logo text
+              <input
+                type="text"
+                value={siteConfig.logoText}
+                onChange={(event) => setSiteConfig((previous) => ({ ...previous, logoText: event.target.value }))}
+                className={inputStyles}
+              />
+            </label>
+            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+              Logo image URL
+              <input
+                type="url"
+                value={siteConfig.logoImage}
+                onChange={(event) => setSiteConfig((previous) => ({ ...previous, logoImage: event.target.value }))}
+                className={inputStyles}
+              />
+            </label>
+          </div>
+          <button type="submit" disabled={saving || loading} className={buttonStyles}>
+            {saving ? 'Saving…' : 'Update Site Config'}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState('');
 
@@ -537,6 +615,7 @@ export default function AdminPage() {
         <AdminHeader adminKey={adminKey} onAdminKeyChange={setAdminKey} />
 
         <div className="space-y-6">
+          <SiteConfigSection adminKey={adminKey} />
           <SiteContentSection adminKey={adminKey} />
           {resources.map((resource) => (
             <AdminResourceSection key={resource.key} resource={resource} adminKey={adminKey} />

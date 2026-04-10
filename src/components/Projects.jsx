@@ -92,7 +92,7 @@ const Projects = () => {
     const loadProjects = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/portfolio', { cache: 'no-store' });
+        const response = await fetch('/api/projects', { cache: 'no-store' });
         if (!response.ok) {
           throw new Error('Unable to load projects');
         }
@@ -124,14 +124,14 @@ const Projects = () => {
       )}
       {loading && <p className="mb-4 text-sm text-slate-500">Loading projects…</p>}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {projectList.map((project) => {
+        {projectList.map((project, index) => {
           const tech = normalizeTech(project.tech ?? project.techStack);
           const featureList = Array.isArray(project.features) ? project.features : [];
           const link = project.demoUrl || project.link;
           const secondaryLink = project.repoUrl || project.link;
           return (
             <motion.article
-              key={project.id ?? project.slug}
+              key={project.id ?? project.slug ?? `${project.title}-${index}`}
               whileHover={{ y: -8, scale: 1.01 }}
               transition={{ type: 'spring', stiffness: 240, damping: 18 }}
               className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white/70 shadow-lg shadow-slate-300/30 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/70 dark:shadow-black/20"
