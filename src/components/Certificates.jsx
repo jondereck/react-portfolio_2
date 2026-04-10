@@ -57,15 +57,7 @@ const Certificates = () => {
       title="Certificates"
       subtitle="Verified learning milestones across frontend, backend, and data tracks."
     >
-      <div className="mb-6 flex justify-end">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="rounded-full border border-cyan-400 px-4 py-2 text-sm font-semibold text-cyan-600 transition hover:bg-cyan-500 hover:text-white dark:text-cyan-300"
-        >
-          Admin
-        </button>
-      </div>
+
 
       {error ? <p className="mb-4 text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
 

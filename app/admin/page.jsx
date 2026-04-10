@@ -371,146 +371,202 @@ function SiteContentSection({ adminKey }) {
   };
 
   return (
-    <section className={cardStyles}>
-      <div className="border-b border-slate-100 p-6 dark:border-slate-800">
-        <h2 className="text-xl font-semibold">Site Content (Hero + About)</h2>
-        <p className="text-sm text-slate-500">Centralized controls for the hero headline, CTA links, and about section.</p>
-      </div>
-      <div className="p-6">
-        <form onSubmit={submit} className="space-y-6">
-          {error && <div className="rounded bg-red-100 p-3 text-red-700">{error}</div>}
-          <div className="grid gap-4 md:grid-cols-2">
-            {Object.entries(hero).map(([field, value]) => {
-              if (field === 'image') {
-                return (
-                  <ImageUpload
-                    key={field}
-                    id={`hero-${field}`}
-                    label={field}
-                    value={value}
-                    onChange={(uploadedUrl) => setHero((previous) => ({ ...previous, [field]: uploadedUrl }))}
-                  />
-                );
-              }
+<section className={`${cardStyles} overflow-hidden`}>
+  {/* Header Section */}
+  <div className="border-b border-slate-100 bg-slate-50/50 p-6 dark:border-slate-800 dark:bg-slate-900/50">
+    <h2 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Site Content</h2>
+    <p className="mt-1 text-sm text-slate-500">Manage your portfolio's first impression and bio.</p>
+  </div>
 
-              return (
-                <label key={field} className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  {field}
-                  {field === 'description' ? (
-                    <textarea
-                      value={value}
-                      onChange={(event) => setHero((previous) => ({ ...previous, [field]: event.target.value }))}
-                      rows={4}
-                      required
-                      className={textareaStyles}
-                    />
-                  ) : (
-                    <input
-                      type="text"
-                      value={value}
-                      onChange={(event) => setHero((previous) => ({ ...previous, [field]: event.target.value }))}
-                      required
-                      className={inputStyles}
-                    />
-                  )}
-                </label>
-              );
-            })}
-          </div>
+  <div className="p-6">
+    <form onSubmit={submit} className="space-y-10">
+      {error && (
+        <div className="animate-in fade-in slide-in-from-top-1 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-400">
+          <span className="font-semibold">Error:</span> {error}
+        </div>
+      )}
 
-          <div className="grid gap-4">
-            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              About title
-              <input
-                type="text"
-                value={about.title}
-                onChange={(event) => setAbout((previous) => ({ ...previous, title: event.target.value }))}
-                required
-                className={inputStyles}
+   {/* --- HERO SECTION --- */}
+<div className="space-y-6">
+  <div className="flex items-center gap-2">
+    <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
+    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Hero Section</span>
+    <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
+  </div>
+
+  <div className="grid gap-6 md:grid-cols-2">
+    {Object.entries(hero).map(([field, value]) => {
+      const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
+
+      if (field === 'image') {
+        return (
+          <div key={field} className="md:col-span-2">
+            <div className="max-w-sm rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+              <ImageUpload
+                id={`hero-${field}`}
+                label={label}
+                value={value}
+                onChange={(url) => setHero((prev) => ({ ...prev, [field]: url }))}
               />
-            </label>
-            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              About body
-              <textarea
-                value={about.body}
-                onChange={(event) => setAbout((previous) => ({ ...previous, body: event.target.value }))}
-                rows={4}
-                required
-                className={textareaStyles}
-              />
-            </label>
-            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              Highlights
-              <div className="space-y-2">
-                {about.highlights.map((highlight, index) => (
-                  <div key={`highlight-${index}`} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-                    <input
-                      type="text"
-                      value={highlight.label}
-                      onChange={(event) =>
-                        setAbout((previous) => ({
-                          ...previous,
-                          highlights: previous.highlights.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, label: event.target.value } : item,
-                          ),
-                        }))
-                      }
-                      placeholder="Label"
-                      required
-                      className={inputStyles}
-                    />
-                    <textarea
-                      value={highlight.value}
-                      onChange={(event) =>
-                        setAbout((previous) => ({
-                          ...previous,
-                          highlights: previous.highlights.map((item, itemIndex) =>
-                            itemIndex === index ? { ...item, value: event.target.value } : item,
-                          ),
-                        }))
-                      }
-                      placeholder="Value"
-                      required
-                      rows={3}
-                      className={textareaStyles}
-                    />
-                    <button
-                      type="button"
-                      className="h-10 rounded-md border border-slate-300 px-3 text-sm hover:bg-slate-100 disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800"
-                      onClick={() =>
-                        setAbout((previous) => ({
-                          ...previous,
-                          highlights: previous.highlights.length > 1 ? previous.highlights.filter((_, itemIndex) => itemIndex !== index) : previous.highlights,
-                        }))
-                      }
-                      disabled={about.highlights.length === 1}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  className="h-9 rounded-md border border-slate-300 px-3 text-sm hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-                  onClick={() =>
-                    setAbout((previous) => ({
-                      ...previous,
-                      highlights: [...previous.highlights, { ...emptyHighlight }],
-                    }))
-                  }
-                >
-                  + Add Highlight
-                </button>
-              </div>
-            </label>
+              <p className="mt-2 text-[10px] text-slate-400 italic">Recommended: 800x800px or smaller.</p>
+            </div>
           </div>
+        );
+      }
 
-          <button type="submit" disabled={saving || loading} className={buttonStyles}>
-            {saving ? 'Saving…' : 'Update Site Content'}
-          </button>
-        </form>
+      return (
+        <label key={field} className="group flex flex-col space-y-2">
+          <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            {label}
+          </span>
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setHero((prev) => ({ ...prev, [field]: e.target.value }))}
+            className={inputStyles}
+          />
+        </label>
+      );
+    })}
+  </div>
+</div>
+
+      {/* --- ABOUT SECTION --- */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">About Section</span>
+          <div className="h-px flex-1 bg-slate-200 dark:bg-slate-800"></div>
+        </div>
+
+        <div className="grid gap-6">
+          <label className="flex flex-col space-y-2">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">About Title</span>
+            <input
+              type="text"
+              value={about.title}
+              onChange={(e) => setAbout((prev) => ({ ...prev, title: e.target.value }))}
+              required
+              className={inputStyles}
+            />
+          </label>
+
+          <label className="flex flex-col space-y-2">
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Bio / Body</span>
+            <textarea
+              value={about.body}
+              onChange={(e) => setAbout((prev) => ({ ...prev, body: e.target.value }))}
+              rows={5}
+              required
+              className={textareaStyles}
+            />
+          </label>
+
+          {/* Highlights List */}
+     {/* --- KEY HIGHLIGHTS (Improved) --- */}
+<div className="mt-10 space-y-4">
+  <div className="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
+    <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-tight">Key Highlights</h3>
+    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500 dark:bg-slate-800">
+      {about.highlights.length} TOTAL
+    </span>
+  </div>
+  
+  <div className="space-y-3">
+    {about.highlights.map((highlight, index) => (
+      <div 
+        key={`highlight-${index}`} 
+        className="group relative flex items-start gap-4 rounded-lg border border-slate-200 bg-white p-3 transition-shadow hover:shadow-sm dark:border-slate-700 dark:bg-slate-800/50"
+      >
+        {/* Label - Fixed Width for alignment */}
+        <div className="w-1/3 md:w-1/4">
+          <label className="text-[10px] font-bold uppercase text-slate-400">Label</label>
+          <input
+            type="text"
+            value={highlight.label}
+            onChange={(e) =>
+              setAbout((prev) => ({
+                ...prev,
+                highlights: prev.highlights.map((item, idx) =>
+                  idx === index ? { ...item, label: e.target.value } : item
+                ),
+              }))
+            }
+            placeholder="Label"
+            className="mt-1 w-full border-none bg-transparent p-0 text-sm font-semibold focus:ring-0 dark:text-white"
+          />
+        </div>
+
+        {/* Vertical Divider */}
+        <div className="h-12 w-px bg-slate-100 dark:bg-slate-700 mt-2"></div>
+
+        {/* Value - Takes up remaining space */}
+        <div className="flex-1">
+          <label className="text-[10px] font-bold uppercase text-slate-400">Value / Description</label>
+          <textarea
+            value={highlight.value}
+            onChange={(e) =>
+              setAbout((prev) => ({
+                ...prev,
+                highlights: prev.highlights.map((item, idx) =>
+                  idx === index ? { ...item, value: e.target.value } : item
+                ),
+              }))
+            }
+            placeholder="Enter details..."
+            rows={2}
+            className="mt-1 w-full border-none bg-transparent p-0 text-sm leading-relaxed focus:ring-0 dark:text-slate-300"
+          />
+        </div>
+
+        {/* Actions */}
+        <button
+          type="button"
+          onClick={() =>
+            setAbout((prev) => ({
+              ...prev,
+              highlights: prev.highlights.filter((_, idx) => idx !== index),
+            }))
+          }
+          className="mt-4 flex h-8 w-8 items-center justify-center rounded-md text-slate-300 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
       </div>
-    </section>
+    ))}
+  </div>
+
+  <button
+    type="button"
+    onClick={() => setAbout((prev) => ({ ...prev, highlights: [...prev.highlights, { ...emptyHighlight }] }))}
+    className="flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-200 py-3 text-xs font-bold uppercase tracking-widest text-slate-400 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-600 dark:border-slate-800 dark:hover:bg-slate-900"
+  >
+    + Add Highlight Item
+  </button>
+</div>
+        </div>
+      </div>
+
+      {/* Footer / Submit */}
+      <div className="sticky bottom-0 -mx-6 -mb-6 mt-10 border-t border-slate-100 bg-white/80 p-6 backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/80">
+        <button 
+          type="submit" 
+          disabled={saving || loading} 
+          className={`${buttonStyles} w-full md:w-auto md:min-w-[200px] shadow-lg shadow-blue-500/20`}
+        >
+          {saving ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              Saving Changes...
+            </span>
+          ) : 'Update Site Content'}
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
   );
 }
 
@@ -622,7 +678,7 @@ function SiteConfigSection({ adminKey }) {
               value={siteConfig.logoImage}
               onChange={(uploadedUrl) => setSiteConfig((previous) => ({ ...previous, logoImage: uploadedUrl }))}
             />
-            {siteConfig.logoImage ? <img src={siteConfig.logoImage} alt="logo preview" className="h-12 w-12 object-contain" /> : null}
+       
           </div>
           <button type="submit" disabled={saving || loading} className={buttonStyles}>
             {saving ? 'Saving…' : 'Update Site Config'}
