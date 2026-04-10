@@ -68,6 +68,8 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [items, setItems] = useState([]);
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
+  const [dialogMode, setDialogMode] = useState('create');
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -82,9 +84,6 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
       if (!response.ok) throw new Error('Failed to load data');
 
       const data = await response.json();
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('RESPONSE:', { endpoint, method: 'GET', data });
-      }
       setItems(Array.isArray(data) ? data : []);
     } catch (error) {
       toast.error(`Unable to load ${title}`, {
@@ -101,16 +100,48 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
 
   const resetForm = useCallback(() => {
     setEditingId(null);
+    setDialogMode('create');
     setFormState(defaultFormState(fields));
   }, [fields]);
 
-  const handleEdit = useCallback(
-    (item) => {
-      setEditingId(item.id);
-      setFormState(formatForForm(fields, item));
-      toast.message(`Editing ${title.toLowerCase()} #${item.id}`);
+  const closeDialog = useCallback(() => {
+    setDialogOpen(false);
+    resetForm();
+  }, [resetForm]);
+
+  const openCreate = useCallback(() => {
+    resetForm();
+    setDialogOpen(true);
+  }, [resetForm]);
+
+  const openEdit = useCallback(
+    async (id) => {
+      setSaving(true);
+      try {
+        const response = await fetch(`${endpoint}/${id}`, {
+          cache: 'no-store',
+          headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
+        });
+
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          throw new Error(detail?.error || 'Failed to load entry');
+        }
+
+        const item = await response.json();
+        setEditingId(id);
+        setDialogMode('edit');
+        setFormState(formatForForm(fields, item));
+        setDialogOpen(true);
+      } catch (error) {
+        toast.error(`Unable to load ${title} entry`, {
+          description: error instanceof Error ? error.message : undefined,
+        });
+      } finally {
+        setSaving(false);
+      }
     },
-    [fields, title]
+    [adminKey, endpoint, fields, title]
   );
 
   const handleSubmit = useCallback(
@@ -120,36 +151,26 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
       setSaving(true);
       try {
         const payload = buildPayload(fields, formState);
-        const isUpdating = editingId !== null;
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('REQUEST:', {
-            endpoint,
-            method: isUpdating ? 'PUT' : 'POST',
-            payload: isUpdating ? { ...payload, id: editingId } : payload,
-          });
-        }
+        const isUpdating = dialogMode === 'edit' && editingId !== null;
+        const requestUrl = isUpdating ? `${endpoint}/${editingId}` : endpoint;
 
-        const response = await fetch(endpoint, {
+        const response = await fetch(requestUrl, {
           method: isUpdating ? 'PUT' : 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(adminKey ? { 'x-admin-key': adminKey } : {}),
           },
-          body: JSON.stringify(isUpdating ? { ...payload, id: editingId } : payload),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(detail?.error || 'Request failed');
         }
-        const data = await response.json();
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('RESPONSE:', { endpoint, method: isUpdating ? 'PUT' : 'POST', data });
-        }
 
         toast.success(`${title} ${isUpdating ? 'updated' : 'created'}.`);
         await loadItems();
-        resetForm();
+        closeDialog();
       } catch (error) {
         toast.error(`Unable to save ${title}`, {
           description: error instanceof Error ? error.message : undefined,
@@ -158,16 +179,13 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setSaving(false);
       }
     },
-    [adminKey, editingId, endpoint, fields, formState, loadItems, resetForm, title]
+    [adminKey, closeDialog, dialogMode, editingId, endpoint, fields, formState, loadItems, title]
   );
 
   const handleDelete = useCallback(
     async (id) => {
       setDeletingId(id);
       try {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('REQUEST:', { endpoint, method: 'DELETE', payload: { id } });
-        }
         const response = await fetch(endpoint, {
           method: 'DELETE',
           headers: {
@@ -181,16 +199,12 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(detail?.error || 'Delete failed');
         }
-        const data = await response.json();
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('RESPONSE:', { endpoint, method: 'DELETE', data });
-        }
 
         toast.success(`${title} entry deleted.`);
         await loadItems();
 
         if (editingId === id) {
-          resetForm();
+          closeDialog();
         }
       } catch (error) {
         toast.error(`Unable to delete ${title}`, {
@@ -200,7 +214,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setDeletingId(null);
       }
     },
-    [adminKey, editingId, endpoint, loadItems, resetForm, title]
+    [adminKey, closeDialog, editingId, endpoint, loadItems, title]
   );
 
   return {
@@ -209,11 +223,14 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
     saving,
     deletingId,
     editingId,
+    dialogMode,
+    dialogOpen,
     formState,
     setFormState,
     loadItems,
-    resetForm,
-    handleEdit,
+    openCreate,
+    openEdit,
+    closeDialog,
     handleSubmit,
     handleDelete,
   };
