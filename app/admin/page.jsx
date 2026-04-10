@@ -5,7 +5,9 @@ import AdminHeader from '@/components/AdminHeader';
 import DataTable from '@/components/DataTable';
 import FormDialog from '@/components/FormDialog';
 import { useAdminData } from '@/hooks/useAdminData';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
+import { handleRequest } from '@/lib/handleRequest';
+import { useLoadingStore } from '@/store/loading';
 
 const cardStyles = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900';
 const buttonStyles =
@@ -161,6 +163,7 @@ function AdminResourceSection({ resource, adminKey }) {
     resetForm,
     handleSubmit,
     handleDelete,
+    error,
   } =
     useAdminData({
       endpoint: resource.endpoint,
@@ -203,6 +206,9 @@ function AdminResourceSection({ resource, adminKey }) {
         </div>
       </div>
       <div className="p-6">
+        {error && (
+          <div className="mb-4 rounded bg-red-100 p-3 text-red-700">{error}</div>
+        )}
         <DataTable
           title={title}
           listColumns={listColumns}
@@ -236,13 +242,15 @@ function SiteContentSection({ adminKey }) {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const setGlobalLoading = useLoadingStore((state) => state.setLoading);
 
   const loadSiteContent = useCallback(async () => {
     try {
+      setError('');
       setLoading(true);
-      const response = await fetch('/api/site-content', { cache: 'no-store' });
-      if (!response.ok) throw new Error('Failed to load site content');
-      const data = await response.json();
+      setGlobalLoading(true);
+      const data = await handleRequest(() => fetch('/api/site-content', { cache: 'no-store' }));
 
       setHero({
         eyebrow: data?.hero?.eyebrow ?? '',
@@ -265,14 +273,15 @@ function SiteContentSection({ adminKey }) {
               }))
             : [{ ...emptyHighlight }],
       });
-    } catch (error) {
-      toast.error('Unable to load hero/about content', {
-        description: error instanceof Error ? error.message : undefined,
-      });
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'Unable to load hero/about content';
+      setError(message);
+      toast.error('Unable to load hero/about content', { description: message });
     } finally {
       setLoading(false);
+      setGlobalLoading(false);
     }
-  }, []);
+  }, [setGlobalLoading]);
 
   useEffect(() => {
     loadSiteContent();
@@ -298,38 +307,42 @@ function SiteContentSection({ adminKey }) {
       return;
     }
 
+    setError('');
     setSaving(true);
+    setGlobalLoading(true);
 
     try {
-      const response = await fetch('/api/site-content', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-admin-key': adminKey,
-        },
-        body: JSON.stringify({
-          hero,
-          about: {
-            title: about.title,
-            body: about.body,
-            highlights: parsedHighlights,
+      const requestPromise = handleRequest(() =>
+        fetch('/api/site-content', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-key': adminKey,
           },
+          body: JSON.stringify({
+            hero,
+            about: {
+              title: about.title,
+              body: about.body,
+              highlights: parsedHighlights,
+            },
+          }),
         }),
+      );
+
+      toast.promise(requestPromise, {
+        loading: 'Saving site content...',
+        success: 'Site content updated.',
+        error: 'Unable to update site content',
       });
 
-      if (!response.ok) {
-        const detail = await response.json().catch(() => ({}));
-        throw new Error(detail?.error || 'Update failed');
-      }
-
-      toast.success('Site content updated.');
+      await requestPromise;
       await loadSiteContent();
-    } catch (error) {
-      toast.error('Unable to update site content', {
-        description: error instanceof Error ? error.message : undefined,
-      });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Unable to update site content');
     } finally {
       setSaving(false);
+      setGlobalLoading(false);
     }
   };
 
@@ -341,6 +354,7 @@ function SiteContentSection({ adminKey }) {
       </div>
       <div className="p-6">
         <form onSubmit={submit} className="space-y-6">
+          {error && <div className="rounded bg-red-100 p-3 text-red-700">{error}</div>}
           <div className="grid gap-4 md:grid-cols-2">
             {Object.entries(hero).map(([field, value]) => (
               <label key={field} className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -467,7 +481,6 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
-      <Toaster richColors position="top-right" />
       <div className="mx-auto max-w-6xl space-y-8">
         <AdminHeader adminKey={adminKey} onAdminKeyChange={setAdminKey} />
 

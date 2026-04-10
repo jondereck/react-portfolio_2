@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { handleRequest } from '@/lib/handleRequest';
+import { useLoadingStore } from '@/store/loading';
 
 const defaultFormState = (fields) =>
   fields.reduce((state, field) => {
@@ -72,29 +74,32 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [error, setError] = useState('');
+
+  const setGlobalLoading = useLoadingStore((state) => state.setLoading);
 
   const loadItems = useCallback(async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(endpoint, {
-        cache: 'no-store',
-        headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
-      });
-      if (!response.ok) throw new Error('Failed to load data');
+    setError('');
+    setLoading(true);
+    setGlobalLoading(true);
 
-      const data = await response.json();
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('RESPONSE:', { endpoint, method: 'GET', data });
-      }
+    try {
+      const data = await handleRequest(() =>
+        fetch(endpoint, {
+          cache: 'no-store',
+          headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
+        }),
+      );
       setItems(Array.isArray(data) ? data : []);
-    } catch (error) {
-      toast.error(`Unable to load ${title}`, {
-        description: error instanceof Error ? error.message : undefined,
-      });
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : `Unable to load ${title}`;
+      setError(message);
+      toast.error(`Unable to load ${title}`, { description: message });
     } finally {
       setLoading(false);
+      setGlobalLoading(false);
     }
-  }, [adminKey, endpoint, title]);
+  }, [adminKey, endpoint, setGlobalLoading, title]);
 
   useEffect(() => {
     loadItems();
@@ -104,129 +109,124 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
     setEditingId(null);
     setFormState(defaultFormState(fields));
     setDialogOpen(false);
+    setError('');
   }, [fields]);
 
   const openCreate = useCallback(() => {
     setEditingId(null);
     setFormState(defaultFormState(fields));
     setDialogOpen(true);
+    setError('');
   }, [fields]);
 
   const openEdit = useCallback(
     async (id) => {
+      setError('');
+      setGlobalLoading(true);
       try {
-        const response = await fetch(`${endpoint}/${id}`, {
-          cache: 'no-store',
-          headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
-        });
-        if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          throw new Error(detail?.error || 'Failed to load item');
-        }
+        const item = await handleRequest(() =>
+          fetch(`${endpoint}/${id}`, {
+            cache: 'no-store',
+            headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
+          }),
+        );
 
-        const item = await response.json();
         setEditingId(item.id);
         setFormState(formatForForm(fields, item));
         setDialogOpen(true);
-        toast.message(`Editing ${title.toLowerCase()} #${item.id}`);
-      } catch (error) {
-        toast.error(`Unable to load ${title} entry`, {
-          description: error instanceof Error ? error.message : undefined,
-        });
+      } catch (requestError) {
+        const message = requestError instanceof Error ? requestError.message : `Unable to load ${title} entry`;
+        setError(message);
+        toast.error(`Unable to load ${title} entry`, { description: message });
+      } finally {
+        setGlobalLoading(false);
       }
     },
-    [adminKey, endpoint, fields, title]
+    [adminKey, endpoint, fields, setGlobalLoading, title],
   );
 
   const handleSubmit = useCallback(
     async (event) => {
       event.preventDefault();
-
+      setError('');
       setSaving(true);
-      try {
-        const payload = buildPayload(fields, formState);
-        const isUpdating = editingId !== null;
-        const requestEndpoint = isUpdating ? `${endpoint}/${editingId}` : endpoint;
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('REQUEST:', {
-            endpoint: requestEndpoint,
-            method: isUpdating ? 'PUT' : 'POST',
-            payload,
-          });
-        }
+      setGlobalLoading(true);
 
-        const response = await fetch(requestEndpoint, {
-          method: isUpdating ? 'PUT' : 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(adminKey ? { 'x-admin-key': adminKey } : {}),
-          },
-          body: JSON.stringify(payload),
+      const payload = buildPayload(fields, formState);
+      const isUpdating = editingId !== null;
+      const requestEndpoint = isUpdating ? `${endpoint}/${editingId}` : endpoint;
+
+      try {
+        const requestPromise = handleRequest(() =>
+          fetch(requestEndpoint, {
+            method: isUpdating ? 'PUT' : 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(adminKey ? { 'x-admin-key': adminKey } : {}),
+            },
+            body: JSON.stringify(payload),
+          }),
+        );
+
+        toast.promise(requestPromise, {
+          loading: `Saving ${title.toLowerCase()}...`,
+          success: `${title} ${isUpdating ? 'updated' : 'created'}.`,
+          error: `Unable to save ${title}`,
         });
 
-        if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          throw new Error(detail?.error || 'Request failed');
-        }
-        const data = await response.json();
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('RESPONSE:', { endpoint, method: isUpdating ? 'PUT' : 'POST', data });
-        }
-
-        toast.success(`${title} ${isUpdating ? 'updated' : 'created'}.`);
+        await requestPromise;
         await loadItems();
         resetForm();
-      } catch (error) {
-        toast.error(`Unable to save ${title}`, {
-          description: error instanceof Error ? error.message : undefined,
-        });
+      } catch (requestError) {
+        const message = requestError instanceof Error ? requestError.message : `Unable to save ${title}`;
+        setError(message);
       } finally {
         setSaving(false);
+        setGlobalLoading(false);
       }
     },
-    [adminKey, editingId, endpoint, fields, formState, loadItems, resetForm, title]
+    [adminKey, editingId, endpoint, fields, formState, loadItems, resetForm, setGlobalLoading, title],
   );
 
   const handleDelete = useCallback(
     async (id) => {
+      setError('');
       setDeletingId(id);
+      setGlobalLoading(true);
+
       try {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('REQUEST:', { endpoint, method: 'DELETE', payload: { id } });
-        }
-        const response = await fetch(endpoint, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(adminKey ? { 'x-admin-key': adminKey } : {}),
-          },
-          body: JSON.stringify({ id }),
+        const requestPromise = handleRequest(() =>
+          fetch(endpoint, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(adminKey ? { 'x-admin-key': adminKey } : {}),
+            },
+            body: JSON.stringify({ id }),
+          }),
+        );
+
+        toast.promise(requestPromise, {
+          loading: `Deleting ${title.toLowerCase()}...`,
+          success: `${title} entry deleted.`,
+          error: `Unable to delete ${title}`,
         });
 
-        if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          throw new Error(detail?.error || 'Delete failed');
-        }
-        const data = await response.json();
-        if (process.env.NODE_ENV !== 'production') {
-          console.log('RESPONSE:', { endpoint, method: 'DELETE', data });
-        }
-
-        toast.success(`${title} entry deleted.`);
+        await requestPromise;
         await loadItems();
 
         if (editingId === id) {
           resetForm();
         }
-      } catch (error) {
-        toast.error(`Unable to delete ${title}`, {
-          description: error instanceof Error ? error.message : undefined,
-        });
+      } catch (requestError) {
+        const message = requestError instanceof Error ? requestError.message : `Unable to delete ${title}`;
+        setError(message);
       } finally {
         setDeletingId(null);
+        setGlobalLoading(false);
       }
     },
-    [adminKey, editingId, endpoint, loadItems, resetForm, title]
+    [adminKey, editingId, endpoint, loadItems, resetForm, setGlobalLoading, title],
   );
 
   return {
@@ -237,6 +237,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
     editingId,
     dialogOpen,
     formState,
+    error,
     setFormState,
     loadItems,
     setDialogOpen,

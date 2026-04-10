@@ -6,7 +6,7 @@ const SocialLinks = () => {
 
     const links = [
         {
-            id: 1,
+            id: 3,
             child:(
                 <>
                 LinkedIn <AiFillLinkedin size={35}/>
@@ -25,7 +25,7 @@ const SocialLinks = () => {
             href: 'https://github.com/jondereck',
         },
         {
-            id: 1,
+            id: 4,
             child:(
                 <>
                 Email <AiOutlineMail size={35}/>
@@ -49,14 +49,14 @@ const SocialLinks = () => {
     <HideOnScroll className="lg:hidden">
     <div className=" lg:flex flex-col top-[35%] left-0 fixed">
       <ul>
-        {links.map(({id,child,href,style,download}) => (
-            <li key={id} className={`flex justify-between item-center w-40 h-14 bg-gray-500 px-4 ml-[-100px] hover:ml-[-10px] hover:rounded-md duration-300 ${style}`} >
-             <a href={href}  
+        {links.map((item, index) => (
+            <li key={`${item.id ?? 'link'}-${index}`} className={`flex justify-between item-center w-40 h-14 bg-gray-500 px-4 ml-[-100px] hover:ml-[-10px] hover:rounded-md duration-300 ${item.style ?? ""}`} >
+             <a href={item.href}  
              target="_blank"
              rel="noreferrer"
              className="flex justify-between items-center w-full  text-white"
-             download={download}>
-              {child}
+             download={item.download}>
+              {item.child}
              </a>
            </li>
 
