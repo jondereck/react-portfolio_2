@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import Blog from '../assets/portfolio/Blog.jpg';
 import RestApi from '../assets/portfolio/RestApi.jpg';
 import Stay from '../assets/portfolio/Stay.jpg';
@@ -87,6 +88,8 @@ const Projects = () => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 6;
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -122,6 +125,12 @@ const Projects = () => {
   }, []);
 
   const projectList = projects.length > 0 ? projects : fallbackProjects;
+  const totalPages = Math.ceil(projectList.length / itemsPerPage);
+  const paginatedData = projectList.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+  useEffect(() => {
+    setPage(1);
+  }, [projectList.length]);
 
   return (
     <SectionContainer name="portfolio" title="Portfolio" subtitle="Selected projects that combine design quality, performance, and product thinking.">
@@ -132,7 +141,7 @@ const Projects = () => {
       )}
       {loading && <p className="mb-4 text-sm text-slate-500">Loading projects…</p>}
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {projectList.map((project, index) => {
+        {paginatedData.map((project, index) => {
           const tech = normalizeTech(project.tech ?? project.techStack);
           const featureList = Array.isArray(project.features) ? project.features : [];
           const link = project.demoUrl || project.link;
@@ -209,6 +218,33 @@ const Projects = () => {
           );
         })}
       </div>
+      {totalPages > 1 ? (
+        <Pagination className="mt-8">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                aria-disabled={page === 1}
+                className={page === 1 ? 'pointer-events-none opacity-50' : ''}
+              />
+            </PaginationItem>
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <PaginationItem key={`project-page-${i + 1}`}>
+                <PaginationLink onClick={() => setPage(i + 1)} isActive={page === i + 1}>
+                  {i + 1}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                aria-disabled={page === totalPages}
+                className={page === totalPages ? 'pointer-events-none opacity-50' : ''}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      ) : null}
     </SectionContainer>
   );
 };

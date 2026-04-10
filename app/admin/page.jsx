@@ -634,6 +634,20 @@ function SiteConfigSection({ adminKey }) {
 
 export default function AdminPage() {
   const [adminKey, setAdminKey] = useState('');
+  const [isAuthorized, setIsAuthorized] = useState(false);
+
+  useEffect(() => {
+    const isAuth = localStorage.getItem('admin-auth');
+    if (!isAuth) {
+      window.location.href = '/';
+      return;
+    }
+    setIsAuthorized(true);
+  }, []);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 p-6 text-slate-900 dark:bg-slate-950 dark:text-slate-50">

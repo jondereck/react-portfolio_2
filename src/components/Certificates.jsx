@@ -1,14 +1,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Dialog } from '@headlessui/react';
 import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 const Certificates = () => {
+  const router = useRouter();
   const [items, setItems] = useState([]);
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedImage, setSelectedImage] = useState('');
   const [error, setError] = useState('');
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 6;
 
   const categories = useMemo(() => {
     const unique = new Set(items.map((item) => item.category));
@@ -21,6 +28,25 @@ const Certificates = () => {
     }
     return items.filter((item) => item.category === activeCategory);
   }, [activeCategory, items]);
+  const totalPages = Math.ceil(filteredCertificates.length / itemsPerPage);
+  const paginatedData = filteredCertificates.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeCategory, items.length]);
+
+  const handleLogin = () => {
+    if (key.trim() === 'admin123') {
+      localStorage.setItem('admin-auth', 'true');
+      setOpen(false);
+      setKey('');
+      setAuthError('');
+      router.push('/admin');
+      return;
+    }
+
+    setAuthError('Invalid credentials');
+  };
 
   const loadCertificates = async () => {
     try {
@@ -48,12 +74,13 @@ const Certificates = () => {
       subtitle="Verified learning milestones across frontend, backend, and data tracks."
     >
       <div className="mb-6 flex justify-end">
-        <Link
-          href="/admin"
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
           className="rounded-full border border-cyan-400 px-4 py-2 text-sm font-semibold text-cyan-600 transition hover:bg-cyan-500 hover:text-white dark:text-cyan-300"
         >
-          Go to Admin Page
-        </Link>
+          Admin
+        </button>
       </div>
 
       {error ? <p className="mb-4 text-sm text-rose-600 dark:text-rose-300">{error}</p> : null}
@@ -76,7 +103,7 @@ const Certificates = () => {
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-       {filteredCertificates.map((item, index) => (
+       {paginatedData.map((item, index) => (
           <motion.article
            key={`${item.id ?? 'cert'}-${item.title}-${index}`}
             whileHover={{ y: -6 }}
@@ -103,14 +130,63 @@ const Certificates = () => {
           </motion.article>
         ))}
       </div>
+      {totalPages > 1 ? (
+        <Pagination className="mt-8">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                aria-disabled={page === 1}
+                className={page === 1 ? 'pointer-events-none opacity-50' : ''}
+              />
+            </PaginationItem>
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <PaginationItem key={`certificate-page-${i + 1}`}>
+                <PaginationLink onClick={() => setPage(i + 1)} isActive={page === i + 1}>
+                  {i + 1}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                aria-disabled={page === totalPages}
+                className={page === totalPages ? 'pointer-events-none opacity-50' : ''}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      ) : null}
 
-      <Dialog open={Boolean(selectedImage)} onClose={() => setSelectedImage('')} className="relative z-50">
-        <div className="fixed inset-0 bg-black/70" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-          <Dialog.Panel className="max-h-[90vh] w-full max-w-4xl overflow-hidden rounded-xl bg-white p-3 dark:bg-slate-900">
-            <img src={selectedImage} alt="Certificate preview" className="max-h-[80vh] w-full object-contain" />
-          </Dialog.Panel>
-        </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="space-y-4">
+          <input
+            type="password"
+            placeholder="Enter admin key"
+            value={key}
+            onChange={(event) => {
+              setKey(event.target.value);
+              if (authError) {
+                setAuthError('');
+              }
+            }}
+            className="h-10 w-full rounded-md border border-slate-300 px-3 text-sm text-slate-900 outline-none focus:border-cyan-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+          />
+          {authError ? <p className="text-sm text-red-500">{authError}</p> : null}
+          <button
+            type="button"
+            onClick={handleLogin}
+            className="rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200"
+          >
+            Login
+          </button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(selectedImage)} onOpenChange={(isOpen) => setSelectedImage(isOpen ? selectedImage : '')}>
+        <DialogContent className="max-w-4xl bg-white p-3 dark:bg-slate-900" showCloseButton={false}>
+          <img src={selectedImage} alt="Certificate preview" className="max-h-[80vh] w-full object-contain" />
+        </DialogContent>
       </Dialog>
     </SectionContainer>
   );
