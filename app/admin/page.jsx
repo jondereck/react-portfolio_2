@@ -15,6 +15,66 @@ const buttonStyles =
 const inputStyles = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950';
 const textareaStyles = 'rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950';
 
+function ImageUploadField({ id, label, value, adminKey, onUploaded }) {
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  const uploadFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!adminKey) {
+      setUploadError('Provide admin API key before uploading.');
+      return;
+    }
+
+    setUploadError('');
+    setUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        headers: {
+          'x-admin-key': adminKey,
+        },
+        body: formData,
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message = typeof payload?.error === 'string' ? payload.error : 'Image upload failed';
+        setUploadError(message);
+        return;
+      }
+
+      if (typeof payload?.secure_url === 'string' && payload.secure_url.length > 0) {
+        onUploaded(payload.secure_url);
+      } else {
+        setUploadError('Image upload failed');
+      }
+    } catch {
+      setUploadError('Image upload failed');
+    } finally {
+      setUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  return (
+    <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+      {label}
+      <input id={`${id}-url`} type="url" value={value} readOnly className={inputStyles} />
+      <input id={`${id}-file`} type="file" accept="image/*" onChange={uploadFile} className={inputStyles} />
+      {uploading ? <span className="text-xs text-slate-500">Uploading image…</span> : null}
+      {uploadError ? <span className="text-xs text-red-600">{uploadError}</span> : null}
+    </label>
+  );
+}
+
 const resources = [
   {
     key: 'certificates',
@@ -202,6 +262,7 @@ function AdminResourceSection({ resource, adminKey }) {
             onChange={updateField}
             onSubmit={handleSubmit}
             onReset={resetForm}
+            adminKey={adminKey}
           />
         </div>
       </div>
@@ -366,28 +427,43 @@ function SiteContentSection({ adminKey }) {
         <form onSubmit={submit} className="space-y-6">
           {error && <div className="rounded bg-red-100 p-3 text-red-700">{error}</div>}
           <div className="grid gap-4 md:grid-cols-2">
-            {Object.entries(hero).map(([field, value]) => (
-              <label key={field} className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-                {field}
-                {field === 'description' ? (
-                  <textarea
+            {Object.entries(hero).map(([field, value]) => {
+              if (field === 'image') {
+                return (
+                  <ImageUploadField
+                    key={field}
+                    id={`hero-${field}`}
+                    label={field}
                     value={value}
-                    onChange={(event) => setHero((previous) => ({ ...previous, [field]: event.target.value }))}
-                    rows={4}
-                    required
-                    className={textareaStyles}
+                    adminKey={adminKey}
+                    onUploaded={(uploadedUrl) => setHero((previous) => ({ ...previous, [field]: uploadedUrl }))}
                   />
-                ) : (
-                  <input
-                    type={field === 'image' ? 'url' : 'text'}
-                    value={value}
-                    onChange={(event) => setHero((previous) => ({ ...previous, [field]: event.target.value }))}
-                    required
-                    className={inputStyles}
-                  />
-                )}
-              </label>
-            ))}
+                );
+              }
+
+              return (
+                <label key={field} className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  {field}
+                  {field === 'description' ? (
+                    <textarea
+                      value={value}
+                      onChange={(event) => setHero((previous) => ({ ...previous, [field]: event.target.value }))}
+                      rows={4}
+                      required
+                      className={textareaStyles}
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(event) => setHero((previous) => ({ ...previous, [field]: event.target.value }))}
+                      required
+                      className={inputStyles}
+                    />
+                  )}
+                </label>
+              );
+            })}
           </div>
 
           <div className="grid gap-4">
@@ -587,15 +663,13 @@ function SiteConfigSection({ adminKey }) {
                 className={inputStyles}
               />
             </label>
-            <label className="flex flex-col space-y-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              Logo image URL
-              <input
-                type="url"
-                value={siteConfig.logoImage}
-                onChange={(event) => setSiteConfig((previous) => ({ ...previous, logoImage: event.target.value }))}
-                className={inputStyles}
-              />
-            </label>
+            <ImageUploadField
+              id="site-config-logo-image"
+              label="Logo image"
+              value={siteConfig.logoImage}
+              adminKey={adminKey}
+              onUploaded={(uploadedUrl) => setSiteConfig((previous) => ({ ...previous, logoImage: uploadedUrl }))}
+            />
           </div>
           <button type="submit" disabled={saving || loading} className={buttonStyles}>
             {saving ? 'Saving…' : 'Update Site Config'}

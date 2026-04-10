@@ -32,7 +32,7 @@ const normalizeHighlights = (value) => {
 };
 
 function App() {
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   const [showThemeFade, setShowThemeFade] = useState(false);
   const [siteContent, setSiteContent] = useState(null);
   const [siteConfig, setSiteConfig] = useState(null);
@@ -98,12 +98,45 @@ function App() {
 
 
   useEffect(() => {
-    if (typeof document === 'undefined') {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const savedTheme = window.localStorage.getItem('theme');
+    const isDark = savedTheme === 'dark';
+    setDarkMode(isDark);
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', isDark);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
       return;
     }
 
     document.documentElement.classList.toggle('dark', darkMode);
+    window.localStorage.setItem('theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
+
+  const toggleDark = () => {
+    if (typeof document === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    const html = document.documentElement;
+    const isDark = html.classList.contains('dark');
+
+    if (isDark) {
+      html.classList.remove('dark');
+      window.localStorage.setItem('theme', 'light');
+      setDarkMode(false);
+    } else {
+      html.classList.add('dark');
+      window.localStorage.setItem('theme', 'dark');
+      setDarkMode(true);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -131,7 +164,7 @@ function App() {
   return (
     <div>
       {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
-      <NavBar darkMode={darkMode} setDarkMode={setDarkMode} config={siteConfig} />
+      <NavBar darkMode={darkMode} onToggleDark={toggleDark} config={siteConfig} />
       <main className="bg-slate-50 text-black transition duration-500 dark:bg-slate-950 dark:text-white">
         <Hero hero={siteContent?.hero} />
         <About about={siteContent?.about} />
