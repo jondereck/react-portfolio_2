@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import GlobalLoader from '@/components/GlobalLoader';
 import {
   ChevronLeft,
   ChevronRight,
@@ -170,7 +171,213 @@ const findPrevIndexByType = (startIndex, photos, matcher, options = {}) => {
   return -1;
 };
 
+const viewerModeStorageKey = "galleryViewerMode";
+const splitPanelTransitionMs = 260;
+
+const SplitPanelMediaSurface = ({
+  panelId,
+  hideUI,
+  label,
+  item,
+  media,
+  assignVideoRef,
+  muted = false,
+  controls = true,
+  autoPlay = false,
+  onEnded,
+  onMediaSuccess,
+  onMediaError,
+  hasError,
+}) => {
+  const [layers, setLayers] = useState(() =>
+    item && media?.key
+      ? [
+          {
+            layerKey: `${panelId}:${media.key}`,
+            item,
+            media,
+            phase: "center",
+          },
+        ]
+      : [],
+  );
+
+  useEffect(() => {
+    if (!item || !media?.key) {
+      setLayers([]);
+      return;
+    }
+
+    setLayers((current) => {
+      const activeLayer = current[current.length - 1];
+      if (
+        activeLayer?.media?.key === media.key &&
+        activeLayer?.item?.id === item.id
+      ) {
+        return current;
+      }
+
+      const nextLayer = {
+        layerKey: `${panelId}:${media.key}`,
+        item,
+        media,
+        phase: current.length === 0 ? "center" : "enter",
+      };
+
+      if (current.length === 0) {
+        return [nextLayer];
+      }
+
+      return [
+        ...current.slice(-1).map((layer) => ({
+          ...layer,
+          phase: "exit",
+        })),
+        nextLayer,
+      ];
+    });
+  }, [item, media, panelId]);
+
+  useEffect(() => {
+    const hasEnteringLayer = layers.some((layer) => layer.phase === "enter");
+    if (!hasEnteringLayer) return undefined;
+
+    const frame = window.requestAnimationFrame(() => {
+      setLayers((current) =>
+        current.map((layer) =>
+          layer.phase === "enter" ? { ...layer, phase: "center" } : layer,
+        ),
+      );
+    });
+
+    const timeout = window.setTimeout(() => {
+      setLayers((current) => current.filter((layer) => layer.phase !== "exit"));
+    }, splitPanelTransitionMs);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timeout);
+    };
+  }, [layers]);
+
+  return (
+    <div
+      className={`relative min-h-0 h-full overflow-hidden ${
+        hideUI
+          ? "rounded-none border border-transparent bg-black"
+          : "rounded-lg border border-white/10 bg-black/70"
+      }`}
+    >
+      {!hideUI ? (
+        <span className="absolute left-2 top-2 z-20 rounded-full border border-white/20 bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
+          {label}
+        </span>
+      ) : null}
+
+      <div className="absolute inset-0">
+        {layers.map((layer, index) => {
+          const isForeground = index === layers.length - 1;
+          const isVisible = layer.phase === "center";
+          const layerItem = layer.item;
+          const layerMedia = layer.media;
+          const layerIsVideo = layerMedia.isVideo;
+          const transitionClass =
+            layer.phase === "center"
+              ? "opacity-100 translate-y-0"
+              : layer.phase === "enter"
+                ? "opacity-0 translate-y-2"
+                : "opacity-0 -translate-y-2";
+
+          return (
+            <div
+              key={layer.layerKey}
+              aria-hidden={!isForeground}
+              className={`absolute inset-0 flex items-center justify-center transition-[opacity,transform] duration-[260ms] ease-out ${
+                isForeground ? "z-10" : "z-0 pointer-events-none"
+              } ${transitionClass}`}
+            >
+              {layerIsVideo ? (
+                <video
+                  ref={isForeground ? assignVideoRef : undefined}
+                  className="h-full w-full object-contain"
+                  controls={controls && isForeground}
+                  autoPlay={autoPlay && isForeground}
+                  muted={isForeground ? muted : true}
+                  playsInline
+                  preload="metadata"
+                  poster={
+                    getVideoPosterUrl(layerItem?.imageUrl) || undefined
+                  }
+                  crossOrigin="anonymous"
+                  onLoadedMetadata={() => {
+                    onMediaSuccess(layerItem);
+                  }}
+                  onLoadedData={() => {
+                    onMediaSuccess(layerItem);
+                  }}
+                  onCanPlay={() => {
+                    onMediaSuccess(layerItem);
+                  }}
+                  onEnded={isForeground ? onEnded : undefined}
+                  onError={(event) => {
+                    onMediaError(
+                      layerItem,
+                      "onError",
+                      event.currentTarget,
+                      layerMedia.playableSrc,
+                    );
+                  }}
+                >
+                  {layerMedia.sources.map((src) => (
+                    <source key={src} src={src} />
+                  ))}
+                </video>
+              ) : (
+                <img
+                  src={layerItem?.imageUrl}
+                  alt={layerItem?.caption || `Photo ${layerItem?.id}`}
+                  className="h-full w-full object-contain"
+                  onLoad={() => {
+                    onMediaSuccess(layerItem);
+                  }}
+                  onError={(event) => {
+                    onMediaError(
+                      layerItem,
+                      "onError",
+                      event.currentTarget,
+                      layerMedia.playableSrc,
+                    );
+                  }}
+                />
+              )}
+
+              {!isVisible ? (
+                <div className="absolute inset-0 bg-black/20" />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+
+      {hasError ? (
+        <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-4 text-center text-sm text-rose-200">
+          Unable to load this media. Try next/previous or close and reopen.
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
 export default function AlbumDetailPage({ params }) {
+  const getInitialDensity = () => {
+    if (typeof window === "undefined") {
+      return "medium";
+    }
+
+    const savedDensity = window.localStorage.getItem("galleryDensity");
+    return savedDensity && densityGridMap[savedDensity] ? savedDensity : "medium";
+  };
+
   const router = useRouter();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
@@ -180,14 +387,22 @@ export default function AlbumDetailPage({ params }) {
   const [photos, setPhotos] = useState([]);
   const [sort, setSort] = useState("custom");
   const [mediaFilter, setMediaFilter] = useState("all");
-  const [density, setDensity] = useState("medium");
+  const [density, setDensity] = useState(getInitialDensity);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [delayMs, setDelayMs] = useState(5000);
   const [customDelaySeconds, setCustomDelaySeconds] = useState("12");
   const [hideUI, setHideUI] = useState(false);
-  const [viewerMode, setViewerMode] = useState("focus");
+  const getInitialViewerMode = () => {
+    if (typeof window === "undefined") {
+      return "focus";
+    }
+
+    const savedMode = window.localStorage.getItem(viewerModeStorageKey);
+    return ["focus", "slideshow", "split"].includes(savedMode) ? savedMode : "focus";
+  };
+  const [viewerMode, setViewerMode] = useState(getInitialViewerMode);
   const [splitPanels, setSplitPanels] = useState({
     left: { ...splitPanelSettingsDefaults },
     right: { ...splitPanelRightDefaults },
@@ -250,16 +465,13 @@ export default function AlbumDetailPage({ params }) {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const savedDensity = window.localStorage.getItem("galleryDensity");
-    if (savedDensity && densityGridMap[savedDensity]) {
-      setDensity(savedDensity);
-    }
-  }, []);
+    window.localStorage.setItem("galleryDensity", density);
+  }, [density]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("galleryDensity", density);
-  }, [density]);
+    window.localStorage.setItem(viewerModeStorageKey, viewerMode);
+  }, [viewerMode]);
 
   useEffect(() => {
     if (!isReady) {
@@ -766,7 +978,6 @@ export default function AlbumDetailPage({ params }) {
     return () => {
       if (!player) return;
       player.pause();
-      player.currentTime = 0;
     };
   }, [viewerOpen, activeItem?.id, activeItemIsVideo, viewerMode]);
 
@@ -777,11 +988,9 @@ export default function AlbumDetailPage({ params }) {
     return () => {
       if (leftPlayer) {
         leftPlayer.pause();
-        leftPlayer.currentTime = 0;
       }
       if (rightPlayer) {
         rightPlayer.pause();
-        rightPlayer.currentTime = 0;
       }
     };
   }, [viewerOpen, viewerMode, leftSplitItem?.id, rightSplitItem?.id]);
@@ -838,13 +1047,14 @@ export default function AlbumDetailPage({ params }) {
 
   useEffect(() => {
     if (!viewerOpen || viewerMode !== "split" || !rightSplitIsVideo) return;
-    const player = splitRightVideoRef.current;
-    if (!player) return;
-    if (rightSplitPanel?.isPlaying) {
-      player.play().catch(() => {});
+    if (!rightSplitPanel?.isPlaying) {
+      const player = splitRightVideoRef.current;
+      player?.pause();
       return;
     }
-    player.pause();
+    const player = splitRightVideoRef.current;
+    if (!player) return;
+    player.play().catch(() => {});
   }, [
     viewerOpen,
     viewerMode,
@@ -879,7 +1089,7 @@ export default function AlbumDetailPage({ params }) {
   };
 
   if (!isReady) {
-    return null;
+    return <GlobalLoader forceVisible message="Checking gallery access" hint="Verifying the secure gallery session." />;
   }
 
   const albumCover =
@@ -1103,14 +1313,6 @@ export default function AlbumDetailPage({ params }) {
                   </span>
                 ) : null}
               </div>
-              <div className="space-y-1 p-3 text-sm">
-                <p className="font-medium text-slate-100">
-                  {photo.caption || "Untitled photo"}
-                </p>
-                <p className="text-xs text-slate-300">
-                  Date: {formatDate(photo.dateTaken || photo.uploadedAt)}
-                </p>
-              </div>
             </article>
           ))}
         </section>
@@ -1175,173 +1377,73 @@ export default function AlbumDetailPage({ params }) {
             >
               {showSplitMode ? (
                 <>
-                  <div
-                    className={`relative overflow-hidden ${hideUI ? "rounded-none border border-transparent bg-black" : "rounded-lg border border-white/10 bg-black/70"}`}
-                  >
-                    {!hideUI ? (
-                      <span className="absolute left-2 top-2 z-10 rounded-full border border-white/20 bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
-                        Left Panel
-                      </span>
-                    ) : null}
-                    {leftSplitMedia.isVideo ? (
-                      <video
-                        key={`left:${leftSplitMedia.key}`}
-                        ref={splitLeftVideoRef}
-                        className="h-full w-full object-contain"
-                        controls
-                        playsInline
-                        preload="metadata"
-                        poster={
-                          getVideoPosterUrl(leftSplitItem?.imageUrl) ||
-                          undefined
-                        }
-                        crossOrigin="anonymous"
-                        onLoadedMetadata={() => {
-                          markPanelMediaSuccess("left", leftSplitItem);
-                        }}
-                        onLoadedData={() => {
-                          markPanelMediaSuccess("left", leftSplitItem);
-                        }}
-                        onCanPlay={() => {
-                          markPanelMediaSuccess("left", leftSplitItem);
-                        }}
-                        onEnded={(event) => {
-                          if (leftSplitPanel?.loop) {
-                            event.currentTarget.currentTime = 0;
-                            event.currentTarget.play().catch(() => {});
-                            return;
-                          }
-                          moveSplitPanel("left", "next");
-                        }}
-                        onError={(event) => {
-                          markPanelMediaError(
-                            "left",
-                            leftSplitItem,
-                            "onError",
-                            event.currentTarget,
-                            leftSplitMedia.playableSrc,
-                          );
-                        }}
-                      >
-                        {leftSplitMedia.sources.map((src) => (
-                          <source key={src} src={src} />
-                        ))}
-                      </video>
-                    ) : (
-                      <img
-                        key={`left:${leftSplitMedia.key}`}
-                        src={leftSplitItem?.imageUrl}
-                        alt={
-                          leftSplitItem?.caption || `Photo ${leftSplitItem?.id}`
-                        }
-                        className="h-full w-full object-contain"
-                        onLoad={() => {
-                          markPanelMediaSuccess("left", leftSplitItem);
-                        }}
-                        onError={(event) => {
-                          markPanelMediaError(
-                            "left",
-                            leftSplitItem,
-                            "onError",
-                            event.currentTarget,
-                            leftSplitMedia.playableSrc,
-                          );
-                        }}
-                      />
+                  <SplitPanelMediaSurface
+                    panelId="left"
+                    hideUI={hideUI}
+                    label="Left Panel"
+                    item={leftSplitItem}
+                    media={leftSplitMedia}
+                    assignVideoRef={splitLeftVideoRef}
+                    onEnded={(event) => {
+                      if (leftSplitPanel?.loop) {
+                        event.currentTarget.currentTime = 0;
+                        event.currentTarget.play().catch(() => {});
+                        return;
+                      }
+                      moveSplitPanel("left", "next");
+                    }}
+                    onMediaSuccess={(item) => {
+                      markPanelMediaSuccess("left", item);
+                    }}
+                    onMediaError={(item, eventName, mediaElement, finalVideoSrc) => {
+                      markPanelMediaError(
+                        "left",
+                        item,
+                        eventName,
+                        mediaElement,
+                        finalVideoSrc,
+                      );
+                    }}
+                    hasError={Boolean(
+                      mediaErrors[getPanelMediaKey("left", leftSplitItem)],
                     )}
-                    {mediaErrors[getPanelMediaKey("left", leftSplitItem)] ? (
-                      <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-4 text-center text-sm text-rose-200">
-                        Unable to load this media. Try next/previous or close
-                        and reopen.
-                      </div>
-                    ) : null}
-                  </div>
-                  <div
-                    className={`relative overflow-hidden ${hideUI ? "rounded-none border border-transparent bg-black" : "rounded-lg border border-white/10 bg-black/70"}`}
-                  >
-                    {!hideUI ? (
-                      <span className="absolute left-2 top-2 z-10 rounded-full border border-white/20 bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
-                        Right Panel
-                      </span>
-                    ) : null}
-                    {rightSplitMedia.isVideo ? (
-                      <video
-                        key={`right:${rightSplitMedia.key}`}
-                        ref={splitRightVideoRef}
-                        className="h-full w-full object-contain"
-                        controls
-                        autoPlay
-                        muted={Boolean(rightSplitPanel?.isMuted)}
-                        playsInline
-                        preload="metadata"
-                        poster={
-                          getVideoPosterUrl(rightSplitItem?.imageUrl) ||
-                          undefined
-                        }
-                        crossOrigin="anonymous"
-                        onLoadedMetadata={() => {
-                          markPanelMediaSuccess("right", rightSplitItem);
-                        }}
-                        onLoadedData={() => {
-                          markPanelMediaSuccess("right", rightSplitItem);
-                        }}
-                        onCanPlay={() => {
-                          markPanelMediaSuccess("right", rightSplitItem);
-                        }}
-                        onEnded={(event) => {
-                          if (!rightSplitPanel?.isPlaying) {
-                            return;
-                          }
-                          if (rightSplitPanel?.loop) {
-                            event.currentTarget.currentTime = 0;
-                            event.currentTarget.play().catch(() => {});
-                            return;
-                          }
-                          moveSplitPanel("right", "next");
-                        }}
-                        onError={(event) => {
-                          markPanelMediaError(
-                            "right",
-                            rightSplitItem,
-                            "onError",
-                            event.currentTarget,
-                            rightSplitMedia.playableSrc,
-                          );
-                        }}
-                      >
-                        {rightSplitMedia.sources.map((src) => (
-                          <source key={src} src={src} />
-                        ))}
-                      </video>
-                    ) : rightSplitItem ? (
-                      <img
-                        key={`right:${rightSplitMedia.key}`}
-                        src={rightSplitItem.imageUrl}
-                        alt={
-                          rightSplitItem.caption || `Photo ${rightSplitItem.id}`
-                        }
-                        className="h-full w-full object-contain"
-                        onLoad={() => {
-                          markPanelMediaSuccess("right", rightSplitItem);
-                        }}
-                        onError={(event) => {
-                          markPanelMediaError(
-                            "right",
-                            rightSplitItem,
-                            "onError",
-                            event.currentTarget,
-                            rightSplitMedia.playableSrc,
-                          );
-                        }}
-                      />
-                    ) : null}
-                    {mediaErrors[getPanelMediaKey("right", rightSplitItem)] ? (
-                      <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-4 text-center text-sm text-rose-200">
-                        Unable to load this media. Try next/previous or close
-                        and reopen.
-                      </div>
-                    ) : null}
-                  </div>
+                  />
+                  <SplitPanelMediaSurface
+                    panelId="right"
+                    hideUI={hideUI}
+                    label="Right Panel"
+                    item={rightSplitItem}
+                    media={rightSplitMedia}
+                    assignVideoRef={splitRightVideoRef}
+                    muted={Boolean(rightSplitPanel?.isMuted)}
+                    autoPlay={Boolean(rightSplitPanel?.isPlaying)}
+                    onEnded={(event) => {
+                      if (!rightSplitPanel?.isPlaying) {
+                        return;
+                      }
+                      if (rightSplitPanel?.loop) {
+                        event.currentTarget.currentTime = 0;
+                        event.currentTarget.play().catch(() => {});
+                        return;
+                      }
+                      moveSplitPanel("right", "next");
+                    }}
+                    onMediaSuccess={(item) => {
+                      markPanelMediaSuccess("right", item);
+                    }}
+                    onMediaError={(item, eventName, mediaElement, finalVideoSrc) => {
+                      markPanelMediaError(
+                        "right",
+                        item,
+                        eventName,
+                        mediaElement,
+                        finalVideoSrc,
+                      );
+                    }}
+                    hasError={Boolean(
+                      mediaErrors[getPanelMediaKey("right", rightSplitItem)],
+                    )}
+                  />
                 </>
               ) : activeItemIsVideo ? (
                 <video

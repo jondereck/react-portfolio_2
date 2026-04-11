@@ -29,6 +29,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
   dragActive,
   onToggleSelect,
   onSetCover,
+  onPreview,
 }) {
   const {
     attributes,
@@ -114,18 +115,29 @@ const SortableMediaCard = memo(function SortableMediaCard({
           ref={setActivatorNodeRef}
           {...attributes}
           {...listeners}
-          className="aspect-[16/9] cursor-grab overflow-hidden rounded-xl border border-slate-200 bg-slate-100 active:cursor-grabbing touch-none dark:border-slate-700 dark:bg-slate-800 md:aspect-[4/3]"
+          className="aspect-square cursor-grab overflow-hidden rounded-xl border border-slate-200 bg-slate-100 active:cursor-grabbing touch-none dark:border-slate-700 dark:bg-slate-800 md:aspect-[4/3]"
         >
-          <MediaPreview
-            url={photo.imageUrl}
-            alt={photo.caption || `Media ${photo.id}`}
-            className="h-full w-full bg-slate-100 object-contain dark:bg-slate-800"
-            controls={false}
-          />
+          <button
+            type="button"
+            className="block h-full w-full"
+            onClick={(event) => {
+              event.stopPropagation();
+              onPreview?.(photo);
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            aria-label={`View ${photo.caption || `media ${photo.id}`}`}
+          >
+            <MediaPreview
+              url={photo.imageUrl}
+              alt={photo.caption || `Media ${photo.id}`}
+              className="h-full w-full bg-slate-100 object-contain dark:bg-slate-800"
+              controls={false}
+            />
+          </button>
         </div>
 
         <div className="min-w-0 space-y-1">
-          <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100 md:text-sm">
             {photo.caption || 'Untitled media'}
           </p>
           <p className="hidden text-[11px] leading-5 text-slate-500 dark:text-slate-400 md:block">{photo.sourceType}</p>
@@ -165,7 +177,8 @@ const SortableMediaCard = memo(function SortableMediaCard({
   prevProps.isDropTarget === nextProps.isDropTarget &&
   prevProps.dragActive === nextProps.dragActive &&
   prevProps.onToggleSelect === nextProps.onToggleSelect &&
-  prevProps.onSetCover === nextProps.onSetCover
+  prevProps.onSetCover === nextProps.onSetCover &&
+  prevProps.onPreview === nextProps.onPreview
 ));
 
 const OverlayCard = memo(function OverlayCard({ photo, draggingCount }) {
@@ -231,6 +244,7 @@ export default function SortableMediaGrid({
   onItemsChange,
   onToggleSelect,
   onSetCover,
+  onPreview,
   onDragStateChange,
 }) {
   const [activeId, setActiveId] = useState(null);
@@ -332,7 +346,7 @@ export default function SortableMediaGrid({
     >
       <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
         <div
-          className={`relative grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 ${
+          className={`relative grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 ${
             dragActive ? 'rounded-xl bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:20px_20px] p-3' : ''
           }`}
         >
@@ -348,6 +362,7 @@ export default function SortableMediaGrid({
               dragActive={dragActive}
               onToggleSelect={onToggleSelect}
               onSetCover={onSetCover}
+              onPreview={onPreview}
             />
           ))}
         </div>

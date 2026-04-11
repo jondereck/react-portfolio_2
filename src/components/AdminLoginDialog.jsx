@@ -8,6 +8,7 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
   const router = useRouter();
   const [key, setKey] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -18,6 +19,8 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
       return;
     }
 
+    setSubmitting(true);
+    let authenticated = false;
     try {
       const response = await fetch('/api/admin/login', {
         method: 'POST',
@@ -31,8 +34,15 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
         setError('Invalid credentials');
         return;
       }
+
+      authenticated = true;
     } catch {
       setError('Unable to validate credentials');
+    } finally {
+      setSubmitting(false);
+    }
+
+    if (!authenticated) {
       return;
     }
 
@@ -64,6 +74,7 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
             placeholder="Enter admin key"
             value={key}
             autoFocus
+            disabled={submitting}
             onChange={(event) => {
               setKey(event.target.value);
               if (error) {
@@ -72,8 +83,15 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
             }}
           />
           {error ? <p className="text-sm text-rose-500">{error}</p> : null}
-          <Button type="submit" className="w-full">
-            Login
+          <Button type="submit" className="w-full" disabled={submitting}>
+            {submitting ? (
+              <span className="inline-flex items-center gap-2">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Logging in...
+              </span>
+            ) : (
+              'Login'
+            )}
           </Button>
         </form>
       </DialogContent>

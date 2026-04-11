@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
+import GlobalLoader from '@/components/GlobalLoader';
 import { useLoadingStore } from '@/store/loading';
 
 const fetchJson = async (url) => {
@@ -230,7 +231,9 @@ export default function GalleryPage() {
     setTouchStartX(null);
   };
 
-  if (!isReady) return null;
+  if (!isReady) {
+    return <GlobalLoader forceVisible message="Checking gallery access" hint="Verifying the secure gallery session." />;
+  }
 
   return (
     <main

@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import SortableMediaGrid from '@/app/admin/gallery/components/SortableMediaGrid';
 import GalleryArrangeMobileControls from '@/modules/gallery/admin/GalleryArrangeMobileControls';
+import GalleryMediaViewer from './GalleryMediaViewer';
 import {
   GalleryAlbumPicker,
   GalleryEmptyState,
@@ -38,6 +40,7 @@ export default function GalleryArrangePanel({ controller }) {
   } = controller;
 
   const isDragging = Boolean(arrangeDragState.isDragging);
+  const [previewPhoto, setPreviewPhoto] = useState(null);
 
   return (
     <div className="space-y-6">
@@ -142,16 +145,23 @@ export default function GalleryArrangePanel({ controller }) {
                 description="Use the Media page first, then return here to manually sequence the album."
               />
             ) : (
-              <SortableMediaGrid
-                items={arrangePhotos}
-                selectedIds={selectedPhotoIds}
-                coverPhotoId={selectedAlbum.coverPhotoId}
-                onItemsChange={reorderChange}
-                onToggleSelect={togglePhotoSelect}
-                onSetCover={setCoverPhoto}
-                onDragStateChange={handleDragStateChange}
-              />
-            )}
+            <SortableMediaGrid
+              items={arrangePhotos}
+              selectedIds={selectedPhotoIds}
+              coverPhotoId={selectedAlbum.coverPhotoId}
+              onItemsChange={reorderChange}
+              onToggleSelect={togglePhotoSelect}
+              onSetCover={setCoverPhoto}
+              onPreview={setPreviewPhoto}
+              onDragStateChange={handleDragStateChange}
+            />
+          )}
+
+          <GalleryMediaViewer
+            open={Boolean(previewPhoto)}
+            photo={previewPhoto}
+            onClose={() => setPreviewPhoto(null)}
+          />
           </GalleryPanelCard>
         ) : (
           <GalleryPanelCard title="Select an album" description="Choose an album before opening the arrange workspace.">
