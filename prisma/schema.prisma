@@ -102,3 +102,44 @@ model SiteConfig {
   updatedAt DateTime @updatedAt
 }
 
+enum PhotoSourceType {
+  upload
+  gdrive
+}
+
+model Album {
+  id           Int         @id @default(autoincrement())
+  name         String
+  slug         String      @unique
+  description  String?
+  coverPhotoId Int?        @unique
+  isPublished  Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  photos       AlbumPhoto[]
+  coverPhoto   AlbumPhoto? @relation("AlbumCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
+
+  @@index([isPublished, createdAt])
+}
+
+model AlbumPhoto {
+  id               Int             @id @default(autoincrement())
+  albumId          Int
+  imageUrl         String
+  cloudinaryPublicId String?
+  caption          String?
+  dateTaken        DateTime?
+  uploadedAt       DateTime        @default(now())
+  sortOrder        Int             @default(0)
+  sourceType       PhotoSourceType @default(upload)
+  sourceId         String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  album            Album           @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  coverForAlbum    Album?          @relation("AlbumCoverPhoto")
+
+  @@index([albumId, sortOrder])
+  @@index([albumId, dateTaken])
+  @@index([albumId, uploadedAt])
+}
+

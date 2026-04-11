@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 export default function AdminHeader({ onLogout }) {
   return (
     <header className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -11,13 +13,21 @@ export default function AdminHeader({ onLogout }) {
             Manage front page content, portfolio, certificates, skills, and experience in one place.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
-        >
-          Logout
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin/gallery"
+            className="inline-flex h-10 items-center rounded-md border border-slate-300 px-4 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+            Gallery Manager
+          </Link>
+          <button
+            type="button"
+            onClick={onLogout}
+            className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+          >
+            Logout
+          </button>
+        </div>
       </div>
     </header>
   );
