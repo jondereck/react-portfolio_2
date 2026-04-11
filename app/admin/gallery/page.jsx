@@ -29,6 +29,31 @@ const formatLocalDate = (value) => {
   return date.toLocaleDateString();
 };
 
+const isVideoUrl = (value) => {
+  if (!value || typeof value !== 'string') return false;
+  const normalized = value.toLowerCase();
+  return (
+    normalized.includes('/video/upload/') ||
+    normalized.endsWith('.mp4') ||
+    normalized.endsWith('.mov') ||
+    normalized.endsWith('.webm') ||
+    normalized.endsWith('.mkv')
+  );
+};
+
+const getPlayableMediaUrl = (value) => {
+  if (!value || typeof value !== 'string') return value;
+  if (!isVideoUrl(value)) return value;
+  if (!value.includes('res.cloudinary.com') || !value.includes('/video/upload/')) return value;
+
+  const [withoutQuery, query] = value.split('?');
+  const transformed = withoutQuery
+    .replace('/video/upload/', '/video/upload/f_mp4,vc_h264,ac_aac,q_auto/')
+    .replace(/\.(mov|mkv|webm)$/i, '.mp4');
+
+  return query ? `${transformed}?${query}` : transformed;
+};
+
 export default function AdminGalleryPage() {
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -347,7 +372,7 @@ export default function AdminGalleryPage() {
             </div>
 
             <form className="grid gap-3 md:grid-cols-3" onSubmit={handleAddPhoto}>
-              <input className={inputStyles} placeholder="Image URL" value={photoForm.imageUrl} onChange={(e) => setPhotoForm((prev) => ({ ...prev, imageUrl: e.target.value }))} required />
+              <input className={inputStyles} placeholder="Media URL (image/video)" value={photoForm.imageUrl} onChange={(e) => setPhotoForm((prev) => ({ ...prev, imageUrl: e.target.value }))} required />
               <input className={inputStyles} placeholder="Caption" value={photoForm.caption} onChange={(e) => setPhotoForm((prev) => ({ ...prev, caption: e.target.value }))} />
               <div className="flex gap-2">
                 <input className={inputStyles} type="date" value={photoForm.dateTaken} onChange={(e) => setPhotoForm((prev) => ({ ...prev, dateTaken: e.target.value }))} />
@@ -356,9 +381,9 @@ export default function AdminGalleryPage() {
             </form>
 
             <div className="rounded-md border border-slate-200 p-3 dark:border-slate-700">
-              <label className="block text-sm font-medium">Bulk Upload Files</label>
-              <input className="mt-2 w-full text-sm" type="file" accept="image/*" multiple onChange={handleBulkUpload} disabled={uploadingFiles} />
-              <p className="mt-1 text-xs text-slate-500">{uploadingFiles ? 'Uploading...' : 'Select multiple images to upload via Cloudinary-backed API.'}</p>
+              <label className="block text-sm font-medium">Bulk Upload Files (Images / Videos)</label>
+              <input className="mt-2 w-full text-sm" type="file" accept="image/*,video/*" multiple onChange={handleBulkUpload} disabled={uploadingFiles} />
+              <p className="mt-1 text-xs text-slate-500">{uploadingFiles ? 'Uploading...' : 'Select multiple image/video files to upload via Cloudinary-backed API.'}</p>
             </div>
 
             <form className="grid gap-3 rounded-md border border-slate-200 p-3 md:grid-cols-4 dark:border-slate-700" onSubmit={handleDriveImport}>
@@ -390,7 +415,11 @@ export default function AdminGalleryPage() {
                   className={`overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900 ${sortMode === 'custom' ? 'cursor-move' : ''}`}
                 >
                   <div className="aspect-video bg-slate-100 dark:bg-slate-800">
-                    <img src={photo.imageUrl} alt={photo.caption || `Photo ${photo.id}`} className="h-full w-full object-cover" />
+                    {isVideoUrl(photo.imageUrl) ? (
+                      <video src={getPlayableMediaUrl(photo.imageUrl)} className="h-full w-full object-cover" controls playsInline preload="metadata" />
+                    ) : (
+                      <img src={photo.imageUrl} alt={photo.caption || `Photo ${photo.id}`} className="h-full w-full object-cover" />
+                    )}
                   </div>
                   <div className="space-y-2 p-3 text-sm">
                     <p className="font-medium">{photo.caption || 'Untitled'}</p>

@@ -3,7 +3,7 @@ import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
-import { uploadImageFile } from '@/lib/server/uploads';
+import { uploadMediaFile } from '@/lib/server/uploads';
 import { gallerySortSchema, photoCreateSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
@@ -15,6 +15,10 @@ const parseId = (value: string) => {
 };
 
 export async function GET(request: Request, context: RouteContext) {
+  if (!isAuthorizedMutation(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { id: idParam } = await context.params;
     const albumId = parseId(idParam);
@@ -24,7 +28,7 @@ export async function GET(request: Request, context: RouteContext) {
 
     const url = new URL(request.url);
     const sort = gallerySortSchema.parse(url.searchParams.get('sort') ?? 'custom');
-    const result = await galleryService.listAlbumPhotos(albumId, sort, isAuthorizedMutation(request));
+    const result = await galleryService.listAlbumPhotos(albumId, sort, true);
     if (!result) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -52,17 +56,37 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const { data, imageFile } = await parseMultipartOrJson(request);
-    const imageUrl = imageFile
-      ? await uploadImageFile(imageFile, `portfolio/gallery/${albumId}`)
+    const uploadedMedia = imageFile
+      ? await uploadMediaFile(imageFile, `portfolio/gallery/${albumId}`)
+      : null;
+    const imageUrl = uploadedMedia
+      ? uploadedMedia.playbackUrl
       : typeof data.imageUrl === 'string'
         ? data.imageUrl
         : '';
+    const cloudinaryPublicId = uploadedMedia?.publicId
+      ? uploadedMedia.publicId
+      : typeof data.cloudinaryPublicId === 'string'
+        ? data.cloudinaryPublicId
+        : undefined;
 
     const parsed = photoCreateSchema.parse({
       ...data,
       imageUrl,
+      cloudinaryPublicId,
       sourceType: data.sourceType || 'upload',
     });
+
+    if (process.env.NODE_ENV !== 'production' && uploadedMedia) {
+      // eslint-disable-next-line no-console
+      console.info('[gallery photo create]', {
+        albumId,
+        imageUrl,
+        cloudinaryPublicId,
+        resourceType: uploadedMedia.resourceType,
+        format: uploadedMedia.format,
+      });
+    }
 
     const created = await galleryService.addAlbumPhoto(albumId, parsed);
     return NextResponse.json(created, { status: 201 });

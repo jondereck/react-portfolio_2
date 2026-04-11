@@ -7,9 +7,12 @@ import { galleryService } from '@/src/modules/gallery/services/galleryService';
 import { slugify } from '@/src/modules/gallery/domain/slug';
 
 export async function GET(request: Request) {
+  if (!isAuthorizedMutation(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const canViewDrafts = isAuthorizedMutation(request);
-    const albums = await galleryService.listAlbums(canViewDrafts);
+    const albums = await galleryService.listAlbums(true);
     return NextResponse.json(albums);
   } catch (error) {
     return toErrorResponse(error, 'Unable to load albums.');

@@ -14,6 +14,10 @@ const parseId = (value: string) => {
 };
 
 export async function GET(request: Request, context: RouteContext) {
+  if (!isAuthorizedMutation(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { id: idParam } = await context.params;
     const id = parseId(idParam);
@@ -21,7 +25,7 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
 
-    const album = await galleryService.getAlbumById(id, isAuthorizedMutation(request));
+    const album = await galleryService.getAlbumById(id, true);
     if (!album) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

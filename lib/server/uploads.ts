@@ -1,7 +1,15 @@
 import { v2 as cloudinary } from 'cloudinary';
 
 export const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
+export const MAX_VIDEO_FILE_SIZE = 60 * 1024 * 1024;
 export const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+export const ALLOWED_VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/x-matroska',
+]);
+export const ALLOWED_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'mkv']);
 
 export class RequestValidationError extends Error {
   status: number;
@@ -36,6 +44,68 @@ export function validateImageFile(file: File, fieldName = 'imageFile') {
     );
   }
 }
+
+export function validateMediaFile(file: File, fieldName = 'imageFile') {
+  const normalizedType = (file.type || '').toLowerCase();
+  const extension = (file.name.split('.').pop() || '').toLowerCase();
+
+  if (ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    validateImageFile(file, fieldName);
+    return;
+  }
+
+  const isVideoByMime = ALLOWED_VIDEO_MIME_TYPES.has(normalizedType);
+  const isVideoByExtension = ALLOWED_VIDEO_EXTENSIONS.has(extension);
+
+  if (isVideoByMime || (!normalizedType && isVideoByExtension)) {
+    if (!isVideoByExtension) {
+      throw new RequestValidationError(
+        `${fieldName} video format is not allowed. Use MP4, MOV, WEBM, or MKV.`,
+        400,
+        { [fieldName]: ['Unsupported video extension.'] },
+      );
+    }
+
+    if (file.size > MAX_VIDEO_FILE_SIZE) {
+      throw new RequestValidationError(
+        `${fieldName} video must be 60MB or smaller.`,
+        400,
+        { [fieldName]: ['Video file is too large.'] },
+      );
+    }
+    return;
+  }
+
+  throw new RequestValidationError(
+    `${fieldName} must be a supported image or video format.`,
+    400,
+    { [fieldName]: ['Unsupported media type.'] },
+  );
+}
+
+const getCloudinaryConfig = () => {
+  const cloudName =
+    process.env.CLOUDINARY_NAME ||
+    process.env.CLOUDINARY_CLOUD_NAME ||
+    process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_KEY || process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_SECRET || process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new RequestValidationError('Upload service not configured.', 500);
+  }
+
+  return { cloudName, apiKey, apiSecret };
+};
+
+const configureCloudinary = () => {
+  const { cloudName, apiKey, apiSecret } = getCloudinaryConfig();
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+  });
+};
 
 function isSupportedImageBuffer(buffer: Buffer): boolean {
   // PNG
@@ -91,20 +161,7 @@ function isSupportedImageBuffer(buffer: Buffer): boolean {
 
 export async function uploadImageFile(file: File, folder: string) {
   validateImageFile(file);
-
-  const cloudName = process.env.CLOUDINARY_NAME;
-  const apiKey = process.env.CLOUDINARY_KEY;
-  const apiSecret = process.env.CLOUDINARY_SECRET;
-
-  if (!cloudName || !apiKey || !apiSecret) {
-    throw new RequestValidationError('Upload service not configured.', 500);
-  }
-
-  cloudinary.config({
-    cloud_name: cloudName,
-    api_key: apiKey,
-    api_secret: apiSecret,
-  });
+  configureCloudinary();
 
   const buffer = Buffer.from(await file.arrayBuffer());
   if (!isSupportedImageBuffer(buffer)) {
@@ -130,4 +187,75 @@ export async function uploadImageFile(file: File, folder: string) {
   }
 
   return result.secure_url;
+}
+
+export async function uploadMediaFile(file: File, folder: string) {
+  validateMediaFile(file);
+  configureCloudinary();
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  if (ALLOWED_IMAGE_MIME_TYPES.has(file.type) && !isSupportedImageBuffer(buffer)) {
+    throw new RequestValidationError('Uploaded content does not match a supported image format.', 400, {
+      imageFile: ['Invalid image content.'],
+    });
+  }
+
+  const result = await new Promise<{
+    secure_url?: string;
+    public_id?: string;
+    resource_type?: 'image' | 'video' | 'raw' | 'auto';
+    format?: string;
+    bytes?: number;
+    original_filename?: string;
+  }>((resolve, reject) => {
+    cloudinary.uploader
+      .upload_stream({ folder, resource_type: 'auto' }, (error, uploadResult) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(uploadResult ?? {});
+      })
+      .end(buffer);
+  });
+
+  if (!result.secure_url) {
+    throw new RequestValidationError('Media upload failed.', 502);
+  }
+
+  const isVideoResource = result.resource_type === 'video';
+  const playbackUrl =
+    isVideoResource && result.public_id
+      ? cloudinary.url(result.public_id, {
+          resource_type: 'video',
+          secure: true,
+          format: 'mp4',
+          transformation: [{ quality: 'auto', video_codec: 'h264', audio_codec: 'aac' }],
+        })
+      : result.secure_url;
+
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.info('[gallery upload]', {
+      name: file.name,
+      mime: file.type,
+      size: file.size,
+      cloudinaryResourceType: result.resource_type,
+      cloudinaryFormat: result.format,
+      publicId: result.public_id,
+      secureUrl: result.secure_url,
+      playbackUrl,
+    });
+  }
+
+  return {
+    secureUrl: result.secure_url,
+    playbackUrl,
+    publicId: result.public_id,
+    resourceType: result.resource_type && result.resource_type !== 'auto' ? result.resource_type : 'raw',
+    format: result.format,
+    bytes: result.bytes,
+    originalFilename: result.original_filename,
+  };
 }
