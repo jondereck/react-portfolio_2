@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
   PointerSensor,
   closestCenter,
+  defaultDropAnimationSideEffects,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -18,13 +19,14 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import MediaPreview from './MediaPreview';
 
-function SortableMediaCard({
+const SortableMediaCard = memo(function SortableMediaCard({
   photo,
   index,
   isSelected,
   isCover,
   isDragging,
   isDropTarget,
+  dragActive,
   onToggleSelect,
   onDelete,
   onSetCover,
@@ -36,7 +38,13 @@ function SortableMediaCard({
     setActivatorNodeRef,
     transform,
     transition,
-  } = useSortable({ id: photo.id });
+  } = useSortable({
+    id: photo.id,
+    transition: {
+      duration: 180,
+      easing: 'cubic-bezier(0.2, 0, 0, 1)',
+    },
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -57,18 +65,31 @@ function SortableMediaCard({
       ref={setNodeRef}
       style={style}
       onClick={handleCardClick}
-      className={`relative overflow-hidden rounded-lg border bg-white p-2 shadow-sm transition dark:bg-slate-900 ${
+      className={`relative overflow-hidden rounded-lg border bg-white p-2 shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-150 will-change-transform dark:bg-slate-900 ${
         isDragging
-          ? 'z-30 border-slate-900 shadow-xl ring-2 ring-slate-300 dark:border-slate-100 dark:ring-slate-700'
+          ? 'z-20 scale-[0.985] border-slate-400/80 opacity-45 shadow-none ring-2 ring-slate-300/80 dark:border-slate-500 dark:ring-slate-700/70'
           : isDropTarget
-            ? 'border-blue-500 ring-2 ring-blue-200 dark:border-blue-400 dark:ring-blue-900/40'
+            ? 'border-blue-500 bg-blue-50/90 ring-2 ring-blue-300 shadow-md dark:border-blue-400 dark:bg-blue-950/25 dark:ring-blue-700/70'
             : isSelected
               ? 'border-blue-500 ring-2 ring-blue-200 dark:border-blue-400 dark:ring-blue-900/40'
               : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
-      }`}
+      } ${dragActive ? 'border-dashed dark:border-dashed' : ''}`}
     >
+      {dragActive ? (
+        <span
+          className={`pointer-events-none absolute inset-0 transition ${
+            isDropTarget
+              ? 'bg-blue-500/8'
+              : 'bg-transparent'
+          }`}
+          aria-hidden
+        />
+      ) : null}
       {isDropTarget ? (
-        <span className="pointer-events-none absolute inset-x-3 top-2 h-1 rounded bg-blue-500/80" aria-hidden />
+        <>
+          <span className="pointer-events-none absolute inset-x-3 top-2 h-1 rounded bg-blue-500/90" aria-hidden />
+          <span className="pointer-events-none absolute inset-y-3 left-2 w-1 rounded bg-blue-500/80" aria-hidden />
+        </>
       ) : null}
 
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -141,12 +162,23 @@ function SortableMediaCard({
       </div>
     </article>
   );
-}
+}, (prevProps, nextProps) => (
+  prevProps.photo === nextProps.photo &&
+  prevProps.index === nextProps.index &&
+  prevProps.isSelected === nextProps.isSelected &&
+  prevProps.isCover === nextProps.isCover &&
+  prevProps.isDragging === nextProps.isDragging &&
+  prevProps.isDropTarget === nextProps.isDropTarget &&
+  prevProps.dragActive === nextProps.dragActive &&
+  prevProps.onToggleSelect === nextProps.onToggleSelect &&
+  prevProps.onDelete === nextProps.onDelete &&
+  prevProps.onSetCover === nextProps.onSetCover
+));
 
-function OverlayCard({ photo, draggingCount }) {
+const OverlayCard = memo(function OverlayCard({ photo, draggingCount }) {
   if (!photo) return null;
   return (
-    <article className="relative w-[240px] overflow-hidden rounded-lg border border-slate-300 bg-white p-2 shadow-2xl dark:border-slate-600 dark:bg-slate-900">
+    <article className="relative w-[240px] scale-[1.02] overflow-hidden rounded-lg border border-slate-300/90 bg-white/95 p-2 shadow-[0_20px_60px_-22px_rgba(15,23,42,0.6)] backdrop-blur dark:border-slate-500 dark:bg-slate-900/95">
       {draggingCount > 1 ? (
         <span className="absolute right-2 top-2 z-10 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white">
           {draggingCount}
@@ -163,6 +195,22 @@ function OverlayCard({ photo, draggingCount }) {
       <p className="truncate text-xs font-medium">{photo.caption || 'Untitled media'}</p>
     </article>
   );
+});
+
+function areItemOrdersEqual(left, right) {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]?.id !== right[index]?.id) return false;
+  }
+  return true;
+}
+
+function moveSingleItem(items, activeId, overId) {
+  if (!overId || activeId === overId) return items;
+  const oldIndex = items.findIndex((item) => item.id === activeId);
+  const newIndex = items.findIndex((item) => item.id === overId);
+  if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return items;
+  return arrayMove(items, oldIndex, newIndex);
 }
 
 function moveSelectedBlock(items, draggedIds, overId) {
@@ -196,17 +244,28 @@ export default function SortableMediaGrid({
   const [activeId, setActiveId] = useState(null);
   const [draggedIds, setDraggedIds] = useState([]);
   const [overId, setOverId] = useState(null);
+  const [previewItems, setPreviewItems] = useState(items);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const draggedSet = useMemo(() => new Set(draggedIds), [draggedIds]);
+  const dragActive = activeId !== null;
+  const visibleItems = dragActive ? previewItems : items;
+  const sortableIds = useMemo(() => visibleItems.map((item) => item.id), [visibleItems]);
+
+  useEffect(() => {
+    if (!dragActive) {
+      setPreviewItems(items);
+    }
+  }, [items, dragActive]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { delay: 220, tolerance: 8 },
+      activationConstraint: { delay: 80, tolerance: 4 },
     }),
   );
 
   const activePhoto = useMemo(
-    () => items.find((photo) => photo.id === activeId) ?? null,
-    [items, activeId],
+    () => visibleItems.find((photo) => photo.id === activeId) ?? items.find((photo) => photo.id === activeId) ?? null,
+    [visibleItems, items, activeId],
   );
 
   const handleDragStart = ({ active }) => {
@@ -218,35 +277,35 @@ export default function SortableMediaGrid({
     setDraggedIds(dragIds);
     setActiveId(active.id);
     setOverId(active.id);
+    setPreviewItems(items);
     onDragStateChange?.({ isDragging: true, draggingCount: dragIds.length });
   };
 
-  const handleDragOver = ({ over }) => {
-    setOverId(over?.id ?? null);
+  const handleDragOver = ({ active, over }) => {
+    const nextOverId = over?.id ?? null;
+    if (!nextOverId) return;
+
+    setOverId(nextOverId);
+    setPreviewItems((previous) => {
+      const nextItems = draggedIds.length > 1
+        ? moveSelectedBlock(previous, draggedIds, nextOverId)
+        : moveSingleItem(previous, active.id, nextOverId);
+
+      return areItemOrdersEqual(previous, nextItems) ? previous : nextItems;
+    });
   };
 
-  const handleDragEnd = ({ active, over }) => {
+  const handleDragEnd = ({ over }) => {
     const nextOverId = over?.id ?? null;
 
-    if (nextOverId) {
-      if (draggedIds.length > 1) {
-        const nextItems = moveSelectedBlock(items, draggedIds, nextOverId);
-        const changed = nextItems.some((item, index) => item.id !== items[index]?.id);
-        if (changed) {
-          onItemsChange(nextItems);
-        }
-      } else if (active.id !== nextOverId) {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === nextOverId);
-        if (oldIndex !== -1 && newIndex !== -1) {
-          onItemsChange(arrayMove(items, oldIndex, newIndex));
-        }
-      }
+    if (nextOverId && !areItemOrdersEqual(previewItems, items)) {
+      onItemsChange(previewItems);
     }
 
     setActiveId(null);
     setDraggedIds([]);
     setOverId(null);
+    setPreviewItems(items);
     onDragStateChange?.({ isDragging: false, draggingCount: 0 });
   };
 
@@ -254,7 +313,20 @@ export default function SortableMediaGrid({
     setActiveId(null);
     setDraggedIds([]);
     setOverId(null);
+    setPreviewItems(items);
     onDragStateChange?.({ isDragging: false, draggingCount: 0 });
+  };
+
+  const dropAnimation = {
+    duration: 190,
+    easing: 'cubic-bezier(0.2, 0, 0, 1)',
+    sideEffects: defaultDropAnimationSideEffects({
+      styles: {
+        active: {
+          opacity: '0.45',
+        },
+      },
+    }),
   };
 
   return (
@@ -266,17 +338,22 @@ export default function SortableMediaGrid({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <SortableContext items={items.map((item) => item.id)} strategy={rectSortingStrategy}>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-          {items.map((photo, index) => (
+      <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
+        <div
+          className={`relative grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 ${
+            dragActive ? 'rounded-xl bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:20px_20px] p-2' : ''
+          }`}
+        >
+          {visibleItems.map((photo, index) => (
             <SortableMediaCard
               key={photo.id}
               photo={photo}
               index={index}
               isSelected={selectedSet.has(photo.id)}
               isCover={coverPhotoId === photo.id}
-              isDragging={draggedIds.includes(photo.id)}
-              isDropTarget={overId === photo.id && !draggedIds.includes(photo.id)}
+              isDragging={draggedSet.has(photo.id)}
+              isDropTarget={overId === photo.id && !draggedSet.has(photo.id)}
+              dragActive={dragActive}
               onToggleSelect={onToggleSelect}
               onDelete={onDelete}
               onSetCover={onSetCover}
@@ -285,7 +362,7 @@ export default function SortableMediaGrid({
         </div>
       </SortableContext>
 
-      <DragOverlay>
+      <DragOverlay dropAnimation={dropAnimation}>
         <OverlayCard photo={activePhoto} draggingCount={draggedIds.length} />
       </DragOverlay>
     </DndContext>

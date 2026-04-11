@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Pause, Play, Repeat2, Volume2, VolumeX } from 'lucide-react';
 
 const fetchJson = async (url) => {
   const response = await fetch(url, { cache: 'no-store' });
@@ -79,7 +80,7 @@ const densityGridMap = {
   large: 'grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
 };
 const timerPresetMs = [2000, 5000, 10000, 15000, 20000, 30000];
-const splitPanelDefaults = { filter: 'photos', index: 0, isPlaying: false, delayMs: 5000, loop: false };
+const splitPanelDefaults = { filter: 'photos', index: 0, isPlaying: false, delayMs: 5000, loop: false, isMuted: false };
 const getSplitPanelFilter = (panelId) => (panelId === 'left' ? 'photos' : 'videos');
 
 const mediaMatchesFilter = (item, filter) => {
@@ -271,12 +272,39 @@ export default function AlbumDetailPage({ params }) {
     });
   }, [filteredPhotoCount]);
 
+  const exitBrowserFullscreen = useCallback(async () => {
+    if (typeof document === 'undefined') return;
+    if (!document.fullscreenElement) return;
+    try {
+      await document.exitFullscreen();
+    } catch {
+      // ignore fullscreen exit failures (e.g., browser restrictions)
+    }
+  }, []);
+
+  const handleHideUI = useCallback(async () => {
+    setHideUI(true);
+    if (typeof document === 'undefined') return;
+    if (document.fullscreenElement) return;
+    try {
+      await document.documentElement.requestFullscreen();
+    } catch {
+      // ignore fullscreen enter failures and keep hide-ui mode enabled
+    }
+  }, []);
+
+  const handleShowUI = useCallback(async () => {
+    setHideUI(false);
+    await exitBrowserFullscreen();
+  }, [exitBrowserFullscreen]);
+
   const closeViewer = useCallback(() => {
     setViewerOpen(false);
     setIsPlaying(false);
     setMediaLoadingByPanel({});
     setHideUI(false);
-  }, []);
+    void exitBrowserFullscreen();
+  }, [exitBrowserFullscreen]);
 
   const openViewerAt = useCallback((index, options = {}) => {
     const { mode = 'focus' } = options;
@@ -314,7 +342,7 @@ export default function AlbumDetailPage({ params }) {
       if (event.key === 'Escape') {
         event.preventDefault();
         if (hideUI) {
-          setHideUI(false);
+          void handleShowUI();
           return;
         }
         closeViewer();
@@ -338,7 +366,18 @@ export default function AlbumDetailPage({ params }) {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [viewerOpen, hideUI, closeViewer, goToPrev, goToNext]);
+  }, [viewerOpen, hideUI, closeViewer, goToPrev, goToNext, handleShowUI]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || !viewerOpen) return undefined;
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement && hideUI) {
+        setHideUI(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, [viewerOpen, hideUI]);
 
   const activeItem = viewerOpen ? filteredPhotos[activeIndex] : null;
   const activeItemIsVideo = activeItem ? isVideoUrl(activeItem.imageUrl) : false;
@@ -409,11 +448,11 @@ export default function AlbumDetailPage({ params }) {
     setPanelLoading(panelId, false);
   }, [clearPanelMediaError, setPanelLoading]);
 
-  const buildSplitCandidates = useCallback((filter, excludeIndex) => {
+  const buildSplitCandidates = useCallback((filter) => {
     if (!Array.isArray(filteredPhotos) || filteredPhotos.length === 0) return [];
     const matched = filteredPhotos
       .map((item, index) => ({ item, index }))
-      .filter(({ item, index }) => mediaMatchesFilter(item, filter) && index !== excludeIndex)
+      .filter(({ item }) => mediaMatchesFilter(item, filter))
       .map(({ index }) => index);
     if (matched.length > 0) return matched;
     return filteredPhotos
@@ -430,25 +469,15 @@ export default function AlbumDetailPage({ params }) {
     const leftState = { ...(splitPanels.left || splitPanelDefaults), filter: getSplitPanelFilter('left') };
     const rightState = { ...(splitPanels.right || splitPanelDefaults), filter: getSplitPanelFilter('right') };
 
-    const leftCandidatesInitial = buildSplitCandidates(leftState.filter, rightState.index);
-    let leftIndex = leftCandidatesInitial.includes(leftState.index)
+    const leftCandidates = buildSplitCandidates(leftState.filter);
+    const leftIndex = leftCandidates.includes(leftState.index)
       ? leftState.index
-      : (leftCandidatesInitial[0] ?? activeIndex ?? 0);
+      : (leftCandidates[0] ?? activeIndex ?? 0);
 
-    const rightCandidatesInitial = buildSplitCandidates(rightState.filter, leftIndex);
-    let rightIndex = rightCandidatesInitial.includes(rightState.index)
+    const rightCandidates = buildSplitCandidates(rightState.filter);
+    const rightIndex = rightCandidates.includes(rightState.index)
       ? rightState.index
-      : (rightCandidatesInitial[0] ?? 0);
-
-    const leftCandidates = buildSplitCandidates(leftState.filter, rightIndex);
-    if (leftCandidates.length > 0 && !leftCandidates.includes(leftIndex)) {
-      leftIndex = leftCandidates[0];
-    }
-
-    const rightCandidates = buildSplitCandidates(rightState.filter, leftIndex);
-    if (rightCandidates.length > 0 && !rightCandidates.includes(rightIndex)) {
-      rightIndex = rightCandidates[0];
-    }
+      : (rightCandidates[0] ?? 0);
 
     const leftItem = filteredPhotos[leftIndex] || null;
     const rightItem = filteredPhotos[rightIndex] || null;
@@ -493,9 +522,7 @@ export default function AlbumDetailPage({ params }) {
     const isNext = direction === 'next';
     setSplitPanels((current) => {
       const target = current[panelId];
-      const otherId = panelId === 'left' ? 'right' : 'left';
-      const other = current[otherId];
-      const candidates = buildSplitCandidates(getSplitPanelFilter(panelId), other.index);
+      const candidates = buildSplitCandidates(getSplitPanelFilter(panelId));
       if (candidates.length === 0) return current;
       const candidateSet = new Set(candidates);
       const matcher = (_item, idx) => candidateSet.has(idx);
@@ -631,6 +658,17 @@ export default function AlbumDetailPage({ params }) {
     const timeout = window.setTimeout(() => moveSplitPanel('right', 'next'), rightSplitPanel.delayMs);
     return () => window.clearTimeout(timeout);
   }, [viewerOpen, viewerMode, rightSplitPanel, rightSplitItem, rightSplitIsVideo, moveSplitPanel]);
+
+  useEffect(() => {
+    if (!viewerOpen || viewerMode !== 'split' || !rightSplitIsVideo) return;
+    const player = splitRightVideoRef.current;
+    if (!player) return;
+    if (rightSplitPanel?.isPlaying) {
+      player.play().catch(() => {});
+      return;
+    }
+    player.pause();
+  }, [viewerOpen, viewerMode, rightSplitIsVideo, rightSplitPanel?.isPlaying, rightSplitItem?.id]);
 
   const handleTouchStart = (event) => {
     if (!viewerOpen) return;
@@ -850,11 +888,11 @@ export default function AlbumDetailPage({ params }) {
         </section>
       </div>
       {viewerOpen && activeItem ? (
-        <div className="fixed inset-0 z-50 bg-black/85 p-4 backdrop-blur-sm sm:p-6" onClick={closeViewer}>
+        <div className={`fixed inset-0 z-50 bg-black/85 backdrop-blur-sm ${hideUI ? 'p-0' : 'p-4 sm:p-6'}`} onClick={closeViewer}>
           <div
             className={`mx-auto flex h-full w-full flex-col shadow-2xl shadow-black/70 transition-all duration-300 ${
               hideUI
-                ? 'max-w-none rounded-none border border-transparent bg-black/95 p-1 sm:p-2'
+                ? 'max-w-none rounded-none border border-transparent bg-black p-0'
                 : 'max-w-6xl rounded-2xl border border-white/20 bg-slate-950/80 p-3 sm:p-5'
             }`}
             onClick={(event) => event.stopPropagation()}
@@ -872,18 +910,23 @@ export default function AlbumDetailPage({ params }) {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setHideUI(true)}
+                  onClick={() => {
+                    void handleHideUI();
+                  }}
                   aria-label="Hide viewer interface"
-                  className="rounded-md border border-white/25 px-3 py-1 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
+                  title="Hide UI / Fullscreen"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/25 text-sm text-white transition hover:bg-white/10"
                 >
-                  Hide UI
+                  ⛶
                 </button>
                 <button
                   type="button"
                   onClick={closeViewer}
-                  className="rounded-md border border-white/25 px-3 py-1 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
+                  aria-label="Close viewer"
+                  title="Close"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/25 text-base text-white transition hover:bg-white/10"
                 >
-                  Close
+                  ×
                 </button>
               </div>
             </div>
@@ -971,6 +1014,7 @@ export default function AlbumDetailPage({ params }) {
                         className="h-full w-full object-contain"
                         controls
                         autoPlay
+                        muted={Boolean(rightSplitPanel?.isMuted)}
                         playsInline
                         preload="metadata"
                         poster={getVideoPosterUrl(rightSplitItem?.imageUrl) || undefined}
@@ -985,6 +1029,9 @@ export default function AlbumDetailPage({ params }) {
                           markPanelMediaSuccess('right', rightSplitItem);
                         }}
                         onEnded={(event) => {
+                          if (!rightSplitPanel?.isPlaying) {
+                            return;
+                          }
                           if (rightSplitPanel?.loop) {
                             event.currentTarget.currentTime = 0;
                             event.currentTarget.play().catch(() => {});
@@ -1128,28 +1175,31 @@ export default function AlbumDetailPage({ params }) {
 
             {!hideUI ? (
               viewerMode !== 'split' ? (
-                <div className="mt-3 flex justify-center overflow-x-auto pb-1 transition-opacity duration-300">
-                  <div className="inline-flex flex-nowrap items-center gap-2">
+                <div className="relative z-[70] mt-3 flex justify-center overflow-visible pb-14 transition-opacity duration-300 md:pb-2">
+                  <div className="flex max-w-6xl flex-wrap items-center justify-center gap-2 overflow-visible">
                     <button
                       type="button"
                       onClick={goToPrev}
-                      className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
+                      className="rounded-md border border-white/25 px-2 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10 sm:px-3"
                     >
-                      Prev
+                      <ChevronLeft className="h-3.5 w-3.5 sm:hidden" />
+                      <span className="hidden sm:inline">Prev</span>
                     </button>
                     <button
                       type="button"
                       onClick={goToNext}
-                      className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
+                      className="rounded-md border border-white/25 px-2 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10 sm:px-3"
                     >
-                      Next
+                      <ChevronRight className="h-3.5 w-3.5 sm:hidden" />
+                      <span className="hidden sm:inline">Next</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setIsPlaying((current) => !current)}
-                      className="rounded-md border border-emerald-300/50 bg-emerald-500/20 px-3 py-2 text-xs uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/30"
+                      className="rounded-md border border-emerald-300/50 bg-emerald-500/20 px-2 py-2 text-xs uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/30 sm:px-3"
                     >
-                      {isPlaying ? 'Pause' : 'Play'}
+                      {isPlaying ? <Pause className="h-3.5 w-3.5 sm:hidden" /> : <Play className="h-3.5 w-3.5 sm:hidden" />}
+                      <span className="hidden sm:inline">{isPlaying ? 'Pause' : 'Play'}</span>
                     </button>
                     <span className="text-xs uppercase tracking-[0.12em] text-slate-300">Mode</span>
                     <select
@@ -1163,7 +1213,7 @@ export default function AlbumDetailPage({ params }) {
                         if (nextMode === 'split') {
                           setSplitPanels((current) => {
                             const left = { ...current.left, filter: getSplitPanelFilter('left'), index: activeIndex };
-                            const rightCandidates = buildSplitCandidates(getSplitPanelFilter('right'), activeIndex);
+                            const rightCandidates = buildSplitCandidates(getSplitPanelFilter('right'));
                             const rightIndex = rightCandidates.includes(current.right.index)
                               ? current.right.index
                               : (rightCandidates[0] ?? activeIndex);
@@ -1180,159 +1230,227 @@ export default function AlbumDetailPage({ params }) {
                       <option value="slideshow">Slideshow</option>
                       <option value="split">Split</option>
                     </select>
-                    <span className="text-xs uppercase tracking-[0.12em] text-slate-300">Timer</span>
-                    <select
-                      value={isPresetDelay ? String(delayMs) : 'custom'}
-                      onChange={(event) => {
-                        if (event.target.value === 'custom') {
-                          const parsed = Number(customDelaySeconds);
-                          if (Number.isFinite(parsed) && parsed > 0) {
-                            setDelayMs(Math.min(300000, Math.max(1000, parsed * 1000)));
-                          }
-                          return;
-                        }
-                        setDelayMs(Number(event.target.value));
-                      }}
-                      className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
-                    >
-                      <option value={2000}>2s</option>
-                      <option value={5000}>5s</option>
-                      <option value={10000}>10s</option>
-                      <option value={15000}>15s</option>
-                      <option value={20000}>20s</option>
-                      <option value={30000}>30s</option>
-                      <option value="custom">Custom</option>
-                    </select>
-                    {!isPresetDelay ? (
-                      <input
-                        type="number"
-                        min={1}
-                        max={300}
-                        step={1}
-                        value={customDelaySeconds}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setCustomDelaySeconds(value);
-                          const parsed = Number(value);
-                          if (Number.isFinite(parsed) && parsed > 0) {
-                            setDelayMs(Math.min(300000, Math.max(1000, parsed * 1000)));
-                          }
-                        }}
-                        className="h-9 w-20 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
-                        aria-label="Custom timer in seconds"
-                      />
+                    {viewerMode === 'slideshow' ? (
+                      <>
+                        <span className="hidden text-xs uppercase tracking-[0.12em] text-slate-300 sm:inline">Timer</span>
+                        <select
+                          value={isPresetDelay ? String(delayMs) : 'custom'}
+                          onChange={(event) => {
+                            if (event.target.value === 'custom') {
+                              const parsed = Number(customDelaySeconds);
+                              if (Number.isFinite(parsed) && parsed > 0) {
+                                setDelayMs(Math.min(300000, Math.max(1000, parsed * 1000)));
+                              }
+                              return;
+                            }
+                            setDelayMs(Number(event.target.value));
+                          }}
+                          className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
+                        >
+                          <option value={2000}>2s</option>
+                          <option value={5000}>5s</option>
+                          <option value={10000}>10s</option>
+                          <option value={15000}>15s</option>
+                          <option value={20000}>20s</option>
+                          <option value={30000}>30s</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                        {!isPresetDelay ? (
+                          <input
+                            type="number"
+                            min={1}
+                            max={300}
+                            step={1}
+                            value={customDelaySeconds}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              setCustomDelaySeconds(value);
+                              const parsed = Number(value);
+                              if (Number.isFinite(parsed) && parsed > 0) {
+                                setDelayMs(Math.min(300000, Math.max(1000, parsed * 1000)));
+                              }
+                            }}
+                            className="h-9 w-20 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
+                            aria-label="Custom timer in seconds"
+                          />
+                        ) : null}
+                        <span className="hidden text-[10px] text-slate-400 sm:inline">
+                          {Math.round(delayMs / 1000)}s
+                        </span>
+                      </>
                     ) : null}
-                    <span className="text-[10px] text-slate-400">
-                      {Math.round(delayMs / 1000)}s
-                    </span>
                   </div>
                 </div>
               ) : (
-                <div className="mt-3 rounded-md border border-white/15 bg-slate-900/40 p-2 text-[10px] tracking-[0.08em] text-slate-200">
-                  <div className="flex w-full flex-col gap-2 lg:flex-row">
-                    <div className="flex flex-1 flex-wrap items-center gap-2 rounded-md border border-white/10 bg-black/20 p-2">
-                      <span className="font-semibold uppercase text-slate-100">Left panel</span>
-                      <span className="rounded-md border border-white/30 bg-slate-900/70 px-2 py-1 text-[10px] text-white">Image</span>
-                      <button
-                        type="button"
-                        onClick={() => moveSplitPanel('left', 'prev')}
-                        className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
-                      >
-                        Prev
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveSplitPanel('left', 'next')}
-                        className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
-                      >
-                        Next
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSplitPanels((current) => ({
-                            ...current,
-                            left: { ...current.left, isPlaying: !current.left.isPlaying }
-                          }));
-                        }}
-                        className="rounded-md border border-emerald-300/50 bg-emerald-500/20 px-2 py-1 text-[10px] uppercase text-emerald-100 transition hover:bg-emerald-500/30"
-                      >
-                        {leftSplitPanel?.isPlaying ? 'Pause' : 'Play'}
-                      </button>
-                      <label className="inline-flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(leftSplitPanel?.loop)}
-                          onChange={() => {
+                <div className="relative z-[70] mt-3 overflow-visible pb-14 md:pb-2">
+                  <div className="mx-auto w-full max-w-6xl rounded-md border border-white/15 bg-slate-900/40 p-2 text-[10px] tracking-[0.08em] text-slate-200">
+                    <div className="grid gap-2 md:grid-cols-[1fr_auto_1fr] md:items-center">
+                      <div className="flex flex-wrap items-center justify-center gap-2 rounded-md border border-white/10 bg-black/20 p-2 md:justify-start">
+                        <span className="font-semibold uppercase text-slate-100">Left panel</span>
+                        <span className="hidden rounded-md border border-white/30 bg-slate-900/70 px-2 py-1 text-[10px] text-white sm:inline-flex">Image</span>
+                        <button
+                          type="button"
+                          onClick={() => moveSplitPanel('left', 'prev')}
+                          className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5 md:hidden" />
+                          <span className="hidden md:inline">Prev</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSplitPanel('left', 'next')}
+                          className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5 md:hidden" />
+                          <span className="hidden md:inline">Next</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSplitPanels((current) => ({
+                              ...current,
+                              left: { ...current.left, isPlaying: !current.left.isPlaying }
+                            }));
+                          }}
+                          className="rounded-md border border-emerald-300/50 bg-emerald-500/20 px-2 py-1 text-[10px] uppercase text-emerald-100 transition hover:bg-emerald-500/30"
+                        >
+                          {leftSplitPanel?.isPlaying ? <Pause className="h-3.5 w-3.5 md:hidden" /> : <Play className="h-3.5 w-3.5 md:hidden" />}
+                          <span className="hidden md:inline">{leftSplitPanel?.isPlaying ? 'Pause' : 'Play'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Toggle left loop"
+                          aria-pressed={Boolean(leftSplitPanel?.loop)}
+                          onClick={() => {
                             setSplitPanels((current) => ({
                               ...current,
                               left: { ...current.left, loop: !current.left.loop }
                             }));
                           }}
-                        />
-                        Loop
-                      </label>
-                      <select
-                        value={String(leftSplitPanel?.delayMs || 5000)}
-                        onChange={(event) => {
-                          const nextDelay = Number(event.target.value);
-                          setSplitPanels((current) => ({
-                            ...current,
-                            left: { ...current.left, delayMs: nextDelay }
-                          }));
-                        }}
-                        className="h-8 rounded-md border border-white/30 bg-slate-900/70 px-2 text-[10px] text-white"
-                      >
-                        {timerPresetMs.map((ms) => (
-                          <option key={`left-delay-${ms}`} value={ms}>{Math.round(ms / 1000)}s</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex flex-1 flex-wrap items-center gap-2 rounded-md border border-white/10 bg-black/20 p-2">
-                      <span className="font-semibold uppercase text-slate-100">Right panel</span>
-                      <span className="rounded-md border border-white/30 bg-slate-900/70 px-2 py-1 text-[10px] text-white">Video</span>
-                      <button
-                        type="button"
-                        onClick={() => moveSplitPanel('right', 'prev')}
-                        className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
-                      >
-                        Prev
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveSplitPanel('right', 'next')}
-                        className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
-                      >
-                        Next
-                      </button>
-                      <label className="inline-flex items-center gap-1">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(rightSplitPanel?.loop)}
-                          onChange={() => {
+                          className={`rounded-md border px-2 py-1 transition ${
+                            leftSplitPanel?.loop
+                              ? 'border-emerald-300/50 bg-emerald-500/20 text-emerald-100'
+                              : 'border-white/25 text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <Repeat2 className="h-3.5 w-3.5" />
+                        </button>
+                        <select
+                          value={String(leftSplitPanel?.delayMs || 5000)}
+                          onChange={(event) => {
+                            const nextDelay = Number(event.target.value);
+                            setSplitPanels((current) => ({
+                              ...current,
+                              left: { ...current.left, delayMs: nextDelay }
+                            }));
+                          }}
+                          className="h-8 rounded-md border border-white/30 bg-slate-900/70 px-2 text-[10px] text-white"
+                        >
+                          {timerPresetMs.map((ms) => (
+                            <option key={`left-delay-${ms}`} value={ms}>{Math.round(ms / 1000)}s</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="hidden items-center justify-center gap-2 rounded-md border border-white/10 bg-black/20 p-2 text-xs uppercase tracking-[0.12em] text-slate-300 md:flex">
+                        <span>Mode</span>
+                        <select
+                          value={viewerMode}
+                          onChange={(event) => {
+                            const nextMode = event.target.value;
+                            setViewerMode(nextMode);
+                            if (nextMode === 'slideshow' && !isPlaying) {
+                              setIsPlaying(true);
+                            }
+                            if (nextMode === 'split') {
+                              setSplitPanels((current) => {
+                                const left = { ...current.left, filter: getSplitPanelFilter('left'), index: activeIndex };
+                                const rightCandidates = buildSplitCandidates(getSplitPanelFilter('right'));
+                                const rightIndex = rightCandidates.includes(current.right.index)
+                                  ? current.right.index
+                                  : (rightCandidates[0] ?? activeIndex);
+                                return {
+                                  left,
+                                  right: { ...current.right, filter: getSplitPanelFilter('right'), isPlaying: true, index: rightIndex }
+                                };
+                              });
+                            }
+                          }}
+                          className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
+                        >
+                          <option value="focus">Focus</option>
+                          <option value="slideshow">Slideshow</option>
+                          <option value="split">Split</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-2 rounded-md border border-white/10 bg-black/20 p-2 md:justify-start">
+                        <span className="font-semibold uppercase text-slate-100">Right panel</span>
+                        <span className="hidden rounded-md border border-white/30 bg-slate-900/70 px-2 py-1 text-[10px] text-white sm:inline-flex">Video</span>
+                        <button
+                          type="button"
+                          onClick={() => moveSplitPanel('right', 'prev')}
+                          className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5 md:hidden" />
+                          <span className="hidden md:inline">Prev</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSplitPanel('right', 'next')}
+                          className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5 md:hidden" />
+                          <span className="hidden md:inline">Next</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSplitPanels((current) => ({
+                              ...current,
+                              right: { ...current.right, isPlaying: !current.right.isPlaying }
+                            }));
+                          }}
+                          className="rounded-md border border-emerald-300/50 bg-emerald-500/20 px-2 py-1 text-[10px] uppercase text-emerald-100 transition hover:bg-emerald-500/30"
+                        >
+                          {rightSplitPanel?.isPlaying ? <Pause className="h-3.5 w-3.5 md:hidden" /> : <Play className="h-3.5 w-3.5 md:hidden" />}
+                          <span className="hidden md:inline">{rightSplitPanel?.isPlaying ? 'Pause' : 'Play'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={rightSplitPanel?.isMuted ? 'Unmute right panel audio' : 'Mute right panel audio'}
+                          aria-pressed={!rightSplitPanel?.isMuted}
+                          onClick={() => {
+                            setSplitPanels((current) => ({
+                              ...current,
+                              right: { ...current.right, isMuted: !current.right.isMuted }
+                            }));
+                          }}
+                          className={`rounded-md border px-2 py-1 transition ${
+                            rightSplitPanel?.isMuted
+                              ? 'border-white/25 text-white hover:bg-white/10'
+                              : 'border-emerald-300/50 bg-emerald-500/20 text-emerald-100'
+                          }`}
+                        >
+                          {rightSplitPanel?.isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Toggle right loop"
+                          aria-pressed={Boolean(rightSplitPanel?.loop)}
+                          onClick={() => {
                             setSplitPanels((current) => ({
                               ...current,
                               right: { ...current.right, loop: !current.right.loop }
                             }));
                           }}
-                        />
-                        Loop
-                      </label>
-                      <select
-                        value={String(rightSplitPanel?.delayMs || 5000)}
-                        onChange={(event) => {
-                          const nextDelay = Number(event.target.value);
-                          setSplitPanels((current) => ({
-                            ...current,
-                            right: { ...current.right, delayMs: nextDelay }
-                          }));
-                        }}
-                        className="h-8 rounded-md border border-white/30 bg-slate-900/70 px-2 text-[10px] text-white"
-                      >
-                        {timerPresetMs.map((ms) => (
-                          <option key={`right-delay-${ms}`} value={ms}>{Math.round(ms / 1000)}s</option>
-                        ))}
-                      </select>
+                          className={`rounded-md border px-2 py-1 transition ${
+                            rightSplitPanel?.loop
+                              ? 'border-emerald-300/50 bg-emerald-500/20 text-emerald-100'
+                              : 'border-white/25 text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <Repeat2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
