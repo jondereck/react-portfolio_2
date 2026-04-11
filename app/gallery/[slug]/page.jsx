@@ -1076,120 +1076,111 @@ export default function AlbumDetailPage({ params }) {
                   Unable to load this media. Try next/previous or close and reopen.
                 </div>
               ) : null}
-              <div
-                className={`absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/45 p-1.5 backdrop-blur transition-all duration-300 ${
-                  hideUI ? 'opacity-95' : 'pointer-events-none opacity-0'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={goToPrev}
-                  aria-label="Previous slide"
-                  className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+              {viewerMode !== 'split' ? (
+                <div
+                  className={`absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/45 p-1.5 backdrop-blur transition-all duration-300 ${
+                    hideUI ? 'opacity-95' : 'pointer-events-none opacity-0'
+                  }`}
                 >
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPlaying((current) => !current)}
-                  aria-label={isPlaying ? 'Pause slideshow' : 'Play slideshow'}
-                  className="rounded-full border border-emerald-300/50 bg-emerald-500/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/35"
-                >
-                  {isPlaying ? 'Pause' : 'Play'}
-                </button>
-                <button
-                  type="button"
-                  onClick={goToNext}
-                  aria-label="Next slide"
-                  className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
-                >
-                  Next
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHideUI(false)}
-                  aria-label="Show viewer interface"
-                  className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
-                >
-                  Show UI
-                </button>
-                <button
-                  type="button"
-                  onClick={closeViewer}
-                  aria-label="Close viewer"
-                  className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
-                >
-                  Close
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={goToPrev}
+                    aria-label="Previous slide"
+                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPlaying((current) => !current)}
+                    aria-label={isPlaying ? 'Pause slideshow' : 'Play slideshow'}
+                    className="rounded-full border border-emerald-300/50 bg-emerald-500/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/35"
+                  >
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goToNext}
+                    aria-label="Next slide"
+                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                  >
+                    Next
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHideUI(false)}
+                    aria-label="Show viewer interface"
+                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                  >
+                    Show UI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeViewer}
+                    aria-label="Close viewer"
+                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             {!hideUI ? (
-              <div className="mt-3 flex flex-col gap-2 transition-opacity duration-300">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={goToPrev}
-                  className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
-                >
-                  Prev
-                </button>
-                <button
-                  type="button"
-                  onClick={goToNext}
-                  className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
-                >
-                  Next
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsPlaying((current) => !current)}
-                  className="rounded-md border border-emerald-300/50 bg-emerald-500/20 px-3 py-2 text-xs uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/30"
-                >
-                  {isPlaying ? 'Pause' : 'Play'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHideUI(true)}
-                  aria-label="Hide viewer interface"
-                  className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
-                >
-                  Hide UI
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.12em] text-slate-300">
-                <span>Mode</span>
-                <select
-                  value={viewerMode}
-                  onChange={(event) => {
-                    const nextMode = event.target.value;
-                    setViewerMode(nextMode);
-                    if (nextMode === 'slideshow' && !isPlaying) {
-                      setIsPlaying(true);
-                    }
-                    if (nextMode === 'split') {
-                      setSplitPanels((current) => {
-                        const left = { ...current.left, filter: getSplitPanelFilter('left'), index: activeIndex };
-                        const rightCandidates = buildSplitCandidates(getSplitPanelFilter('right'), activeIndex);
-                        const rightIndex = rightCandidates.includes(current.right.index)
-                          ? current.right.index
-                          : (rightCandidates[0] ?? activeIndex);
-                        return {
-                          left,
-                          right: { ...current.right, filter: getSplitPanelFilter('right'), isPlaying: true, index: rightIndex }
-                        };
-                      });
-                    }
-                  }}
-                  className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
-                >
-                  <option value="focus">Focus</option>
-                  <option value="slideshow">Slideshow</option>
-                  <option value="split">Split</option>
-                </select>
-                {viewerMode !== 'split' ? (
-                  <>
-                    <span>Timer</span>
+              viewerMode !== 'split' ? (
+                <div className="mt-3 flex justify-center overflow-x-auto pb-1 transition-opacity duration-300">
+                  <div className="inline-flex flex-nowrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={goToPrev}
+                      className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
+                    >
+                      Prev
+                    </button>
+                    <button
+                      type="button"
+                      onClick={goToNext}
+                      className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
+                    >
+                      Next
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsPlaying((current) => !current)}
+                      className="rounded-md border border-emerald-300/50 bg-emerald-500/20 px-3 py-2 text-xs uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/30"
+                    >
+                      {isPlaying ? 'Pause' : 'Play'}
+                    </button>
+                    <span className="text-xs uppercase tracking-[0.12em] text-slate-300">Mode</span>
+                    <select
+                      value={viewerMode}
+                      onChange={(event) => {
+                        const nextMode = event.target.value;
+                        setViewerMode(nextMode);
+                        if (nextMode === 'slideshow' && !isPlaying) {
+                          setIsPlaying(true);
+                        }
+                        if (nextMode === 'split') {
+                          setSplitPanels((current) => {
+                            const left = { ...current.left, filter: getSplitPanelFilter('left'), index: activeIndex };
+                            const rightCandidates = buildSplitCandidates(getSplitPanelFilter('right'), activeIndex);
+                            const rightIndex = rightCandidates.includes(current.right.index)
+                              ? current.right.index
+                              : (rightCandidates[0] ?? activeIndex);
+                            return {
+                              left,
+                              right: { ...current.right, filter: getSplitPanelFilter('right'), isPlaying: true, index: rightIndex }
+                            };
+                          });
+                        }
+                      }}
+                      className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
+                    >
+                      <option value="focus">Focus</option>
+                      <option value="slideshow">Slideshow</option>
+                      <option value="split">Split</option>
+                    </select>
+                    <span className="text-xs uppercase tracking-[0.12em] text-slate-300">Timer</span>
                     <select
                       value={isPresetDelay ? String(delayMs) : 'custom'}
                       onChange={(event) => {
@@ -1234,9 +1225,11 @@ export default function AlbumDetailPage({ params }) {
                     <span className="text-[10px] text-slate-400">
                       {Math.round(delayMs / 1000)}s
                     </span>
-                  </>
-                ) : (
-                  <div className="flex w-full flex-col gap-2 rounded-md border border-white/15 bg-slate-900/40 p-2 text-[10px] tracking-[0.08em] text-slate-200 lg:flex-row">
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 rounded-md border border-white/15 bg-slate-900/40 p-2 text-[10px] tracking-[0.08em] text-slate-200">
+                  <div className="flex w-full flex-col gap-2 lg:flex-row">
                     <div className="flex flex-1 flex-wrap items-center gap-2 rounded-md border border-white/10 bg-black/20 p-2">
                       <span className="font-semibold uppercase text-slate-100">Left panel</span>
                       <span className="rounded-md border border-white/30 bg-slate-900/70 px-2 py-1 text-[10px] text-white">Image</span>
@@ -1342,19 +1335,8 @@ export default function AlbumDetailPage({ params }) {
                       </select>
                     </div>
                   </div>
-                )}
-                {viewerMode !== 'split' ? (
-                  <span className="rounded-full border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-200">
-                    Esc / ← / → / Space
-                  </span>
-                ) : null}
-                {viewerMode !== 'split' ? (
-                  <span className="rounded-full border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-200">
-                    {activeItemIsVideo ? 'Video follows duration' : 'Image follows timer'}
-                  </span>
-                ) : null}
-              </div>
-              </div>
+                </div>
+              )
             ) : null}
           </div>
         </div>
