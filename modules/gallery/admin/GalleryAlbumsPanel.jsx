@@ -92,20 +92,20 @@ export default function GalleryAlbumsPanel({ controller }) {
                     <button
                       key={album.id}
                       type="button"
-                      className={`w-full rounded-xl border px-3 py-3 text-left transition ${
+                      className={`grid w-full gap-2 rounded-xl border px-3 py-3 text-left transition sm:flex sm:items-center sm:justify-between ${
                         isActive
                           ? 'border-slate-900 bg-slate-100 dark:border-slate-100 dark:bg-slate-800'
                           : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
                       }`}
                       onClick={() => setSelectedAlbumId(album.id)}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{album.name}</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {album._count?.photos ?? 0} media item{(album._count?.photos ?? 0) === 1 ? '' : 's'}
-                          </p>
-                        </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{album.name}</p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {album._count?.photos ?? 0} media item{(album._count?.photos ?? 0) === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                      <div className="flex justify-start sm:justify-end">
                         <AdminStatusBadge label={album.isPublished ? 'Published' : 'Draft'} />
                       </div>
                     </button>
@@ -156,7 +156,7 @@ export default function GalleryAlbumsPanel({ controller }) {
                 ) : null}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" className={ghostButtonStyles} onClick={() => deleteAlbum(selectedAlbum.id)}>
+                  <button type="button" className={`${ghostButtonStyles} w-full sm:w-auto`} onClick={() => deleteAlbum(selectedAlbum.id)}>
                     Delete Album
                   </button>
                 </div>

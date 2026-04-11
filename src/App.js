@@ -10,6 +10,7 @@ import Hero from './components/Hero';
 import NavBar from './components/NavBar';
 import Projects from './components/Projects';
 import SocialLinks from './components/SocialLinks';
+import GlobalLoader from '@/components/GlobalLoader';
 import { REALTIME_EVENT, REALTIME_SIGNAL_KEY, revalidatePublicData } from '@/lib/realtime';
 import { useLoadingStore } from '@/store/loading';
 
@@ -167,7 +168,7 @@ function App() {
   }, [darkMode]);
 
   if (loading) {
-    return null;
+    return <GlobalLoader forceVisible message="Loading portfolio" hint="Fetching homepage data." />;
   }
 
   if (loadError) {

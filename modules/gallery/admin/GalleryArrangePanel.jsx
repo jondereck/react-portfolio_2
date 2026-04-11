@@ -1,7 +1,15 @@
 'use client';
 
 import SortableMediaGrid from '@/app/admin/gallery/components/SortableMediaGrid';
-import { GalleryAlbumPicker, GalleryEmptyState, GalleryPageHeader, GalleryPanelCard, buttonStyles, ghostButtonStyles } from './galleryAdminShared';
+import GalleryArrangeMobileControls from '@/modules/gallery/admin/GalleryArrangeMobileControls';
+import {
+  GalleryAlbumPicker,
+  GalleryEmptyState,
+  GalleryPageHeader,
+  GalleryPanelCard,
+  buttonStyles,
+  ghostButtonStyles,
+} from './galleryAdminShared';
 
 export default function GalleryArrangePanel({ controller }) {
   const {
@@ -18,7 +26,6 @@ export default function GalleryArrangePanel({ controller }) {
     arrangeDragState,
     selectedPhotoIds,
     setSelectedAlbumId,
-    deletePhoto,
     setCoverPhoto,
     reorderChange,
     togglePhotoSelect,
@@ -37,7 +44,7 @@ export default function GalleryArrangePanel({ controller }) {
       <GalleryPageHeader
         eyebrow="Sorting Workspace"
         title="Arrange"
-        description="A dedicated ordering workspace for the selected album with drag-and-drop controls only."
+        description="A dedicated ordering workspace for the selected album with selection, reordering, and save controls only."
       />
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -52,15 +59,15 @@ export default function GalleryArrangePanel({ controller }) {
         {selectedAlbum ? (
           <GalleryPanelCard
             title={`Arrange ${selectedAlbum.name}`}
-            description="Use manual sorting, selection, and save controls without upload or settings clutter."
+            description="Use manual sorting, selection, and save controls without upload, delete, or settings clutter."
+            className="relative overflow-visible pb-24 md:pb-0"
           >
             {isDragging ? (
               <div className="rounded-xl border border-blue-200 bg-blue-50/95 px-3 py-2 text-xs font-medium text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-200">
                 Dragging {arrangeDragState.draggingCount > 1 ? `${arrangeDragState.draggingCount} selected items` : '1 item'}. Release to drop.
               </div>
             ) : (
-              <div className="rounded-xl border border-slate-200 bg-white/95 p-3 dark:border-slate-700 dark:bg-slate-900/95">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Shift-click supports range selection.</p>
+              <div className="hidden rounded-xl border border-slate-200 bg-white/95 p-3 dark:border-slate-700 dark:bg-slate-900/95 md:block">
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -107,6 +114,26 @@ export default function GalleryArrangePanel({ controller }) {
               </div>
             )}
 
+            <div className="md:hidden">
+              <GalleryArrangeMobileControls
+                orderDirty={orderDirty}
+                orderSaving={orderSaving}
+                onSaveOrder={saveOrder}
+                onManualOrder={async () => {
+                  if (sortMode !== 'custom') {
+                    setSortMode('custom');
+                  }
+                  await loadPhotos(selectedAlbumId, 'custom');
+                }}
+                onSortNewest={() => reorderChange([...arrangePhotos].sort((a, b) => getPhotoSortTime(b) - getPhotoSortTime(a)))}
+                onSortOldest={() => reorderChange([...arrangePhotos].sort((a, b) => getPhotoSortTime(a) - getPhotoSortTime(b)))}
+                onReverseOrder={() => reorderChange([...arrangePhotos].reverse())}
+                onMoveTop={() => moveSelection('top')}
+                onMoveBottom={() => moveSelection('bottom')}
+                onUndo={undoOrder}
+              />
+            </div>
+
             {loadingPhotos ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">Loading media...</p>
             ) : arrangePhotos.length === 0 ? (
@@ -121,7 +148,6 @@ export default function GalleryArrangePanel({ controller }) {
                 coverPhotoId={selectedAlbum.coverPhotoId}
                 onItemsChange={reorderChange}
                 onToggleSelect={togglePhotoSelect}
-                onDelete={deletePhoto}
                 onSetCover={setCoverPhoto}
                 onDragStateChange={handleDragStateChange}
               />

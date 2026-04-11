@@ -5,13 +5,16 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import AdminStatusBadge from '@/components/admin/shared/AdminStatusBadge';
 import SortableMediaGrid from '@/app/admin/gallery/components/SortableMediaGrid';
+import GalleryUploadDropzone from '@/modules/gallery/admin/GalleryUploadDropzone';
 import {
   areIdListsEqual,
   formatLocalDate,
   getPhotoDedupeKey,
   getPhotoSortTime,
 } from '@/app/admin/gallery/utils';
+import GalleryMobileWorkspaceNav from '@/modules/gallery/admin/GalleryMobileWorkspaceNav';
 import { normalizeGalleryWorkspaceTab } from '@/modules/gallery/admin/workspaceConfig';
+import { uploadFormDataWithProgress } from './galleryAdminShared';
 
 const inputStyles =
   'h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950';
@@ -30,7 +33,7 @@ const workspaceTabCards = [
   {
     id: 'media',
     label: 'Media',
-    description: 'Upload files and add remote URLs into the selected album.',
+    description: 'Upload files into the selected album with drag-and-drop support.',
     accent: 'sky',
   },
   {
@@ -69,7 +72,6 @@ const fetchJson = async (url, init) => {
 
 const getSaveState = ({
   savingAlbum,
-  savingPhoto,
   uploadingFiles,
   importingDrive,
   savingDetails,
@@ -77,7 +79,7 @@ const getSaveState = ({
   detailsDirty,
   orderDirty,
 }) => {
-  if (savingAlbum || savingPhoto || uploadingFiles || importingDrive || savingDetails || orderSaving) {
+  if (savingAlbum || uploadingFiles || importingDrive || savingDetails || orderSaving) {
     return {
       label: 'Saving...',
       tone: 'text-amber-700 bg-amber-100 dark:bg-amber-950/30 dark:text-amber-300',
@@ -159,10 +161,8 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
 
   const [albumForm, setAlbumForm] = useState({ name: '', slug: '', description: '', isPublished: true });
   const [savingAlbum, setSavingAlbum] = useState(false);
-
-  const [photoForm, setPhotoForm] = useState({ imageUrl: '', caption: '', dateTaken: '' });
-  const [savingPhoto, setSavingPhoto] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   const [detailsForm, setDetailsForm] = useState({ name: '', slug: '', description: '', isPublished: true });
   const [detailsDirty, setDetailsDirty] = useState(false);
@@ -190,7 +190,6 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
     () =>
       getSaveState({
         savingAlbum,
-        savingPhoto,
         uploadingFiles,
         importingDrive,
         savingDetails,
@@ -205,7 +204,6 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       orderSaving,
       savingAlbum,
       savingDetails,
-      savingPhoto,
       uploadingFiles,
     ],
   );
@@ -408,63 +406,58 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
     }
   };
 
-  const handleAddPhoto = async (event) => {
-    event.preventDefault();
-    if (!selectedAlbumId) {
-      toast.error('Select an album first.');
-      return;
-    }
-
-    setSavingPhoto(true);
-    try {
-      await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: photoForm.imageUrl,
-          caption: photoForm.caption || undefined,
-          dateTaken: photoForm.dateTaken
-            ? new Date(`${photoForm.dateTaken}T00:00:00.000Z`).toISOString()
-            : undefined,
-        }),
-      });
-
-      toast.success('Media added');
-      setPhotoForm({ imageUrl: '', caption: '', dateTaken: '' });
-      await loadPhotos(selectedAlbumId, sortMode);
-      await loadAlbums();
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setSavingPhoto(false);
-    }
-  };
-
-  const handleBulkUpload = async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!selectedAlbumId || files.length === 0) return;
+  const uploadFiles = async (files) => {
+    const nextFiles = Array.from(files || []);
+    if (!selectedAlbumId || nextFiles.length === 0) return;
 
     setUploadingFiles(true);
+    const totalBytes = Math.max(nextFiles.reduce((sum, file) => sum + (file.size || 0), 0), 1);
+    let completedBytes = 0;
+    setUploadProgress({
+      percent: 0,
+      currentFileName: nextFiles[0]?.name ?? '',
+      currentFileIndex: 1,
+      totalFiles: nextFiles.length,
+    });
+
     try {
-      for (const file of files) {
+      for (let index = 0; index < nextFiles.length; index += 1) {
+        const file = nextFiles[index];
         const formData = new FormData();
         formData.append('imageFile', file);
         formData.append('caption', file.name);
 
-        await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos`, {
-          method: 'POST',
-          body: formData,
+        await uploadFormDataWithProgress(`/api/gallery/albums/${selectedAlbumId}/photos`, formData, {
+          onProgress: ({ loaded }) => {
+            const progressBytes = completedBytes + Math.min(loaded, file.size || loaded);
+            const percent = Math.min(100, Math.round((progressBytes / totalBytes) * 100));
+
+            setUploadProgress({
+              percent,
+              currentFileName: file.name,
+              currentFileIndex: index + 1,
+              totalFiles: nextFiles.length,
+            });
+          },
+        });
+
+        completedBytes += file.size || 0;
+        setUploadProgress({
+          percent: Math.min(100, Math.round((completedBytes / totalBytes) * 100)),
+          currentFileName: file.name,
+          currentFileIndex: index + 1,
+          totalFiles: nextFiles.length,
         });
       }
 
-      toast.success(`${files.length} file(s) uploaded`);
+      toast.success(`${nextFiles.length} file(s) uploaded`);
       await loadPhotos(selectedAlbumId, sortMode);
       await loadAlbums();
     } catch (error) {
       toast.error(error.message);
     } finally {
-      event.target.value = '';
       setUploadingFiles(false);
+      setUploadProgress(null);
     }
   };
 
@@ -674,7 +667,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
   const canRenderWorkspace = Boolean(selectedAlbum) || showAlbumWorkspace;
 
   return (
-    <div className="grid gap-6 lg:h-[calc(100vh-120px)] lg:grid-cols-[320px_1fr] lg:overflow-hidden">
+    <div className="grid gap-4 lg:h-[calc(100vh-120px)] lg:grid-cols-[320px_1fr] lg:gap-6 lg:overflow-hidden">
           <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:h-full lg:overflow-y-auto dark:border-slate-800 dark:bg-slate-900">
             <div>
               <h2 className="text-lg font-semibold">Albums</h2>
@@ -743,7 +736,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
 
           <main
             ref={workspaceMainRef}
-            className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:h-full lg:overflow-y-auto dark:border-slate-800 dark:bg-slate-900"
+            className="space-y-4 rounded-2xl border border-slate-200 bg-white p-3 pb-28 shadow-sm lg:h-full lg:overflow-y-auto dark:border-slate-800 dark:bg-slate-900 sm:p-4 sm:pb-4"
           >
             {canRenderWorkspace ? (
               <>
@@ -759,17 +752,17 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                       className="sticky top-0 z-20 rounded-xl border border-slate-200 bg-white/95 p-4 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
                       aria-hidden={isArrangeDragActive}
                     >
-                      <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div>
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="space-y-1">
                           <h2 className="text-xl font-semibold">{selectedAlbum.name}</h2>
-                          <p className="mt-1 text-sm text-slate-500">{selectedAlbum._count?.photos ?? photos.length} media item(s)</p>
+                          <p className="text-sm text-slate-500">{selectedAlbum._count?.photos ?? photos.length} media item(s)</p>
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="grid gap-2 sm:grid-cols-2 md:flex md:flex-wrap md:items-center">
                           <AdminStatusBadge label={selectedAlbum.isPublished ? 'Published' : 'Draft'} />
                           <span className={`rounded-full px-3 py-1 text-xs font-medium ${saveState.tone}`}>{saveState.label}</span>
                           <select
-                            className="h-9 rounded-md border border-slate-300 bg-white px-2 text-xs dark:border-slate-700 dark:bg-slate-900"
+                            className="h-10 rounded-md border border-slate-300 bg-white px-3 text-xs dark:border-slate-700 dark:bg-slate-900 sm:min-w-[10rem]"
                             value={sortMode}
                             onChange={(event) => setSortMode(event.target.value)}
                           >
@@ -779,7 +772,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                           </select>
                           <button
                             type="button"
-                            className="h-9 rounded-md border border-red-300 px-3 text-xs text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/30"
+                            className="h-10 rounded-md border border-red-300 px-3 text-xs text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/30 md:h-9"
                             onClick={handleDeleteAlbum}
                           >
                             Delete Album
@@ -790,12 +783,24 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                   </div>
                 ) : null}
 
+                <GalleryMobileWorkspaceNav
+                  tabs={workspaceTabCards}
+                  activeTab={activeTab}
+                  onSelectTab={(tabId) => {
+                    if (tabId === 'arrange' && sortMode !== 'custom') {
+                      setSortMode('custom');
+                    }
+                    syncWorkspaceTab(tabId);
+                  }}
+                  disabledTabIds={sortMode !== 'custom' ? ['arrange'] : []}
+                />
+
                 <div
-                  className={`transition-all duration-200 ${
+                  className={`hidden transition-all duration-200 md:block ${
                     isArrangeDragActive
                       ? 'pointer-events-none max-h-0 -translate-y-2 overflow-hidden opacity-0'
                       : 'max-h-[420px] translate-y-0 opacity-100'
-                  }`}
+                    }`}
                 >
                   <div className="rounded-2xl border border-slate-200 p-2 dark:border-slate-700">
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -882,7 +887,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                             {
                               id: 'media',
                               label: 'Open media intake',
-                              description: 'Upload files or add remote URLs',
+                              description: 'Upload files with drag-and-drop',
                             },
                             {
                               id: 'arrange',
@@ -928,48 +933,16 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
 
                   {activeTab === 'media' ? (
                     <section className="space-y-5">
-                    <div className="grid gap-4 xl:grid-cols-3">
-                      <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                        <p className="text-sm font-semibold">Upload files</p>
-                        <p className="mt-1 text-xs text-slate-500">Batch upload images and videos.</p>
-                        <input
-                          className="mt-3 w-full text-sm"
-                          type="file"
-                          accept="image/*,video/*"
-                          multiple
-                          disabled={uploadingFiles}
-                          onChange={handleBulkUpload}
-                        />
-                        <p className="mt-2 text-xs text-slate-500">
-                          {uploadingFiles ? 'Uploading files...' : 'Cloudinary-backed upload with existing API flow.'}
-                        </p>
-                      </div>
-
-                      <form className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700" onSubmit={handleAddPhoto}>
-                        <p className="text-sm font-semibold">Add media URL</p>
-                        <input
-                          className={inputStyles}
-                          placeholder="https://..."
-                          value={photoForm.imageUrl}
-                          onChange={(event) => setPhotoForm((previous) => ({ ...previous, imageUrl: event.target.value }))}
-                          required
-                        />
-                        <input
-                          className={inputStyles}
-                          placeholder="Caption"
-                          value={photoForm.caption}
-                          onChange={(event) => setPhotoForm((previous) => ({ ...previous, caption: event.target.value }))}
-                        />
-                        <input
-                          className={inputStyles}
-                          type="date"
-                          value={photoForm.dateTaken}
-                          onChange={(event) => setPhotoForm((previous) => ({ ...previous, dateTaken: event.target.value }))}
-                        />
-                        <button className={`${buttonStyles} w-full`} disabled={savingPhoto}>
-                          {savingPhoto ? 'Adding...' : 'Add Media'}
-                        </button>
-                      </form>
+                    <div className="grid gap-4 xl:grid-cols-2">
+                      <GalleryUploadDropzone
+                        uploading={uploadingFiles}
+                        uploadProgress={uploadProgress}
+                        onUploadFiles={uploadFiles}
+                        title="Upload media"
+                        description="Drag and drop images or videos here, or choose files from your device."
+                        helpText="Batch uploads go straight into the selected album."
+                        uploadLabel="Choose files"
+                      />
 
                       <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                         <p className="text-sm font-semibold">Import Drive folder</p>
@@ -999,7 +972,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                       </div>
                     ) : (
                       <div className="rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-                        <p className="text-sm font-medium">Shift-click supports range selection.</p>
+           
                         <div className="mt-3 flex flex-wrap gap-2">
                           <button
                             type="button"

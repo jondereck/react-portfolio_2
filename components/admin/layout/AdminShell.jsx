@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminSidebar from '@/components/admin/navigation/AdminSidebar';
 import AdminTopbar from '@/components/admin/layout/AdminTopbar';
+import GlobalLoader from '@/components/GlobalLoader';
 
 export default function AdminShell({ children }) {
   const router = useRouter();
@@ -42,11 +43,7 @@ export default function AdminShell({ children }) {
   };
 
   if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 text-sm text-slate-600 dark:bg-slate-950 dark:text-slate-300">
-        Checking admin session...
-      </div>
-    );
+    return <GlobalLoader forceVisible message="Checking admin session" hint="Preparing the control center." />;
   }
 
   return (
@@ -54,7 +51,9 @@ export default function AdminShell({ children }) {
       <div className="mx-auto max-w-[1640px] space-y-6">
         <AdminTopbar onLogout={handleLogout} />
         <div className="flex flex-col gap-6 lg:flex-row">
-          <AdminSidebar />
+          <div className="hidden lg:block">
+            <AdminSidebar />
+          </div>
           <main className="min-w-0 flex-1 space-y-6">{children}</main>
         </div>
       </div>

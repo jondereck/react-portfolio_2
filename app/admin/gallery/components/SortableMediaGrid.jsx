@@ -28,7 +28,6 @@ const SortableMediaCard = memo(function SortableMediaCard({
   isDropTarget,
   dragActive,
   onToggleSelect,
-  onDelete,
   onSetCover,
 }) {
   const {
@@ -65,7 +64,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
       ref={setNodeRef}
       style={style}
       onClick={handleCardClick}
-      className={`relative overflow-hidden rounded-lg border bg-white p-2 shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-150 will-change-transform dark:bg-slate-900 ${
+      className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-150 will-change-transform dark:bg-slate-900 ${
         isDragging
           ? 'z-20 scale-[0.985] border-slate-400/80 opacity-45 shadow-none ring-2 ring-slate-300/80 dark:border-slate-500 dark:ring-slate-700/70'
           : isDropTarget
@@ -92,8 +91,8 @@ const SortableMediaCard = memo(function SortableMediaCard({
         </>
       ) : null}
 
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <label className="inline-flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-2.5 py-2 dark:border-slate-700/80 md:px-3 md:py-3">
+        <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-600 dark:text-slate-300 md:text-xs">
           <input
             type="checkbox"
             className="h-4 w-4"
@@ -105,60 +104,55 @@ const SortableMediaCard = memo(function SortableMediaCard({
           Select
         </label>
 
-        <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300 md:text-[11px]">
           #{index + 1}
         </span>
       </div>
 
-      <div
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-        className="mb-2 aspect-[4/3] cursor-grab overflow-hidden rounded-md border border-slate-200 bg-slate-100 active:cursor-grabbing dark:border-slate-700 dark:bg-slate-800"
-      >
-        <MediaPreview
-          url={photo.imageUrl}
-          alt={photo.caption || `Media ${photo.id}`}
-          className="h-full w-full bg-slate-100 object-contain dark:bg-slate-800"
-          controls={false}
-        />
-      </div>
-
-      <p className="truncate text-xs font-medium text-slate-900 dark:text-slate-100">
-        {photo.caption || 'Untitled media'}
-      </p>
-      <p className="mt-1 text-[11px] text-slate-500">{photo.sourceType}</p>
-
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          {isCover ? (
-            <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-              Cover
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="rounded-md border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSetCover(photo.id);
-            }}
-          >
-            Set Cover
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/30"
-            onClick={(event) => {
-              event.stopPropagation();
-              onDelete(photo.id);
-            }}
-          >
-            Delete
-          </button>
+      <div className="grid gap-2 p-2.5 md:gap-3 md:p-3">
+        <div
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          className="aspect-[16/9] cursor-grab overflow-hidden rounded-xl border border-slate-200 bg-slate-100 active:cursor-grabbing touch-none dark:border-slate-700 dark:bg-slate-800 md:aspect-[4/3]"
+        >
+          <MediaPreview
+            url={photo.imageUrl}
+            alt={photo.caption || `Media ${photo.id}`}
+            className="h-full w-full bg-slate-100 object-contain dark:bg-slate-800"
+            controls={false}
+          />
         </div>
 
-      
+        <div className="min-w-0 space-y-1">
+          <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {photo.caption || 'Untitled media'}
+          </p>
+          <p className="hidden text-[11px] leading-5 text-slate-500 dark:text-slate-400 md:block">{photo.sourceType}</p>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            {isCover ? (
+              <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                Cover
+              </span>
+            ) : null}
+          </div>
+
+          {onSetCover ? (
+            <button
+              type="button"
+              className="shrink-0 rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
+              onClick={(event) => {
+                event.stopPropagation();
+                onSetCover(photo.id);
+              }}
+            >
+              Set cover
+            </button>
+          ) : null}
+        </div>
       </div>
     </article>
   );
@@ -171,14 +165,13 @@ const SortableMediaCard = memo(function SortableMediaCard({
   prevProps.isDropTarget === nextProps.isDropTarget &&
   prevProps.dragActive === nextProps.dragActive &&
   prevProps.onToggleSelect === nextProps.onToggleSelect &&
-  prevProps.onDelete === nextProps.onDelete &&
   prevProps.onSetCover === nextProps.onSetCover
 ));
 
 const OverlayCard = memo(function OverlayCard({ photo, draggingCount }) {
   if (!photo) return null;
   return (
-    <article className="relative w-[240px] scale-[1.02] overflow-hidden rounded-lg border border-slate-300/90 bg-white/95 p-2 shadow-[0_20px_60px_-22px_rgba(15,23,42,0.6)] backdrop-blur dark:border-slate-500 dark:bg-slate-900/95">
+    <article className="relative w-[200px] scale-[1.02] overflow-hidden rounded-xl border border-slate-300/90 bg-white/95 p-2 shadow-[0_20px_60px_-22px_rgba(15,23,42,0.6)] backdrop-blur dark:border-slate-500 dark:bg-slate-900/95 sm:w-[240px]">
       {draggingCount > 1 ? (
         <span className="absolute right-2 top-2 z-10 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white">
           {draggingCount}
@@ -237,7 +230,6 @@ export default function SortableMediaGrid({
   coverPhotoId,
   onItemsChange,
   onToggleSelect,
-  onDelete,
   onSetCover,
   onDragStateChange,
 }) {
@@ -340,8 +332,8 @@ export default function SortableMediaGrid({
     >
       <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
         <div
-          className={`relative grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 ${
-            dragActive ? 'rounded-xl bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:20px_20px] p-2' : ''
+          className={`relative grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 ${
+            dragActive ? 'rounded-xl bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:20px_20px] p-3' : ''
           }`}
         >
           {visibleItems.map((photo, index) => (
@@ -355,7 +347,6 @@ export default function SortableMediaGrid({
               isDropTarget={overId === photo.id && !draggedSet.has(photo.id)}
               dragActive={dragActive}
               onToggleSelect={onToggleSelect}
-              onDelete={onDelete}
               onSetCover={onSetCover}
             />
           ))}

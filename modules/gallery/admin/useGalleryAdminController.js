@@ -7,7 +7,7 @@ import {
   getPhotoDedupeKey,
   getPhotoSortTime,
 } from '@/app/admin/gallery/utils';
-import { fetchJson } from './galleryAdminShared';
+import { fetchJson, uploadFormDataWithProgress } from './galleryAdminShared';
 
 export function useGalleryAdminController() {
   const [albums, setAlbums] = useState([]);
@@ -22,9 +22,8 @@ export function useGalleryAdminController() {
   const [albumForm, setAlbumForm] = useState({ name: '', slug: '', description: '', isPublished: true });
   const [savingAlbum, setSavingAlbum] = useState(false);
 
-  const [photoForm, setPhotoForm] = useState({ imageUrl: '', caption: '', dateTaken: '' });
-  const [savingPhoto, setSavingPhoto] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   const [detailsForm, setDetailsForm] = useState({ name: '', slug: '', description: '', isPublished: true });
   const [detailsDirty, setDetailsDirty] = useState(false);
@@ -50,7 +49,7 @@ export function useGalleryAdminController() {
   );
 
   const saveState = useMemo(() => {
-    if (savingAlbum || savingPhoto || uploadingFiles || importingDrive || savingDetails || orderSaving) {
+    if (savingAlbum || uploadingFiles || importingDrive || savingDetails || orderSaving) {
       return {
         label: 'Saving...',
         tone: 'text-amber-700 bg-amber-100 dark:bg-amber-950/30 dark:text-amber-300',
@@ -68,7 +67,7 @@ export function useGalleryAdminController() {
       label: 'All changes saved',
       tone: 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300',
     };
-  }, [detailsDirty, importingDrive, orderDirty, orderSaving, savingAlbum, savingDetails, savingPhoto, uploadingFiles]);
+  }, [detailsDirty, importingDrive, orderDirty, orderSaving, savingAlbum, savingDetails, uploadingFiles]);
 
   const loadAlbums = async () => {
     setLoadingAlbums(true);
@@ -219,62 +218,65 @@ export function useGalleryAdminController() {
     }
   };
 
-  const addPhoto = async (event) => {
-    event.preventDefault();
-    if (!selectedAlbumId) {
-      toast.error('Select an album first.');
-      return;
-    }
+  const uploadFiles = async (files) => {
+    const nextFiles = Array.from(files || []);
+    if (!selectedAlbumId || nextFiles.length === 0) return;
 
-    setSavingPhoto(true);
+    setUploadingFiles(true);
+    const totalBytes = Math.max(nextFiles.reduce((sum, file) => sum + (file.size || 0), 0), 1);
+    let completedBytes = 0;
+    setUploadProgress({
+      percent: 0,
+      currentFileName: nextFiles[0]?.name ?? '',
+      currentFileIndex: 1,
+      totalFiles: nextFiles.length,
+    });
+
     try {
-      await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageUrl: photoForm.imageUrl,
-          caption: photoForm.caption || undefined,
-          dateTaken: photoForm.dateTaken ? new Date(`${photoForm.dateTaken}T00:00:00.000Z`).toISOString() : undefined,
-        }),
-      });
+      for (let index = 0; index < nextFiles.length; index += 1) {
+        const file = nextFiles[index];
+        const formData = new FormData();
+        formData.append('imageFile', file);
+        formData.append('caption', file.name);
 
-      toast.success('Media added');
-      setPhotoForm({ imageUrl: '', caption: '', dateTaken: '' });
+        await uploadFormDataWithProgress(`/api/gallery/albums/${selectedAlbumId}/photos`, formData, {
+          onProgress: ({ loaded }) => {
+            const progressBytes = completedBytes + Math.min(loaded, file.size || loaded);
+            const percent = Math.min(100, Math.round((progressBytes / totalBytes) * 100));
+
+            setUploadProgress({
+              percent,
+              currentFileName: file.name,
+              currentFileIndex: index + 1,
+              totalFiles: nextFiles.length,
+            });
+          },
+        });
+
+        completedBytes += file.size || 0;
+        setUploadProgress({
+          percent: Math.min(100, Math.round((completedBytes / totalBytes) * 100)),
+          currentFileName: file.name,
+          currentFileIndex: index + 1,
+          totalFiles: nextFiles.length,
+        });
+      }
+
+      toast.success(`${nextFiles.length} file(s) uploaded`);
       await loadPhotos(selectedAlbumId, sortMode);
       await loadAlbums();
     } catch (error) {
       toast.error(error.message);
     } finally {
-      setSavingPhoto(false);
+      setUploadingFiles(false);
+      setUploadProgress(null);
     }
   };
 
   const bulkUpload = async (event) => {
     const files = Array.from(event.target.files || []);
-    if (!selectedAlbumId || files.length === 0) return;
-
-    setUploadingFiles(true);
-    try {
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append('imageFile', file);
-        formData.append('caption', file.name);
-
-        await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos`, {
-          method: 'POST',
-          body: formData,
-        });
-      }
-
-      toast.success(`${files.length} file(s) uploaded`);
-      await loadPhotos(selectedAlbumId, sortMode);
-      await loadAlbums();
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      event.target.value = '';
-      setUploadingFiles(false);
-    }
+    await uploadFiles(files);
+    event.target.value = '';
   };
 
   const deletePhoto = async (photoId) => {
@@ -283,6 +285,29 @@ export function useGalleryAdminController() {
     try {
       await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos/${photoId}`, { method: 'DELETE' });
       toast.success('Media removed');
+      await loadPhotos(selectedAlbumId, sortMode);
+      await loadAlbums();
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const deleteSelectedPhotos = async () => {
+    const photoIds = [...selectedPhotoIds];
+    if (!selectedAlbumId || photoIds.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Delete ${photoIds.length} selected media item${photoIds.length === 1 ? '' : 's'}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      for (const photoId of photoIds) {
+        await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos/${photoId}`, { method: 'DELETE' });
+      }
+
+      clearPhotoSelection();
+      toast.success(`${photoIds.length} media item${photoIds.length === 1 ? '' : 's'} deleted`);
       await loadPhotos(selectedAlbumId, sortMode);
       await loadAlbums();
     } catch (error) {
@@ -407,6 +432,11 @@ export function useGalleryAdminController() {
     setSelectionAnchorId(photoId);
   };
 
+  const clearPhotoSelection = () => {
+    setSelectedPhotoIds([]);
+    setSelectionAnchorId(null);
+  };
+
   const moveSelection = (direction) => {
     if (selectedPhotoIds.length === 0) {
       toast.error('Select at least one media item first.');
@@ -497,10 +527,8 @@ export function useGalleryAdminController() {
     albumForm,
     setAlbumForm,
     savingAlbum,
-    photoForm,
-    setPhotoForm,
-    savingPhoto,
     uploadingFiles,
+    uploadProgress,
     detailsForm,
     setDetailsForm,
     detailsDirty,
@@ -508,6 +536,7 @@ export function useGalleryAdminController() {
     savingDetails,
     arrangePhotos,
     selectedPhotoIds,
+    setSelectedPhotoIds,
     orderDirty,
     orderSaving,
     arrangeDragState,
@@ -526,14 +555,16 @@ export function useGalleryAdminController() {
     createAlbum,
     deleteAlbum,
     saveAlbumDetails,
-    addPhoto,
+    uploadFiles,
     bulkUpload,
     deletePhoto,
+    deleteSelectedPhotos,
     setCoverPhoto,
     handleDriveImport,
     reorderChange,
     arrangeAction,
     togglePhotoSelect,
+    clearPhotoSelection,
     moveSelection,
     undoOrder,
     saveOrder,

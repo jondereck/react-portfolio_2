@@ -1,4 +1,9 @@
+'use client';
+
 import Link from 'next/link';
+import { Dialog, Transition } from '@headlessui/react';
+import { Fragment, useMemo, useState } from 'react';
+import { ArrowUpDown, Check, Filter, Search } from 'lucide-react';
 
 export const inputStyles =
   'h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950';
@@ -54,13 +59,52 @@ export async function fetchJson(url, init) {
   return data;
 }
 
+export function uploadFormDataWithProgress(url, formData, { method = 'POST', onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.open(method, url);
+    xhr.responseType = 'json';
+    xhr.withCredentials = true;
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || typeof onProgress !== 'function') {
+        return;
+      }
+
+      onProgress({
+        loaded: event.loaded,
+        total: event.total,
+        percent: event.total > 0 ? Math.round((event.loaded / event.total) * 100) : 0,
+      });
+    };
+
+    xhr.onload = () => {
+      const data = xhr.response ?? {};
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data);
+        return;
+      }
+
+      reject(new Error(data?.error || 'Request failed'));
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Request failed'));
+    };
+
+    xhr.send(formData);
+  });
+}
+
 export function GalleryPageHeader({ eyebrow, title, description, actions }) {
   return (
-    <header className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{eyebrow}</p>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{title}</h1>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500 sm:text-xs">{eyebrow}</p>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-950 dark:text-slate-50 sm:text-2xl">{title}</h1>
           <p className="max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -71,7 +115,7 @@ export function GalleryPageHeader({ eyebrow, title, description, actions }) {
 
 export function GalleryEmptyState({ title, description, action }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center dark:border-slate-700 dark:bg-slate-900/60">
+    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center dark:border-slate-700 dark:bg-slate-900/60 sm:p-8">
       <p className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</p>
       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">{description}</p>
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
@@ -87,56 +131,324 @@ export function GalleryAlbumPicker({
   emptyTitle = 'No albums yet',
   emptyDescription = 'Create an album first to unlock this page.',
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sortMode, setSortMode] = useState('newest');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const selectedAlbum = useMemo(
+    () => albums.find((album) => album.id === selectedAlbumId) ?? null,
+    [albums, selectedAlbumId],
+  );
+
+  const filteredAlbums = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+
+    const visibleAlbums = albums.filter((album) => {
+      if (statusFilter === 'published' && !album.isPublished) {
+        return false;
+      }
+
+      if (statusFilter === 'draft' && album.isPublished) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      const haystack = [album.name, album.slug, album.description]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(normalizedQuery);
+    });
+
+    return [...visibleAlbums].sort((left, right) => {
+      const leftCount = left._count?.photos ?? 0;
+      const rightCount = right._count?.photos ?? 0;
+      const leftCreatedAt = new Date(left.createdAt ?? 0).getTime();
+      const rightCreatedAt = new Date(right.createdAt ?? 0).getTime();
+      const leftName = (left.name ?? '').toLowerCase();
+      const rightName = (right.name ?? '').toLowerCase();
+
+      switch (sortMode) {
+        case 'oldest':
+          return leftCreatedAt - rightCreatedAt;
+        case 'az':
+          return leftName.localeCompare(rightName);
+        case 'media':
+          if (rightCount !== leftCount) {
+            return rightCount - leftCount;
+          }
+          return rightCreatedAt - leftCreatedAt;
+        case 'newest':
+        default:
+          if (rightCreatedAt !== leftCreatedAt) {
+            return rightCreatedAt - leftCreatedAt;
+          }
+          return leftName.localeCompare(rightName);
+      }
+    });
+  }, [albums, query, sortMode, statusFilter]);
+
+  const selectedMediaCount = selectedAlbum?._count?.photos ?? 0;
+
   return (
-    <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div>
-        <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-50">Albums</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Select the album that this workspace should operate on.</p>
-      </div>
-
-      {loadingAlbums ? <p className="text-sm text-slate-500 dark:text-slate-400">Loading albums...</p> : null}
-
-      {!loadingAlbums && albums.length === 0 ? (
-        <GalleryEmptyState title={emptyTitle} description={emptyDescription} />
-      ) : (
-        <div className="space-y-2">
-          {albums.map((album) => {
-            const isActive = selectedAlbumId === album.id;
-
-            return (
-              <button
-                key={album.id}
-                type="button"
-                className={`w-full rounded-xl border px-3 py-3 text-left transition ${
-                  isActive
-                    ? 'border-slate-900 bg-slate-100 dark:border-slate-100 dark:bg-slate-800'
-                    : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
-                }`}
-                onClick={() => onSelectAlbum(album.id)}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{album.name}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{album._count?.photos ?? 0} media items</p>
-                  </div>
-                  <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                    {album.isPublished ? 'Published' : 'Draft'}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
+    <>
+      <aside className="space-y-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-950 dark:text-slate-50">Current album</h2>
+            <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Keep the active album visible, then switch only when needed.
+            </p>
+          </div>
+          <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+            Scalable
+          </span>
         </div>
-      )}
-    </aside>
+
+        {loadingAlbums ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading albums...</p>
+        ) : selectedAlbum ? (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedAlbum.name}</p>
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {selectedMediaCount} media item{selectedMediaCount === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                  {selectedAlbum.isPublished ? 'Published' : 'Draft'}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                <p className="truncate">
+                  <span className="font-medium text-slate-700 dark:text-slate-200">Slug:</span>{' '}
+                  {selectedAlbum.slug ? selectedAlbum.slug : 'No slug'}
+                </p>
+                {selectedAlbum.description ? (
+                  <p className="line-clamp-2">
+                    <span className="font-medium text-slate-700 dark:text-slate-200">Description:</span> {selectedAlbum.description}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
+              <button
+                type="button"
+                className={`${buttonStyles} w-full sm:w-auto`}
+                onClick={() => setIsOpen(true)}
+              >
+                Change album
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-10 w-full items-center justify-center rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
+                onClick={() => {
+                  setQuery('');
+                  setStatusFilter('all');
+                  setSortMode('newest');
+                  setIsOpen(true);
+                }}
+              >
+                Browse all
+              </button>
+            </div>
+          </div>
+        ) : (
+          <GalleryEmptyState
+            title={emptyTitle}
+            description={emptyDescription}
+            action={
+              <button type="button" className={buttonStyles} onClick={() => setIsOpen(true)}>
+                Choose album
+              </button>
+            }
+          />
+        )}
+      </aside>
+
+      <Transition show={isOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={setIsOpen}>
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-200"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-150"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto p-0 sm:p-6">
+            <div className="flex min-h-full items-center justify-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-200"
+                enterFrom="opacity-0 scale-95 translate-y-2"
+                enterTo="opacity-100 scale-100 translate-y-0"
+                leave="ease-in duration-150"
+                leaveFrom="opacity-100 scale-100 translate-y-0"
+                leaveTo="opacity-0 scale-95 translate-y-2"
+              >
+                <Dialog.Panel className="h-[100dvh] w-full overflow-hidden rounded-none border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[min(42rem,calc(100dvh-3rem))] sm:max-w-4xl sm:rounded-2xl">
+                  <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Album picker</p>
+                      <Dialog.Title className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
+                        Search and switch albums
+                      </Dialog.Title>
+                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        Filter by name, slug, or description, then switch without scrolling through a long list.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                      onClick={() => setIsOpen(false)}
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 border-b border-slate-200 px-4 py-4 dark:border-slate-800 sm:grid-cols-2 sm:gap-4 sm:px-5 lg:grid-cols-3">
+                    <label className="relative block">
+                      <Filter className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                      <select
+                        className="h-11 w-full appearance-none rounded-md border border-slate-300 bg-white pl-10 pr-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+                        value={statusFilter}
+                        onChange={(event) => setStatusFilter(event.target.value)}
+                        >
+                        <option value="all">All statuses</option>
+                        <option value="published">Published</option>
+                        <option value="draft">Draft</option>
+                      </select>
+                    </label>
+
+                    <label className="relative block">
+                      <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                      <select
+                        className="h-11 w-full appearance-none rounded-md border border-slate-300 bg-white pl-10 pr-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+                        value={sortMode}
+                        onChange={(event) => setSortMode(event.target.value)}
+                      >
+                        <option value="newest">Sort by newest</option>
+                        <option value="oldest">Sort by oldest</option>
+                        <option value="az">Sort A-Z</option>
+                        <option value="media">Sort by most media</option>
+                      </select>
+                    </label>
+
+                    <label className="relative block sm:col-span-2 lg:col-span-3">
+                      <span className="sr-only">Search albums</span>
+                      <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+                      <input
+                        className="h-11 w-full rounded-md border border-slate-300 bg-white pl-10 pr-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+                        placeholder="Search name, slug, or description"
+                        value={query}
+                        onChange={(event) => setQuery(event.target.value)}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                    <p>
+                      {filteredAlbums.length} result{filteredAlbums.length === 1 ? '' : 's'}
+                    </p>
+                    <button
+                      type="button"
+                      className="inline-flex w-full items-center justify-center rounded-md border border-slate-300 px-3 py-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 sm:w-auto sm:border-0 sm:px-0 sm:py-0"
+                      onClick={() => {
+                        setQuery('');
+                        setStatusFilter('all');
+                        setSortMode('newest');
+                      }}
+                    >
+                      Reset filters
+                    </button>
+                  </div>
+
+                  <div className="max-h-[calc(100dvh-14rem)] overflow-auto p-3 sm:max-h-[34rem]">
+                    {!loadingAlbums && albums.length === 0 ? (
+                      <GalleryEmptyState title={emptyTitle} description={emptyDescription} />
+                    ) : filteredAlbums.length === 0 ? (
+                      <GalleryEmptyState
+                        title="No matching albums"
+                        description="Try a different search term or remove the current filters."
+                      />
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredAlbums.map((album) => {
+                          const isActive = selectedAlbumId === album.id;
+                          const mediaCount = album._count?.photos ?? 0;
+
+                          return (
+                            <button
+                              key={album.id}
+                              type="button"
+                              className={`grid w-full gap-3 rounded-xl border px-4 py-3 text-left transition sm:flex sm:items-center sm:justify-between ${
+                                isActive
+                                  ? 'border-slate-900 bg-slate-100 dark:border-slate-100 dark:bg-slate-800'
+                                  : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                              }`}
+                              onClick={() => {
+                                onSelectAlbum(album.id);
+                                setIsOpen(false);
+                              }}
+                            >
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{album.name}</p>
+                                  {isActive ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white dark:bg-slate-100 dark:text-slate-950">
+                                      <Check className="size-3" />
+                                      Selected
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-1 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+                                  {album.slug ? `Slug: ${album.slug}` : 'No slug'}
+                                  {album.description ? ` · ${album.description}` : ''}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+                                <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                  {mediaCount} media
+                                </span>
+                                <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                  {album.isPublished ? 'Published' : 'Draft'}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+    </>
   );
 }
 
 export function GalleryPanelCard({ title, description, children, className = '' }) {
   return (
-    <section className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}>
+    <section className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5 ${className}`}>
       <div className="mb-4 space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-50">{title}</h2>
+        <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50 sm:text-lg">{title}</h2>
         {description ? <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p> : null}
       </div>
       {children}

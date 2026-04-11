@@ -82,7 +82,7 @@ export default async function GalleryAdminPage() {
         </Link>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
+      <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <AdminMetricCard
           label="Albums"
           value={totalAlbums}
@@ -100,7 +100,7 @@ export default async function GalleryAdminPage() {
         />
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {galleryOverviewCards.map((card) => (
           <AdminOverviewCard key={card.title} {...card} />
         ))}
