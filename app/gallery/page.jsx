@@ -39,6 +39,28 @@ const getPlayableMediaUrl = (value) => {
   return query ? `${transformed}?${query}` : transformed;
 };
 
+const getVideoPosterUrl = (value) => {
+  if (!isVideoUrl(value) || !value.includes('res.cloudinary.com') || !value.includes('/video/upload/')) {
+    return '';
+  }
+
+  const [withoutQuery, query] = value.split('?');
+  const posterBase = withoutQuery
+    .replace('/video/upload/', '/video/upload/so_0,f_jpg,q_auto/')
+    .replace(/\.(mp4|mov|webm|mkv)$/i, '.jpg');
+
+  return query ? `${posterBase}?${query}` : posterBase;
+};
+
+const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
+  const posterSrc = getVideoPosterUrl(src);
+  if (!posterSrc) {
+    return <div className={fallbackClassName} />;
+  }
+
+  return <img src={posterSrc} alt={alt} className={className} />;
+};
+
 const normalizeLabel = (album) => {
   if (typeof album?.description === 'string' && album.description.trim()) {
     const firstChunk = album.description.split(/[\.|·]/)[0]?.trim();
@@ -214,14 +236,11 @@ export default function GalleryPage() {
             transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
           >
             {activeIsVideo ? (
-              <video
-                src={getPlayableMediaUrl(activeCover)}
+              <VideoPoster
+                src={activeCover}
+                alt={activeAlbum?.name || 'Active album'}
                 className="h-full w-full object-cover"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
+                fallbackClassName="h-full w-full bg-[linear-gradient(135deg,#1e293b,#334155,#0f172a)]"
               />
             ) : (
               <img
@@ -330,14 +349,11 @@ export default function GalleryPage() {
                           aria-label={`Show album ${album.name}`}
                         >
                           {coverImage ? coverIsVideo ? (
-                            <video
-                              src={getPlayableMediaUrl(coverImage)}
+                            <VideoPoster
+                              src={coverImage}
+                              alt={album.name}
                               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                              muted
-                              loop
-                              autoPlay
-                              playsInline
-                              preload="metadata"
+                              fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]"
                             />
                           ) : (
                             <img

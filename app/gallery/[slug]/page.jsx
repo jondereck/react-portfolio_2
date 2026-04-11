@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -38,11 +38,39 @@ const getPlayableMediaUrl = (value) => {
   if (!value.includes('res.cloudinary.com') || !value.includes('/video/upload/')) return value;
 
   const [withoutQuery, query] = value.split('?');
-  const transformed = withoutQuery
-    .replace('/video/upload/', '/video/upload/f_mp4,vc_h264,ac_aac,q_auto/')
-    .replace(/\.(mov|mkv|webm)$/i, '.mp4');
+  const uploadToken = '/video/upload/';
+  const uploadIndex = withoutQuery.indexOf(uploadToken);
+  const afterUpload = uploadIndex >= 0 ? withoutQuery.slice(uploadIndex + uploadToken.length) : '';
+  const firstPathSegment = afterUpload.split('/')[0] || '';
+  const hasTransformationSegment = firstPathSegment.includes(',');
+  const transformedBase = hasTransformationSegment
+    ? withoutQuery
+    : withoutQuery.replace(uploadToken, `${uploadToken}f_mp4,vc_h264,ac_aac,q_auto/`);
+  const transformed = transformedBase.replace(/\.(mov|mkv|webm)$/i, '.mp4');
 
   return query ? `${transformed}?${query}` : transformed;
+};
+
+const getVideoPosterUrl = (value) => {
+  if (!isVideoUrl(value) || !value.includes('res.cloudinary.com') || !value.includes('/video/upload/')) {
+    return '';
+  }
+
+  const [withoutQuery, query] = value.split('?');
+  const posterBase = withoutQuery
+    .replace('/video/upload/', '/video/upload/so_0,f_jpg,q_auto/')
+    .replace(/\.(mp4|mov|webm|mkv)$/i, '.jpg');
+
+  return query ? `${posterBase}?${query}` : posterBase;
+};
+
+const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
+  const posterSrc = getVideoPosterUrl(src);
+  if (!posterSrc) {
+    return <div className={fallbackClassName} />;
+  }
+
+  return <img src={posterSrc} alt={alt} className={className} />;
 };
 
 const densityGridMap = {
@@ -51,6 +79,59 @@ const densityGridMap = {
   large: 'grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
 };
 const timerPresetMs = [2000, 5000, 10000, 15000, 20000, 30000];
+const splitPanelDefaults = { filter: 'photos', index: 0, isPlaying: false, delayMs: 5000, loop: false };
+const getSplitPanelFilter = (panelId) => (panelId === 'left' ? 'photos' : 'videos');
+
+const mediaMatchesFilter = (item, filter) => {
+  if (!item) return false;
+  if (filter === 'photos') return !isVideoUrl(item.imageUrl);
+  if (filter === 'videos') return isVideoUrl(item.imageUrl);
+  return true;
+};
+
+const findNextIndexByType = (startIndex, photos, matcher, options = {}) => {
+  const { wrap = true } = options;
+  if (!Array.isArray(photos) || photos.length === 0) return -1;
+  const size = photos.length;
+  let attempts = wrap ? size : Math.max(0, size - startIndex - 1);
+  let cursor = startIndex;
+
+  while (attempts > 0) {
+    cursor += 1;
+    if (cursor >= size) {
+      if (!wrap) return -1;
+      cursor = 0;
+    }
+    if (matcher(photos[cursor], cursor)) {
+      return cursor;
+    }
+    attempts -= 1;
+  }
+
+  return -1;
+};
+
+const findPrevIndexByType = (startIndex, photos, matcher, options = {}) => {
+  const { wrap = true } = options;
+  if (!Array.isArray(photos) || photos.length === 0) return -1;
+  const size = photos.length;
+  let attempts = wrap ? size : Math.max(0, startIndex);
+  let cursor = startIndex;
+
+  while (attempts > 0) {
+    cursor -= 1;
+    if (cursor < 0) {
+      if (!wrap) return -1;
+      cursor = size - 1;
+    }
+    if (matcher(photos[cursor], cursor)) {
+      return cursor;
+    }
+    attempts -= 1;
+  }
+
+  return -1;
+};
 
 export default function AlbumDetailPage({ params }) {
   const router = useRouter();
@@ -68,16 +149,17 @@ export default function AlbumDetailPage({ params }) {
   const [customDelaySeconds, setCustomDelaySeconds] = useState('12');
   const [hideUI, setHideUI] = useState(false);
   const [viewerMode, setViewerMode] = useState('focus');
-  const [isMuted, setIsMuted] = useState(true);
-  const [splitPanelFilter, setSplitPanelFilter] = useState('all');
-  const [splitPanelItemId, setSplitPanelItemId] = useState('');
-  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
-  const [activeMediaLoading, setActiveMediaLoading] = useState(false);
+  const [splitPanels, setSplitPanels] = useState({
+    left: { ...splitPanelDefaults },
+    right: { ...splitPanelDefaults, filter: 'videos', isPlaying: true }
+  });
+  const [mediaLoadingByPanel, setMediaLoadingByPanel] = useState({});
   const [mediaErrors, setMediaErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const activeVideoRef = useRef(null);
-  const videoProgressRef = useRef({});
+  const splitLeftVideoRef = useRef(null);
+  const splitRightVideoRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0, active: false });
 
   useEffect(() => {
@@ -192,19 +274,21 @@ export default function AlbumDetailPage({ params }) {
   const closeViewer = useCallback(() => {
     setViewerOpen(false);
     setIsPlaying(false);
-    setAutoplayBlocked(false);
-    setActiveMediaLoading(false);
+    setMediaLoadingByPanel({});
     setHideUI(false);
   }, []);
 
   const openViewerAt = useCallback((index, options = {}) => {
-    const { autoplay = false, mode = 'focus' } = options;
+    const { mode = 'focus' } = options;
     setActiveIndex(index);
     setViewerMode(mode);
     setViewerOpen(true);
-    setIsPlaying(autoplay);
-    setAutoplayBlocked(false);
-    setActiveMediaLoading(true);
+    setIsPlaying(mode === 'slideshow');
+    setSplitPanels({
+      left: { ...splitPanelDefaults, index },
+      right: { ...splitPanelDefaults, filter: 'videos', isPlaying: true }
+    });
+    setMediaLoadingByPanel({ primary: true });
     setHideUI(false);
   }, []);
 
@@ -258,22 +342,191 @@ export default function AlbumDetailPage({ params }) {
 
   const activeItem = viewerOpen ? filteredPhotos[activeIndex] : null;
   const activeItemIsVideo = activeItem ? isVideoUrl(activeItem.imageUrl) : false;
-  const splitCandidates = viewerOpen
-    ? filteredPhotos.filter((item, index) => {
-        if (index === activeIndex) return false;
-        if (splitPanelFilter === 'photos') return !isVideoUrl(item.imageUrl);
-        if (splitPanelFilter === 'videos') return isVideoUrl(item.imageUrl);
-        return true;
-      })
+  const activePlayableSrc = activeItemIsVideo ? getPlayableMediaUrl(activeItem?.imageUrl) : activeItem?.imageUrl || '';
+  const activeVideoSources = activeItemIsVideo
+    ? Array.from(new Set([activeItem?.imageUrl, activePlayableSrc].filter(Boolean)))
     : [];
-  const secondaryItem = splitPanelItemId
-    ? splitCandidates.find((item) => item.id === splitPanelItemId) || splitCandidates[0] || null
-    : splitCandidates[0] || null;
-  const showSplitMode = viewerMode === 'split' && !!secondaryItem;
+  const activeMediaKey = activeItem
+    ? `primary:${activeItem.id}:${activeItemIsVideo ? activeVideoSources.join('|') : activePlayableSrc}`
+    : '';
   const isPresetDelay = timerPresetMs.includes(delayMs);
 
+  const getPanelMediaKey = useCallback((panelId, item) => {
+    if (!item) return `${panelId}:none`;
+    return `${panelId}:${item.id}`;
+  }, []);
+
+  const setPanelLoading = useCallback((panelId, isLoading) => {
+    setMediaLoadingByPanel((current) => {
+      const next = { ...current };
+      if (isLoading) {
+        next[panelId] = true;
+      } else {
+        delete next[panelId];
+      }
+      return next;
+    });
+  }, []);
+
+  const clearPanelMediaError = useCallback((panelId, item) => {
+    if (!item) return;
+    const key = getPanelMediaKey(panelId, item);
+    setMediaErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }, [getPanelMediaKey]);
+
+  const markPanelMediaError = useCallback((panelId, item, eventName, mediaElement, finalVideoSrc = '') => {
+    if (!item) return;
+    const mediaError = mediaElement?.error
+      ? {
+          code: mediaElement.error.code,
+          message: mediaElement.error.message || '',
+          networkState: mediaElement.networkState,
+          readyState: mediaElement.readyState
+        }
+      : null;
+    if (mediaError?.code === 1) {
+      return;
+    }
+    const key = getPanelMediaKey(panelId, item);
+    setMediaErrors((current) => ({ ...current, [key]: true }));
+    setPanelLoading(panelId, false);
+    console.warn('[GalleryViewer] Media failed to load', {
+      panelId,
+      eventName,
+      mediaId: item.id,
+      finalVideoSrc,
+      mediaError
+    });
+  }, [getPanelMediaKey, setPanelLoading]);
+
+  const markPanelMediaSuccess = useCallback((panelId, item) => {
+    clearPanelMediaError(panelId, item);
+    setPanelLoading(panelId, false);
+  }, [clearPanelMediaError, setPanelLoading]);
+
+  const buildSplitCandidates = useCallback((filter, excludeIndex) => {
+    if (!Array.isArray(filteredPhotos) || filteredPhotos.length === 0) return [];
+    const matched = filteredPhotos
+      .map((item, index) => ({ item, index }))
+      .filter(({ item, index }) => mediaMatchesFilter(item, filter) && index !== excludeIndex)
+      .map(({ index }) => index);
+    if (matched.length > 0) return matched;
+    return filteredPhotos
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => mediaMatchesFilter(item, filter))
+      .map(({ index }) => index);
+  }, [filteredPhotos]);
+
+  const splitResolved = useMemo(() => {
+    if (!viewerOpen || viewerMode !== 'split' || filteredPhotos.length === 0) {
+      return null;
+    }
+
+    const leftState = { ...(splitPanels.left || splitPanelDefaults), filter: getSplitPanelFilter('left') };
+    const rightState = { ...(splitPanels.right || splitPanelDefaults), filter: getSplitPanelFilter('right') };
+
+    const leftCandidatesInitial = buildSplitCandidates(leftState.filter, rightState.index);
+    let leftIndex = leftCandidatesInitial.includes(leftState.index)
+      ? leftState.index
+      : (leftCandidatesInitial[0] ?? activeIndex ?? 0);
+
+    const rightCandidatesInitial = buildSplitCandidates(rightState.filter, leftIndex);
+    let rightIndex = rightCandidatesInitial.includes(rightState.index)
+      ? rightState.index
+      : (rightCandidatesInitial[0] ?? 0);
+
+    const leftCandidates = buildSplitCandidates(leftState.filter, rightIndex);
+    if (leftCandidates.length > 0 && !leftCandidates.includes(leftIndex)) {
+      leftIndex = leftCandidates[0];
+    }
+
+    const rightCandidates = buildSplitCandidates(rightState.filter, leftIndex);
+    if (rightCandidates.length > 0 && !rightCandidates.includes(rightIndex)) {
+      rightIndex = rightCandidates[0];
+    }
+
+    const leftItem = filteredPhotos[leftIndex] || null;
+    const rightItem = filteredPhotos[rightIndex] || null;
+
+    return {
+      left: {
+        ...leftState,
+        index: leftIndex,
+        candidates: leftCandidates,
+        item: leftItem
+      },
+      right: {
+        ...rightState,
+        index: rightIndex,
+        candidates: rightCandidates,
+        item: rightItem
+      }
+    };
+  }, [viewerOpen, viewerMode, filteredPhotos, splitPanels, buildSplitCandidates, activeIndex]);
+
+  const leftSplitPanel = splitResolved?.left || null;
+  const rightSplitPanel = splitResolved?.right || null;
+  const leftSplitItem = leftSplitPanel?.item || null;
+  const rightSplitItem = rightSplitPanel?.item || null;
+  const leftSplitIsVideo = leftSplitItem ? isVideoUrl(leftSplitItem.imageUrl) : false;
+  const rightSplitIsVideo = rightSplitItem ? isVideoUrl(rightSplitItem.imageUrl) : false;
+  const showSplitMode = viewerMode === 'split' && !!leftSplitItem && !!rightSplitItem;
+
+  const getMediaSources = useCallback((item) => {
+    if (!item) return { isVideo: false, playableSrc: '', sources: [], key: '' };
+    const isVideo = isVideoUrl(item.imageUrl);
+    const playableSrc = isVideo ? getPlayableMediaUrl(item.imageUrl) : item.imageUrl;
+    const sources = isVideo ? Array.from(new Set([item.imageUrl, playableSrc].filter(Boolean))) : [];
+    const key = `${item.id}:${isVideo ? sources.join('|') : playableSrc}`;
+    return { isVideo, playableSrc, sources, key };
+  }, []);
+
+  const leftSplitMedia = getMediaSources(leftSplitItem);
+  const rightSplitMedia = getMediaSources(rightSplitItem);
+
+  const moveSplitPanel = useCallback((panelId, direction) => {
+    const isNext = direction === 'next';
+    setSplitPanels((current) => {
+      const target = current[panelId];
+      const otherId = panelId === 'left' ? 'right' : 'left';
+      const other = current[otherId];
+      const candidates = buildSplitCandidates(getSplitPanelFilter(panelId), other.index);
+      if (candidates.length === 0) return current;
+      const candidateSet = new Set(candidates);
+      const matcher = (_item, idx) => candidateSet.has(idx);
+      const nextIndex = isNext
+        ? findNextIndexByType(target.index, filteredPhotos, matcher, { wrap: true })
+        : findPrevIndexByType(target.index, filteredPhotos, matcher, { wrap: true });
+      const resolvedIndex = nextIndex >= 0 ? nextIndex : candidates[0];
+      return {
+        ...current,
+        [panelId]: {
+          ...target,
+          index: resolvedIndex
+        }
+      };
+    });
+  }, [buildSplitCandidates, filteredPhotos]);
+
+  const goToNextVideo = useCallback(() => {
+    setActiveIndex((current) => {
+      const nextVideoIndex = findNextIndexByType(
+        current,
+        filteredPhotos,
+        (item) => isVideoUrl(item?.imageUrl),
+        { wrap: true }
+      );
+      return nextVideoIndex >= 0 ? nextVideoIndex : current;
+    });
+  }, [filteredPhotos]);
+
   useEffect(() => {
-    if (!viewerOpen || !isPlaying || !activeItem || activeItemIsVideo) {
+    if (!viewerOpen || !isPlaying || !activeItem || activeItemIsVideo || viewerMode === 'split') {
       return;
     }
 
@@ -282,48 +535,102 @@ export default function AlbumDetailPage({ params }) {
     }, delayMs);
 
     return () => window.clearTimeout(timeout);
-  }, [viewerOpen, isPlaying, activeItem, activeItemIsVideo, delayMs, goToNext]);
+  }, [viewerOpen, isPlaying, activeItem, activeItemIsVideo, delayMs, goToNext, viewerMode]);
 
   useEffect(() => {
-    if (!viewerOpen || !activeItem || !activeItemIsVideo) {
-      return;
+    if (!viewerOpen || viewerMode !== 'split' || !leftSplitPanel || !leftSplitItem) return;
+    if (leftSplitPanel.index !== activeIndex) {
+      setActiveIndex(leftSplitPanel.index);
     }
+  }, [viewerOpen, viewerMode, leftSplitPanel, leftSplitItem, activeIndex]);
 
-    const player = activeVideoRef.current;
-    if (!player) {
-      return;
-    }
-
-    if (isPlaying) {
-      const playPromise = player.play();
-      if (playPromise && typeof playPromise.catch === 'function') {
-        playPromise.catch(() => {
-          setAutoplayBlocked(true);
-          setIsPlaying(false);
-        });
+  useEffect(() => {
+    if (!viewerOpen || viewerMode !== 'split' || !splitResolved) return;
+    setSplitPanels((current) => {
+      let changed = false;
+      const next = { ...current };
+      if (current.left.index !== splitResolved.left.index) {
+        next.left = { ...current.left, index: splitResolved.left.index };
+        changed = true;
       }
-    }
-  }, [viewerOpen, activeItem, activeItemIsVideo, isPlaying]);
+      if (current.right.index !== splitResolved.right.index) {
+        next.right = { ...current.right, index: splitResolved.right.index };
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [viewerOpen, viewerMode, splitResolved]);
 
   useEffect(() => {
     if (!viewerOpen || viewerMode !== 'split') return;
-    if (splitCandidates.length === 0) {
-      setSplitPanelItemId('');
-      return;
-    }
-    const stillValid = splitCandidates.some((item) => item.id === splitPanelItemId);
-    if (!stillValid) {
-      setSplitPanelItemId(splitCandidates[0].id);
-    }
-  }, [viewerOpen, viewerMode, splitCandidates, splitPanelItemId]);
+    setSplitPanels((current) => {
+      if (current.left.index === activeIndex) return current;
+      return {
+        ...current,
+        left: { ...current.left, index: activeIndex }
+      };
+    });
+  }, [viewerOpen, viewerMode, activeIndex]);
 
   useEffect(() => {
-    if (!viewerOpen || !activeItem) {
+    if (!viewerOpen || !activeItem || viewerMode === 'split') return;
+    setPanelLoading('primary', true);
+    clearPanelMediaError('primary', activeItem);
+  }, [viewerOpen, viewerMode, activeItem?.id, activePlayableSrc, setPanelLoading, clearPanelMediaError, activeItem]);
+
+  useEffect(() => {
+    if (!viewerOpen || viewerMode !== 'split') return;
+    if (leftSplitItem) {
+      setPanelLoading('left', true);
+      clearPanelMediaError('left', leftSplitItem);
+    }
+    if (rightSplitItem) {
+      setPanelLoading('right', true);
+      clearPanelMediaError('right', rightSplitItem);
+    }
+  }, [viewerOpen, viewerMode, leftSplitItem?.id, rightSplitItem?.id, leftSplitMedia.key, rightSplitMedia.key, setPanelLoading, clearPanelMediaError, leftSplitItem, rightSplitItem]);
+
+  useEffect(() => {
+    if (!viewerOpen || !activeItemIsVideo || viewerMode === 'split') return undefined;
+    const player = activeVideoRef.current;
+    return () => {
+      if (!player) return;
+      player.pause();
+      player.currentTime = 0;
+    };
+  }, [viewerOpen, activeItem?.id, activeItemIsVideo, viewerMode]);
+
+  useEffect(() => {
+    if (!viewerOpen || viewerMode !== 'split') return undefined;
+    const leftPlayer = splitLeftVideoRef.current;
+    const rightPlayer = splitRightVideoRef.current;
+    return () => {
+      if (leftPlayer) {
+        leftPlayer.pause();
+        leftPlayer.currentTime = 0;
+      }
+      if (rightPlayer) {
+        rightPlayer.pause();
+        rightPlayer.currentTime = 0;
+      }
+    };
+  }, [viewerOpen, viewerMode, leftSplitItem?.id, rightSplitItem?.id]);
+
+  useEffect(() => {
+    if (!viewerOpen || viewerMode !== 'split' || !leftSplitPanel?.isPlaying || !leftSplitItem || leftSplitIsVideo) {
       return;
     }
-    setActiveMediaLoading(true);
-    setAutoplayBlocked(false);
-  }, [viewerOpen, activeItem?.id]);
+    const timeout = window.setTimeout(() => moveSplitPanel('left', 'next'), leftSplitPanel.delayMs);
+    return () => window.clearTimeout(timeout);
+  }, [viewerOpen, viewerMode, leftSplitPanel, leftSplitItem, leftSplitIsVideo, moveSplitPanel]);
+
+  useEffect(() => {
+    if (!viewerOpen || viewerMode !== 'split' || !rightSplitPanel?.isPlaying || !rightSplitItem || rightSplitIsVideo) {
+      return;
+    }
+    const timeout = window.setTimeout(() => moveSplitPanel('right', 'next'), rightSplitPanel.delayMs);
+    return () => window.clearTimeout(timeout);
+  }, [viewerOpen, viewerMode, rightSplitPanel, rightSplitItem, rightSplitIsVideo, moveSplitPanel]);
 
   const handleTouchStart = (event) => {
     if (!viewerOpen) return;
@@ -367,14 +674,11 @@ export default function AlbumDetailPage({ params }) {
         <section className="relative overflow-hidden rounded-3xl border border-white/15 bg-slate-900/70 shadow-2xl shadow-slate-950/70">
           {albumCover ? (
             albumCoverIsVideo ? (
-              <video
-                src={getPlayableMediaUrl(albumCover)}
+              <VideoPoster
+                src={albumCover}
+                alt={album?.name || 'Album cover'}
                 className="h-[40vh] min-h-[250px] w-full object-cover"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
+                fallbackClassName="h-[40vh] min-h-[250px] w-full bg-[linear-gradient(135deg,#1e293b,#334155,#0f172a)]"
               />
             ) : (
               <img
@@ -493,7 +797,7 @@ export default function AlbumDetailPage({ params }) {
             </select>
             <button
               type="button"
-              onClick={() => openViewerAt(0, { autoplay: true, mode: 'slideshow' })}
+              onClick={() => openViewerAt(0, { mode: 'slideshow' })}
               disabled={filteredPhotos.length === 0}
               className="h-10 w-full rounded-md border border-emerald-300/50 bg-emerald-500/20 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
             >
@@ -521,14 +825,11 @@ export default function AlbumDetailPage({ params }) {
             >
               <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
                 {isVideoUrl(photo.imageUrl) ? (
-                  <video
-                    src={getPlayableMediaUrl(photo.imageUrl)}
+                  <VideoPoster
+                    src={photo.imageUrl}
+                    alt={photo.caption || `Video ${photo.id}`}
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    preload="metadata"
+                    fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#1e293b,#334155,#0f172a)]"
                   />
                 ) : (
                   <img src={photo.imageUrl} alt={photo.caption || `Photo ${photo.id}`} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -564,7 +865,9 @@ export default function AlbumDetailPage({ params }) {
               }`}
             >
               <p className="truncate">
-                {activeIndex + 1} / {filteredPhotos.length} · {activeItem.caption || 'Untitled media'}
+                {activeItemIsVideo
+                  ? (activeItem.caption || 'Untitled media')
+                  : `${activeIndex + 1} / ${filteredPhotos.length} · ${activeItem.caption || 'Untitled media'}`}
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -597,142 +900,178 @@ export default function AlbumDetailPage({ params }) {
                   <div className={`relative overflow-hidden ${hideUI ? 'rounded-none border border-transparent bg-black' : 'rounded-lg border border-white/10 bg-black/70'}`}>
                     {!hideUI ? (
                       <span className="absolute left-2 top-2 z-10 rounded-full border border-white/20 bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
-                        Active
+                        Left Panel
                       </span>
                     ) : null}
-                    {activeItemIsVideo ? (
+                    {leftSplitMedia.isVideo ? (
                       <video
-                        key={activeItem.id}
-                        ref={activeVideoRef}
-                        src={getPlayableMediaUrl(activeItem.imageUrl)}
+                        key={`left:${leftSplitMedia.key}`}
+                        ref={splitLeftVideoRef}
                         className="h-full w-full object-contain"
                         controls
-                        muted={isMuted}
-                        autoPlay={isPlaying}
                         playsInline
                         preload="metadata"
-                        onLoadedMetadata={(event) => {
-                          const savedPosition = videoProgressRef.current[activeItem.id];
-                          if (
-                            typeof savedPosition === 'number' &&
-                            savedPosition > 0 &&
-                            savedPosition < event.currentTarget.duration - 0.2
-                          ) {
-                            event.currentTarget.currentTime = savedPosition;
+                        poster={getVideoPosterUrl(leftSplitItem?.imageUrl) || undefined}
+                        crossOrigin="anonymous"
+                        onLoadedMetadata={() => {
+                          markPanelMediaSuccess('left', leftSplitItem);
+                        }}
+                        onLoadedData={() => {
+                          markPanelMediaSuccess('left', leftSplitItem);
+                        }}
+                        onCanPlay={() => {
+                          markPanelMediaSuccess('left', leftSplitItem);
+                        }}
+                        onEnded={(event) => {
+                          if (leftSplitPanel?.loop) {
+                            event.currentTarget.currentTime = 0;
+                            event.currentTarget.play().catch(() => {});
+                            return;
                           }
-                          setActiveMediaLoading(false);
+                          moveSplitPanel('left', 'next');
                         }}
-                        onTimeUpdate={(event) => {
-                          videoProgressRef.current[activeItem.id] = event.currentTarget.currentTime;
+                        onError={(event) => {
+                          markPanelMediaError('left', leftSplitItem, 'onError', event.currentTarget, leftSplitMedia.playableSrc);
                         }}
-                        onEnded={() => {
-                          videoProgressRef.current[activeItem.id] = 0;
-                          if (isPlaying) {
-                            goToNext();
-                          }
-                        }}
-                        onError={() => {
-                          setMediaErrors((current) => ({ ...current, [activeItem.id]: true }));
-                          setActiveMediaLoading(false);
-                        }}
-                      />
+                      >
+                        {leftSplitMedia.sources.map((src) => (
+                          <source key={src} src={src} />
+                        ))}
+                      </video>
                     ) : (
                       <img
-                        src={activeItem.imageUrl}
-                        alt={activeItem.caption || `Photo ${activeItem.id}`}
+                        key={`left:${leftSplitMedia.key}`}
+                        src={leftSplitItem?.imageUrl}
+                        alt={leftSplitItem?.caption || `Photo ${leftSplitItem?.id}`}
                         className="h-full w-full object-contain"
-                        onLoad={() => setActiveMediaLoading(false)}
-                        onError={() => {
-                          setMediaErrors((current) => ({ ...current, [activeItem.id]: true }));
-                          setActiveMediaLoading(false);
+                        onLoad={() => {
+                          markPanelMediaSuccess('left', leftSplitItem);
+                        }}
+                        onError={(event) => {
+                          markPanelMediaError('left', leftSplitItem, 'onError', event.currentTarget, leftSplitMedia.playableSrc);
                         }}
                       />
                     )}
+                    {mediaErrors[getPanelMediaKey('left', leftSplitItem)] ? (
+                      <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-4 text-center text-sm text-rose-200">
+                        Unable to load this media. Try next/previous or close and reopen.
+                      </div>
+                    ) : null}
                   </div>
                   <div className={`relative overflow-hidden ${hideUI ? 'rounded-none border border-transparent bg-black' : 'rounded-lg border border-white/10 bg-black/70'}`}>
                     {!hideUI ? (
                       <span className="absolute left-2 top-2 z-10 rounded-full border border-white/20 bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
-                        Up Next
+                        Right Panel
                       </span>
                     ) : null}
-                    {secondaryItem && isVideoUrl(secondaryItem.imageUrl) ? (
+                    {rightSplitMedia.isVideo ? (
                       <video
-                        key={`next-${secondaryItem.id}`}
-                        src={getPlayableMediaUrl(secondaryItem.imageUrl)}
+                        key={`right:${rightSplitMedia.key}`}
+                        ref={splitRightVideoRef}
                         className="h-full w-full object-contain"
-                        muted
+                        controls
                         autoPlay
-                        loop
                         playsInline
                         preload="metadata"
-                      />
-                    ) : secondaryItem ? (
+                        poster={getVideoPosterUrl(rightSplitItem?.imageUrl) || undefined}
+                        crossOrigin="anonymous"
+                        onLoadedMetadata={() => {
+                          markPanelMediaSuccess('right', rightSplitItem);
+                        }}
+                        onLoadedData={() => {
+                          markPanelMediaSuccess('right', rightSplitItem);
+                        }}
+                        onCanPlay={() => {
+                          markPanelMediaSuccess('right', rightSplitItem);
+                        }}
+                        onEnded={(event) => {
+                          if (rightSplitPanel?.loop) {
+                            event.currentTarget.currentTime = 0;
+                            event.currentTarget.play().catch(() => {});
+                            return;
+                          }
+                          moveSplitPanel('right', 'next');
+                        }}
+                        onError={(event) => {
+                          markPanelMediaError('right', rightSplitItem, 'onError', event.currentTarget, rightSplitMedia.playableSrc);
+                        }}
+                      >
+                        {rightSplitMedia.sources.map((src) => (
+                          <source key={src} src={src} />
+                        ))}
+                      </video>
+                    ) : rightSplitItem ? (
                       <img
-                        src={secondaryItem.imageUrl}
-                        alt={secondaryItem.caption || `Photo ${secondaryItem.id}`}
+                        key={`right:${rightSplitMedia.key}`}
+                        src={rightSplitItem.imageUrl}
+                        alt={rightSplitItem.caption || `Photo ${rightSplitItem.id}`}
                         className="h-full w-full object-contain"
+                        onLoad={() => {
+                          markPanelMediaSuccess('right', rightSplitItem);
+                        }}
+                        onError={(event) => {
+                          markPanelMediaError('right', rightSplitItem, 'onError', event.currentTarget, rightSplitMedia.playableSrc);
+                        }}
                       />
+                    ) : null}
+                    {mediaErrors[getPanelMediaKey('right', rightSplitItem)] ? (
+                      <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-4 text-center text-sm text-rose-200">
+                        Unable to load this media. Try next/previous or close and reopen.
+                      </div>
                     ) : null}
                   </div>
                 </>
               ) : activeItemIsVideo ? (
                 <video
-                  key={activeItem.id}
+                  key={activeMediaKey}
                   ref={activeVideoRef}
-                  src={getPlayableMediaUrl(activeItem.imageUrl)}
                   className="h-full w-full object-contain"
                   controls
-                  muted={isMuted}
-                  autoPlay={isPlaying}
                   playsInline
                   preload="metadata"
-                  onLoadedMetadata={(event) => {
-                    const savedPosition = videoProgressRef.current[activeItem.id];
-                    if (
-                      typeof savedPosition === 'number' &&
-                      savedPosition > 0 &&
-                      savedPosition < event.currentTarget.duration - 0.2
-                    ) {
-                      event.currentTarget.currentTime = savedPosition;
-                    }
-                    setActiveMediaLoading(false);
+                  poster={getVideoPosterUrl(activeItem.imageUrl) || undefined}
+                  crossOrigin="anonymous"
+                  onLoadedMetadata={() => {
+                    markPanelMediaSuccess('primary', activeItem);
                   }}
-                  onTimeUpdate={(event) => {
-                    videoProgressRef.current[activeItem.id] = event.currentTarget.currentTime;
+                  onLoadedData={() => {
+                    markPanelMediaSuccess('primary', activeItem);
+                  }}
+                  onCanPlay={() => {
+                    markPanelMediaSuccess('primary', activeItem);
                   }}
                   onEnded={() => {
-                    videoProgressRef.current[activeItem.id] = 0;
+                    if (viewerMode === 'focus') {
+                      goToNextVideo();
+                      return;
+                    }
                     if (isPlaying) {
                       goToNext();
                     }
                   }}
-                  onError={() => {
-                    setMediaErrors((current) => ({ ...current, [activeItem.id]: true }));
-                    setActiveMediaLoading(false);
+                  onError={(event) => {
+                    markPanelMediaError('primary', activeItem, 'onError', event.currentTarget, activePlayableSrc);
                   }}
-                />
+                >
+                  {activeVideoSources.map((src) => (
+                    <source key={src} src={src} />
+                  ))}
+                </video>
               ) : (
                 <img
+                  key={activeMediaKey}
                   src={activeItem.imageUrl}
                   alt={activeItem.caption || `Photo ${activeItem.id}`}
                   className="h-full w-full object-contain"
-                  onLoad={() => setActiveMediaLoading(false)}
-                  onError={() => {
-                    setMediaErrors((current) => ({ ...current, [activeItem.id]: true }));
-                    setActiveMediaLoading(false);
+                  onLoad={() => {
+                    markPanelMediaSuccess('primary', activeItem);
+                  }}
+                  onError={(event) => {
+                    markPanelMediaError('primary', activeItem, 'onError', event.currentTarget, activePlayableSrc);
                   }}
                 />
               )}
-              {activeMediaLoading ? (
-                <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/35 text-xs uppercase tracking-[0.15em] text-slate-100">
-                  {hideUI ? (
-                    <span className="h-7 w-7 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  ) : (
-                    'Loading media...'
-                  )}
-                </div>
-              ) : null}
-              {mediaErrors[activeItem.id] ? (
+              {!showSplitMode && mediaErrors[getPanelMediaKey('primary', activeItem)] ? (
                 <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-4 text-center text-sm text-rose-200">
                   Unable to load this media. Try next/previous or close and reopen.
                 </div>
@@ -786,7 +1125,7 @@ export default function AlbumDetailPage({ params }) {
             </div>
 
             {!hideUI ? (
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 transition-opacity duration-300">
+              <div className="mt-3 flex flex-col gap-2 transition-opacity duration-300">
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -811,13 +1150,6 @@ export default function AlbumDetailPage({ params }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsMuted((current) => !current)}
-                  className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
-                >
-                  {isMuted ? 'Unmute' : 'Mute'}
-                </button>
-                <button
-                  type="button"
                   onClick={() => setHideUI(true)}
                   aria-label="Hide viewer interface"
                   className="rounded-md border border-white/25 px-3 py-2 text-xs uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
@@ -832,11 +1164,21 @@ export default function AlbumDetailPage({ params }) {
                   onChange={(event) => {
                     const nextMode = event.target.value;
                     setViewerMode(nextMode);
-                    if (nextMode !== 'split') {
-                      setSplitPanelItemId('');
-                    }
                     if (nextMode === 'slideshow' && !isPlaying) {
                       setIsPlaying(true);
+                    }
+                    if (nextMode === 'split') {
+                      setSplitPanels((current) => {
+                        const left = { ...current.left, filter: getSplitPanelFilter('left'), index: activeIndex };
+                        const rightCandidates = buildSplitCandidates(getSplitPanelFilter('right'), activeIndex);
+                        const rightIndex = rightCandidates.includes(current.right.index)
+                          ? current.right.index
+                          : (rightCandidates[0] ?? activeIndex);
+                        return {
+                          left,
+                          right: { ...current.right, filter: getSplitPanelFilter('right'), isPlaying: true, index: rightIndex }
+                        };
+                      });
                     }
                   }}
                   className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
@@ -845,90 +1187,170 @@ export default function AlbumDetailPage({ params }) {
                   <option value="slideshow">Slideshow</option>
                   <option value="split">Split</option>
                 </select>
-                <span>Timer</span>
-                <select
-                  value={isPresetDelay ? String(delayMs) : 'custom'}
-                  onChange={(event) => {
-                    if (event.target.value === 'custom') {
-                      const parsed = Number(customDelaySeconds);
-                      if (Number.isFinite(parsed) && parsed > 0) {
-                        setDelayMs(Math.min(300000, Math.max(1000, parsed * 1000)));
-                      }
-                      return;
-                    }
-                    setDelayMs(Number(event.target.value));
-                  }}
-                  className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
-                >
-                  <option value={2000}>2s</option>
-                  <option value={5000}>5s</option>
-                  <option value={10000}>10s</option>
-                  <option value={15000}>15s</option>
-                  <option value={20000}>20s</option>
-                  <option value={30000}>30s</option>
-                  <option value="custom">Custom</option>
-                </select>
-                {!isPresetDelay ? (
-                  <input
-                    type="number"
-                    min={1}
-                    max={300}
-                    step={1}
-                    value={customDelaySeconds}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      setCustomDelaySeconds(value);
-                      const parsed = Number(value);
-                      if (Number.isFinite(parsed) && parsed > 0) {
-                        setDelayMs(Math.min(300000, Math.max(1000, parsed * 1000)));
-                      }
-                    }}
-                    className="h-9 w-20 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
-                    aria-label="Custom timer in seconds"
-                  />
-                ) : null}
-                <span className="text-[10px] text-slate-400">
-                  {Math.round(delayMs / 1000)}s
-                </span>
-                {viewerMode === 'split' ? (
+                {viewerMode !== 'split' ? (
                   <>
-                    <span>Split panel</span>
+                    <span>Timer</span>
                     <select
-                      value={splitPanelFilter}
+                      value={isPresetDelay ? String(delayMs) : 'custom'}
                       onChange={(event) => {
-                        setSplitPanelFilter(event.target.value);
-                        setSplitPanelItemId('');
+                        if (event.target.value === 'custom') {
+                          const parsed = Number(customDelaySeconds);
+                          if (Number.isFinite(parsed) && parsed > 0) {
+                            setDelayMs(Math.min(300000, Math.max(1000, parsed * 1000)));
+                          }
+                          return;
+                        }
+                        setDelayMs(Number(event.target.value));
                       }}
                       className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
                     >
-                      <option value="all">All media</option>
-                      <option value="photos">Photos only</option>
-                      <option value="videos">Videos only</option>
+                      <option value={2000}>2s</option>
+                      <option value={5000}>5s</option>
+                      <option value={10000}>10s</option>
+                      <option value={15000}>15s</option>
+                      <option value={20000}>20s</option>
+                      <option value={30000}>30s</option>
+                      <option value="custom">Custom</option>
                     </select>
-                    <select
-                      value={splitPanelItemId}
-                      onChange={(event) => setSplitPanelItemId(event.target.value)}
-                      className="h-9 max-w-[220px] rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
-                      disabled={splitCandidates.length === 0}
-                    >
-                      {splitCandidates.length === 0 ? <option value="">No matching media</option> : null}
-                      {splitCandidates.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {isVideoUrl(item.imageUrl) ? 'Video' : 'Image'} · {item.caption || `#${item.id}`}
-                        </option>
-                      ))}
-                    </select>
+                    {!isPresetDelay ? (
+                      <input
+                        type="number"
+                        min={1}
+                        max={300}
+                        step={1}
+                        value={customDelaySeconds}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setCustomDelaySeconds(value);
+                          const parsed = Number(value);
+                          if (Number.isFinite(parsed) && parsed > 0) {
+                            setDelayMs(Math.min(300000, Math.max(1000, parsed * 1000)));
+                          }
+                        }}
+                        className="h-9 w-20 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
+                        aria-label="Custom timer in seconds"
+                      />
+                    ) : null}
+                    <span className="text-[10px] text-slate-400">
+                      {Math.round(delayMs / 1000)}s
+                    </span>
                   </>
+                ) : (
+                  <div className="flex w-full flex-col gap-2 rounded-md border border-white/15 bg-slate-900/40 p-2 text-[10px] tracking-[0.08em] text-slate-200 lg:flex-row">
+                    <div className="flex flex-1 flex-wrap items-center gap-2 rounded-md border border-white/10 bg-black/20 p-2">
+                      <span className="font-semibold uppercase text-slate-100">Left panel</span>
+                      <span className="rounded-md border border-white/30 bg-slate-900/70 px-2 py-1 text-[10px] text-white">Image</span>
+                      <button
+                        type="button"
+                        onClick={() => moveSplitPanel('left', 'prev')}
+                        className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSplitPanel('left', 'next')}
+                        className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
+                      >
+                        Next
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSplitPanels((current) => ({
+                            ...current,
+                            left: { ...current.left, isPlaying: !current.left.isPlaying }
+                          }));
+                        }}
+                        className="rounded-md border border-emerald-300/50 bg-emerald-500/20 px-2 py-1 text-[10px] uppercase text-emerald-100 transition hover:bg-emerald-500/30"
+                      >
+                        {leftSplitPanel?.isPlaying ? 'Pause' : 'Play'}
+                      </button>
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(leftSplitPanel?.loop)}
+                          onChange={() => {
+                            setSplitPanels((current) => ({
+                              ...current,
+                              left: { ...current.left, loop: !current.left.loop }
+                            }));
+                          }}
+                        />
+                        Loop
+                      </label>
+                      <select
+                        value={String(leftSplitPanel?.delayMs || 5000)}
+                        onChange={(event) => {
+                          const nextDelay = Number(event.target.value);
+                          setSplitPanels((current) => ({
+                            ...current,
+                            left: { ...current.left, delayMs: nextDelay }
+                          }));
+                        }}
+                        className="h-8 rounded-md border border-white/30 bg-slate-900/70 px-2 text-[10px] text-white"
+                      >
+                        {timerPresetMs.map((ms) => (
+                          <option key={`left-delay-${ms}`} value={ms}>{Math.round(ms / 1000)}s</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-1 flex-wrap items-center gap-2 rounded-md border border-white/10 bg-black/20 p-2">
+                      <span className="font-semibold uppercase text-slate-100">Right panel</span>
+                      <span className="rounded-md border border-white/30 bg-slate-900/70 px-2 py-1 text-[10px] text-white">Video</span>
+                      <button
+                        type="button"
+                        onClick={() => moveSplitPanel('right', 'prev')}
+                        className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
+                      >
+                        Prev
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSplitPanel('right', 'next')}
+                        className="rounded-md border border-white/25 px-2 py-1 text-[10px] uppercase text-white transition hover:bg-white/10"
+                      >
+                        Next
+                      </button>
+                      <label className="inline-flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(rightSplitPanel?.loop)}
+                          onChange={() => {
+                            setSplitPanels((current) => ({
+                              ...current,
+                              right: { ...current.right, loop: !current.right.loop }
+                            }));
+                          }}
+                        />
+                        Loop
+                      </label>
+                      <select
+                        value={String(rightSplitPanel?.delayMs || 5000)}
+                        onChange={(event) => {
+                          const nextDelay = Number(event.target.value);
+                          setSplitPanels((current) => ({
+                            ...current,
+                            right: { ...current.right, delayMs: nextDelay }
+                          }));
+                        }}
+                        className="h-8 rounded-md border border-white/30 bg-slate-900/70 px-2 text-[10px] text-white"
+                      >
+                        {timerPresetMs.map((ms) => (
+                          <option key={`right-delay-${ms}`} value={ms}>{Math.round(ms / 1000)}s</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+                {viewerMode !== 'split' ? (
+                  <span className="rounded-full border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-200">
+                    Esc / ← / → / Space
+                  </span>
                 ) : null}
-                <span className="rounded-full border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-200">
-                  Esc / ← / → / Space
-                </span>
-                <span className="rounded-full border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-200">
-                  {activeItemIsVideo ? 'Video follows duration' : 'Image follows timer'}
-                </span>
-                {autoplayBlocked ? (
-                  <span className="rounded-full border border-amber-300/40 bg-amber-500/15 px-2 py-1 text-[10px] text-amber-100">
-                    Autoplay blocked. Press Play.
+                {viewerMode !== 'split' ? (
+                  <span className="rounded-full border border-white/20 bg-white/5 px-2 py-1 text-[10px] text-slate-200">
+                    {activeItemIsVideo ? 'Video follows duration' : 'Image follows timer'}
                   </span>
                 ) : null}
               </div>

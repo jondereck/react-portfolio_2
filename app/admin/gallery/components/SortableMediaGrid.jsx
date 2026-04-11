@@ -108,7 +108,7 @@ function SortableMediaCard({
       </p>
       <p className="mt-1 text-[11px] text-slate-500">{photo.sourceType}</p>
 
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           {isCover ? (
             <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -136,6 +136,8 @@ function SortableMediaCard({
             Delete
           </button>
         </div>
+
+      
       </div>
     </article>
   );
@@ -198,7 +200,7 @@ export default function SortableMediaGrid({
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      activationConstraint: { distance: 4 },
+      activationConstraint: { delay: 220, tolerance: 8 },
     }),
   );
 
