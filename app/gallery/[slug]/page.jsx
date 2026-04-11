@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Pause, Play, Repeat2, Volume2, VolumeX } from 'lucide-react';
+import { useLoadingStore } from '@/store/loading';
 
 const fetchJson = async (url) => {
   const response = await fetch(url, { cache: 'no-store' });
@@ -136,6 +137,8 @@ const findPrevIndexByType = (startIndex, photos, matcher, options = {}) => {
 
 export default function AlbumDetailPage({ params }) {
   const router = useRouter();
+  const startGlobalLoading = useLoadingStore((state) => state.startLoading);
+  const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const [slug, setSlug] = useState('');
   const [isReady, setIsReady] = useState(false);
   const [album, setAlbum] = useState(null);
@@ -230,6 +233,20 @@ export default function AlbumDetailPage({ params }) {
       return;
     }
 
+    let finished = false;
+    const finalize = () => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+      stopGlobalLoading();
+    };
+
+    setLoading(true);
+    setError('');
+    startGlobalLoading('Loading the album viewer');
+
     const run = async () => {
       try {
         const albumData = await fetchJson(`/api/gallery/albums/by-slug/${slug}`);
@@ -241,11 +258,15 @@ export default function AlbumDetailPage({ params }) {
         setError(err.message);
       } finally {
         setLoading(false);
+        finalize();
       }
     };
 
     run();
-  }, [isReady, slug, sort]);
+    return () => {
+      finalize();
+    };
+  }, [isReady, slug, sort, startGlobalLoading, stopGlobalLoading]);
 
   const filteredPhotos = photos.filter((item) => {
     if (mediaFilter === 'photos') {

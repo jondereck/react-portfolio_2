@@ -1,0 +1,146 @@
+export const portfolioResources = [
+  {
+    key: 'certificates',
+    title: 'Certificates',
+    endpoint: '/api/certificates',
+    listColumns: [
+      { key: 'title', label: 'Title' },
+      { key: 'category', label: 'Category' },
+      { key: 'issuer', label: 'Issuer' },
+    ],
+    fields: [
+      { name: 'title', label: 'Title', type: 'text' },
+      { name: 'issuer', label: 'Issuer', type: 'text' },
+      { name: 'image', label: 'Certificate Image', type: 'image' },
+      { name: 'link', label: 'Reference Link', type: 'url' },
+      { name: 'category', label: 'Category', type: 'text' },
+      {
+        name: 'issuedAt',
+        label: 'Issued At',
+        type: 'date',
+        required: false,
+        serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
+        deserialize: (value) => (value ? value.substring(0, 10) : ''),
+      },
+      {
+        name: 'expiresAt',
+        label: 'Expires At',
+        type: 'date',
+        required: false,
+        serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
+        deserialize: (value) => (value ? value.substring(0, 10) : ''),
+      },
+      { name: 'credentialId', label: 'Credential ID', type: 'text', required: false },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
+    ],
+  },
+  {
+    key: 'skills',
+    title: 'Skills',
+    endpoint: '/api/skills',
+    listColumns: [
+      { key: 'name', label: 'Name' },
+      { key: 'category', label: 'Category' },
+      { key: 'level', label: 'Level', formatter: (item) => `${item.level}%` },
+    ],
+    fields: [
+      { name: 'name', label: 'Name', type: 'text' },
+      { name: 'level', label: 'Level (1-100)', type: 'number', placeholder: '50' },
+      { name: 'category', label: 'Category', type: 'text' },
+      { name: 'image', label: 'Skill Image', type: 'image', required: false },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
+    ],
+  },
+  {
+    key: 'portfolio',
+    title: 'Projects',
+    endpoint: '/api/portfolio',
+    listColumns: [
+      { key: 'title', label: 'Title' },
+      { key: 'badge', label: 'Badge' },
+      { key: 'tech', label: 'Tech', formatter: (item) => (Array.isArray(item.tech) ? item.tech.join(', ') : '') },
+    ],
+    fields: [
+      { name: 'title', label: 'Project Title', type: 'text' },
+      { name: 'slug', label: 'Slug (optional - auto-generated)', type: 'text', required: false },
+      { name: 'summary', label: 'Summary', type: 'textarea', rows: 4 },
+      {
+        name: 'descriptions',
+        label: 'Descriptions (Bullet Items)',
+        type: 'string-array',
+        required: false,
+        helperText: 'Each item becomes one bullet point in the project card.',
+      },
+      {
+        name: 'tech',
+        label: 'Tech Stack (comma-separated)',
+        type: 'text',
+        serialize: (value) =>
+          typeof value === 'string'
+            ? value
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : [],
+        deserialize: (value) => (Array.isArray(value) ? value.join(', ') : ''),
+      },
+      { name: 'image', label: 'Project Image', type: 'image' },
+      { name: 'badge', label: 'Badge', type: 'text' },
+      {
+        name: 'demoUrl',
+        label: 'Live Demo URL',
+        type: 'url',
+        required: false,
+        helperText: 'Optional. Public deployed app, site, or page visitors can open.',
+      },
+      {
+        name: 'repoUrl',
+        label: 'Source Repository URL',
+        type: 'url',
+        required: false,
+        helperText: 'Optional. GitHub, GitLab, or other source repository link.',
+      },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
+      { name: 'isFeatured', label: 'Featured', type: 'checkbox', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
+    ],
+  },
+  {
+    key: 'experience',
+    title: 'Experience',
+    endpoint: '/api/experience',
+    listColumns: [
+      { key: 'title', label: 'Role' },
+      { key: 'company', label: 'Company' },
+      { key: 'location', label: 'Location' },
+    ],
+    fields: [
+      { name: 'title', label: 'Role Title', type: 'text' },
+      { name: 'company', label: 'Company', type: 'text' },
+      { name: 'description', label: 'Description', type: 'textarea', rows: 4 },
+      { name: 'location', label: 'Location', type: 'text', required: false },
+      { name: 'employmentType', label: 'Employment Type', type: 'text', required: false },
+      { name: 'image', label: 'Experience Image', type: 'image', required: false },
+      {
+        name: 'startDate',
+        label: 'Start Date',
+        type: 'date',
+        serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
+        deserialize: (value) => (value ? value.substring(0, 10) : ''),
+      },
+      {
+        name: 'endDate',
+        label: 'End Date (leave blank for ongoing)',
+        type: 'date',
+        required: false,
+        serialize: (value) => (value ? new Date(`${value}T00:00:00.000Z`).toISOString() : null),
+        deserialize: (value) => (value ? value.substring(0, 10) : ''),
+      },
+      { name: 'isCurrent', label: 'Current role', type: 'checkbox', required: false },
+      { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
+    ],
+  },
+];

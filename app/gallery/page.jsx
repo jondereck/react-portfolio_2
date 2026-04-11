@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useLoadingStore } from '@/store/loading';
 
 const fetchJson = async (url) => {
   const response = await fetch(url, { cache: 'no-store' });
@@ -86,6 +87,8 @@ const buildTitleLines = (name) => {
 
 export default function GalleryPage() {
   const router = useRouter();
+  const startGlobalLoading = useLoadingStore((state) => state.startLoading);
+  const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const [isReady, setIsReady] = useState(false);
   const [albums, setAlbums] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -126,6 +129,20 @@ export default function GalleryPage() {
       return;
     }
 
+    let finished = false;
+    const finalize = () => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+      stopGlobalLoading();
+    };
+
+    setLoading(true);
+    setError('');
+    startGlobalLoading('Curating the gallery preview');
+
     const loadAlbums = async () => {
       try {
         const data = await fetchJson('/api/gallery/albums');
@@ -136,11 +153,15 @@ export default function GalleryPage() {
         setError(requestError.message);
       } finally {
         setLoading(false);
+        finalize();
       }
     };
 
     loadAlbums();
-  }, [isReady]);
+    return () => {
+      finalize();
+    };
+  }, [isReady, startGlobalLoading, stopGlobalLoading]);
 
   const resolveAlbumCover = (album) => album?.coverPhoto?.imageUrl || album?.photos?.[0]?.imageUrl || '';
 

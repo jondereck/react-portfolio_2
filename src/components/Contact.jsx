@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import SectionContainer from './SectionContainer';
 import Success from './Success';
 import { toast } from 'sonner';
+import { useLoadingStore } from '@/store/loading';
 
 const initialForm = { name: '', email: '', message: '' };
 
@@ -12,6 +13,8 @@ const Contact = () => {
   const [errors, setErrors] = useState(initialForm);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const startGlobalLoading = useLoadingStore((state) => state.startLoading);
+  const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
 
   const validateForm = ({ name, email, message }) => {
     const nextErrors = { ...initialForm };
@@ -45,6 +48,7 @@ const Contact = () => {
     }
 
     setLoading(true);
+    startGlobalLoading('Sending your message');
     try {
       const promise = fetch('/api/contact', {
         method: 'POST',
@@ -76,6 +80,7 @@ const Contact = () => {
       // Toast already handles error state.
     } finally {
       setLoading(false);
+      stopGlobalLoading();
     }
   };
 

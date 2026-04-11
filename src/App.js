@@ -11,6 +11,7 @@ import NavBar from './components/NavBar';
 import Projects from './components/Projects';
 import SocialLinks from './components/SocialLinks';
 import { REALTIME_EVENT, REALTIME_SIGNAL_KEY, revalidatePublicData } from '@/lib/realtime';
+import { useLoadingStore } from '@/store/loading';
 
 const sanitizeText = (value) => (typeof value === 'string' ? value : '');
 
@@ -43,6 +44,8 @@ const fetcher = (url) =>
 function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [showThemeFade, setShowThemeFade] = useState(false);
+  const startGlobalLoading = useLoadingStore((state) => state.startLoading);
+  const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const {
     data: siteContentData,
     error: siteContentError,
@@ -76,6 +79,17 @@ function App() {
 
   const loading = siteContentLoading || siteConfigLoading;
   const loadError = siteContentError || siteConfigError;
+
+  useEffect(() => {
+    if (!loading) {
+      return undefined;
+    }
+
+    startGlobalLoading('Composing the portfolio experience');
+    return () => {
+      stopGlobalLoading();
+    };
+  }, [loading, startGlobalLoading, stopGlobalLoading]);
 
   useEffect(() => {
     const handleRefresh = () => {
