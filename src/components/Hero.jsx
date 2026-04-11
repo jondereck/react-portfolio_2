@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-scroll';
 import heroFallbackImage from '../assets/heroImage.jpg';
+import { isSafeHttpUrl } from '@/lib/url-safety';
 
 const Hero = ({ hero }) => {
   if (!hero) {
@@ -24,13 +25,17 @@ const Hero = ({ hero }) => {
       >
         {content.primaryCtaLabel}
       </Link>
-    ) : (
+    ) : isSafeHttpUrl(content.primaryCtaHref) ? (
       <a
         href={content.primaryCtaHref}
         className="rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 px-7 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-500/30 transition hover:-translate-y-0.5 hover:shadow-cyan-500/50"
       >
         {content.primaryCtaLabel}
       </a>
+    ) : (
+      <span className="rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 px-7 py-3 text-sm font-semibold text-white opacity-70">
+        {content.primaryCtaLabel}
+      </span>
     );
 
     const secondary = isAnchorLink(content.secondaryCtaHref) ? (
@@ -42,13 +47,17 @@ const Hero = ({ hero }) => {
       >
         {content.secondaryCtaLabel}
       </Link>
-    ) : (
+    ) : isSafeHttpUrl(content.secondaryCtaHref) ? (
       <a
         href={content.secondaryCtaHref}
         className="rounded-full border border-slate-300 px-7 py-3 text-sm font-semibold text-slate-700 transition hover:border-cyan-400 hover:text-cyan-500 dark:border-slate-700 dark:text-slate-100 dark:hover:border-cyan-300"
       >
         {content.secondaryCtaLabel}
       </a>
+    ) : (
+      <span className="rounded-full border border-slate-300 px-7 py-3 text-sm font-semibold text-slate-700 opacity-70 dark:border-slate-700 dark:text-slate-100">
+        {content.secondaryCtaLabel}
+      </span>
     );
 
     return { primary, secondary };

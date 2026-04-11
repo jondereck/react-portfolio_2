@@ -173,7 +173,7 @@ const resources = [
   },
 ];
 
-function AdminResourceSection({ resource, adminKey }) {
+function AdminResourceSection({ resource }) {
   const { title, key, fields, listColumns } = resource;
   const {
     items,
@@ -198,7 +198,6 @@ function AdminResourceSection({ resource, adminKey }) {
       endpoint: resource.endpoint,
       title,
       fields,
-      adminKey,
     });
 
   const updateField = (fieldName, value) => {
@@ -232,7 +231,6 @@ function AdminResourceSection({ resource, adminKey }) {
             onChange={updateField}
             onSubmit={handleSubmit}
             onReset={resetForm}
-            adminKey={adminKey}
           />
         </div>
       </div>
@@ -254,7 +252,7 @@ function AdminResourceSection({ resource, adminKey }) {
   );
 }
 
-function SiteContentSection({ adminKey }) {
+function SiteContentSection() {
   const emptyHighlight = { label: '', value: '' };
   const [hero, setHero] = useState({
     eyebrow: '',
@@ -321,11 +319,6 @@ function SiteContentSection({ adminKey }) {
   const submit = async (event) => {
     event.preventDefault();
 
-    if (!adminKey) {
-      toast.error('Provide the admin API key to update site content.');
-      return;
-    }
-
     const parsedHighlights = about.highlights
       .map((item) => ({
         label: item.label.trim(),
@@ -347,7 +340,6 @@ function SiteContentSection({ adminKey }) {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-key': adminKey,
           },
           body: JSON.stringify({
             hero,
@@ -578,7 +570,7 @@ function SiteContentSection({ adminKey }) {
 }
 
 
-function SiteConfigSection({ adminKey }) {
+function SiteConfigSection() {
   const [siteConfig, setSiteConfig] = useState({
     logoText: '',
     logoImage: '',
@@ -611,11 +603,6 @@ function SiteConfigSection({ adminKey }) {
   const submit = async (event) => {
     event.preventDefault();
 
-    if (!adminKey) {
-      toast.error('Provide the admin API key to update site config.');
-      return;
-    }
-
     setError('');
     setSaving(true);
 
@@ -625,7 +612,6 @@ function SiteConfigSection({ adminKey }) {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'x-admin-key': adminKey,
           },
           body: JSON.stringify({
             logoText: siteConfig.logoText.trim(),
@@ -688,31 +674,36 @@ function SiteConfigSection({ adminKey }) {
 
 export default function AdminPage() {
   const router = useRouter();
-  const [adminKey, setAdminKey] = useState('');
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const isAuth = localStorage.getItem('admin-auth');
-    const storedKey = localStorage.getItem('admin-key');
+    let mounted = true;
 
-    if (!isAuth) {
-      router.replace('/');
-      return;
-    }
+    const verifySession = async () => {
+      try {
+        const response = await fetch('/api/admin/verify', { cache: 'no-store' });
+        if (!response.ok) {
+          router.replace('/');
+          return;
+        }
 
-    if (storedKey) {
-      setAdminKey(storedKey);
-      setIsReady(true);
-      return;
-    }
+        if (mounted) {
+          setIsReady(true);
+        }
+      } catch {
+        router.replace('/');
+      }
+    };
 
-    localStorage.removeItem('admin-auth');
-    router.replace('/');
+    verifySession();
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('admin-auth');
-    localStorage.removeItem('admin-key');
+  const handleLogout = async () => {
+    await fetch('/api/admin/logout', { method: 'POST' }).catch(() => null);
     router.push('/');
   };
 
@@ -726,10 +717,10 @@ export default function AdminPage() {
         <AdminHeader onLogout={handleLogout} />
 
         <div className="space-y-6">
-          <SiteConfigSection adminKey={adminKey} />
-          <SiteContentSection adminKey={adminKey} />
+          <SiteConfigSection />
+          <SiteContentSection />
           {resources.map((resource) => (
-            <AdminResourceSection key={resource.key} resource={resource} adminKey={adminKey} />
+            <AdminResourceSection key={resource.key} resource={resource} />
           ))}
         </div>
       </div>

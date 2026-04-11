@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import useSWR from 'swr';
+import { isSafeHttpUrl } from '@/lib/url-safety';
 
 const fetcher = (url) =>
   fetch(url, { cache: 'no-store' }).then((response) => {
@@ -18,6 +19,19 @@ const normalizeTech = (value) => {
   if (typeof value === 'string') {
     return value
       .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [];
+};
+
+const normalizeDescriptions = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return value
+      .split('\n')
       .map((item) => item.trim())
       .filter(Boolean);
   }
@@ -48,12 +62,13 @@ const Projects = () => {
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {paginatedData.map((project, index) => {
           const tech = normalizeTech(project.tech ?? project.techStack);
+          const bulletItems = normalizeDescriptions(project.descriptions);
           const summary =
             project.description ??
             project.summary ??
             (Array.isArray(project.descriptions) && project.descriptions.length > 0 ? project.descriptions[0] : '');
-          const link = project.demoUrl ?? '';
-          const secondaryLink = project.repoUrl ?? '';
+          const link = isSafeHttpUrl(project.demoUrl) ? project.demoUrl : '';
+          const secondaryLink = isSafeHttpUrl(project.repoUrl) ? project.repoUrl : '';
           return (
             <motion.article
               key={project.id ?? project.slug ?? `${project.title}-${index}`}
@@ -89,6 +104,13 @@ const Projects = () => {
                       </span>
                     ))}
                   </div>
+                ) : null}
+                {bulletItems.length > 0 ? (
+                  <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-300">
+                    {bulletItems.map((item, bulletIndex) => (
+                      <li key={`${project.id ?? project.slug ?? index}-desc-${bulletIndex}`}>{item}</li>
+                    ))}
+                  </ul>
                 ) : null}
                 <div className="mt-auto flex flex-wrap gap-3 pt-6">
                   {link ? (

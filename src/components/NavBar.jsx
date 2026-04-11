@@ -3,6 +3,7 @@ import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';
 import { Link as ScrollLink } from 'react-scroll';
 import AdminLoginDialog from './AdminLoginDialog';
+import { isSafeHttpUrl } from '@/lib/url-safety';
 
 const links = ['home', 'about', 'portfolio', 'experience', 'certificates', 'contact'];
 
@@ -10,7 +11,7 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
   const [nav, setNav] = useState(false);
   const [open, setOpen] = useState(false);
   const logoText = typeof config?.logoText === 'string' && config.logoText.trim().length > 0 ? config.logoText : 'Jon';
-  const logoImage = typeof config?.logoImage === 'string' ? config.logoImage : '';
+  const logoImage = isSafeHttpUrl(config?.logoImage) ? config.logoImage : '';
 
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">

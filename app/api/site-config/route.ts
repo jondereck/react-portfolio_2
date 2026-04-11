@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { defaultSiteConfig } from '@/lib/siteContentDefaults';
+import { isRateLimited } from '@/lib/server/rate-limit';
+import { isSafeHttpUrl } from '@/lib/url-safety';
 
 async function ensureSiteConfig() {
   await prisma.siteConfig.upsert({
@@ -47,6 +49,10 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -66,9 +72,7 @@ export async function PUT(request: Request) {
     }
 
     if (logoImageInput) {
-      try {
-        new URL(logoImageInput);
-      } catch {
+      if (!isSafeHttpUrl(logoImageInput)) {
         return NextResponse.json({ message: 'Invalid payload' }, { status: 400 });
       }
     }

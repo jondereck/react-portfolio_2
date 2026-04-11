@@ -5,6 +5,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { Dialog, DialogContent } from './ui/dialog';
 import AdminLoginDialog from './AdminLoginDialog';
 import useSWR from 'swr';
+import { isSafeHttpUrl } from '@/lib/url-safety';
 
 const fetcher = (url) =>
   fetch(url, { cache: 'no-store' }).then((response) => {
@@ -84,7 +85,7 @@ const Certificates = () => {
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{item.category}</span>
                 <a
-                  href={item.link}
+                  href={isSafeHttpUrl(item.link) ? item.link : '#'}
                   target="_blank"
                   rel="noreferrer"
                   className="rounded-full border border-cyan-400 px-3 py-1 text-xs font-semibold text-cyan-600 transition hover:bg-cyan-500 hover:text-white dark:text-cyan-300"

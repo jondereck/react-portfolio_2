@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { experienceSchema } from '@/lib/validators';
+import { isRateLimited } from '@/lib/server/rate-limit';
 
 export async function GET(request: Request) {
   const canViewDrafts = isAuthorizedMutation(request);
@@ -13,6 +14,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -47,6 +52,10 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -87,6 +96,10 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

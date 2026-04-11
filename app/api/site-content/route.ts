@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { aboutSchema, heroSchema, contactSchema, seoSchema } from '@/lib/validators';
 import { defaultSiteContent } from '@/lib/siteContentDefaults';
+import { isRateLimited } from '@/lib/server/rate-limit';
 
 type UpdateRequestPayload = {
   hero?: Record<string, unknown>;
@@ -33,6 +34,10 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

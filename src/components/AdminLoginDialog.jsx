@@ -19,7 +19,7 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
     }
 
     try {
-      const response = await fetch('/api/admin/verify', {
+      const response = await fetch('/api/admin/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -36,8 +36,6 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
       return;
     }
 
-    localStorage.setItem('admin-auth', 'true');
-    localStorage.setItem('admin-key', normalizedKey);
     setKey('');
     setError('');
     onOpenChange(false);

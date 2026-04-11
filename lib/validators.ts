@@ -1,7 +1,14 @@
 import { z } from 'zod';
+import { isAnchorOrSafeHttpUrl, isSafeHttpUrl } from '@/lib/url-safety';
 
 const textField = (min: number, max: number) => z.string().trim().min(min).max(max);
-const urlField = (max: number) => z.string().trim().url().max(max);
+const urlField = (max: number) =>
+  z
+    .string()
+    .trim()
+    .url()
+    .max(max)
+    .refine((value) => isSafeHttpUrl(value), { message: 'Only http/https URLs are allowed.' });
 const emailField = () => z.string().trim().email().max(120);
 const orderField = (max = 9999) => z.number().int().min(0).max(max).optional().default(0);
 const publishField = () => z.boolean().optional().default(true);
@@ -48,9 +55,13 @@ export const heroSchema = z.object({
   title: textField(5, 220),
   description: textField(20, 600),
   primaryCtaLabel: textField(1, 40),
-  primaryCtaHref: textField(1, 200),
+  primaryCtaHref: textField(1, 200).refine((value) => isAnchorOrSafeHttpUrl(value), {
+    message: 'Must be an anchor link or an http/https URL.',
+  }),
   secondaryCtaLabel: textField(1, 40),
-  secondaryCtaHref: textField(1, 200),
+  secondaryCtaHref: textField(1, 200).refine((value) => isAnchorOrSafeHttpUrl(value), {
+    message: 'Must be an anchor link or an http/https URL.',
+  }),
   image: urlField(500),
 });
 

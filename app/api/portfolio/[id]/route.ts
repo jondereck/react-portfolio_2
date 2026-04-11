@@ -5,6 +5,7 @@ import { portfolioSchema } from '@/lib/validators';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { uploadImageFile } from '@/lib/server/uploads';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { isRateLimited } from '@/lib/server/rate-limit';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -82,6 +83,10 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function PUT(request: Request, context: RouteContext) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

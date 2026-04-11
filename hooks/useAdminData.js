@@ -96,10 +96,9 @@ const formatForForm = (fields, item) =>
     return state;
   }, defaultFormState(fields));
 
-const fetcher = (url, adminKey) =>
+const fetcher = (url) =>
   fetch(url, {
     cache: 'no-store',
-    headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
   }).then((response) => {
     if (!response.ok) {
       throw new Error(`Unable to load ${url}`);
@@ -108,7 +107,7 @@ const fetcher = (url, adminKey) =>
     return response.json();
   });
 
-export function useAdminData({ endpoint, title, fields, adminKey }) {
+export function useAdminData({ endpoint, title, fields }) {
   const [formState, setFormState] = useState(() => defaultFormState(fields));
   const [editingId, setEditingId] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
@@ -117,7 +116,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState('');
 
-  const { data, error: swrError, isLoading, mutate: refreshItems } = useSWR(endpoint, (url) => fetcher(url, adminKey));
+  const { data, error: swrError, isLoading, mutate: refreshItems } = useSWR(endpoint, fetcher);
   const items = Array.isArray(data) ? data : [];
 
   useEffect(() => {
@@ -157,7 +156,6 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         const item = await handleRequest(() =>
           fetch(`${endpoint}/${id}`, {
             cache: 'no-store',
-            headers: adminKey ? { 'x-admin-key': adminKey } : undefined,
           }),
         );
 
@@ -171,7 +169,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         toast.error(`Unable to load ${title} entry`, { description: message });
       }
     },
-    [adminKey, endpoint, fields, title],
+    [endpoint, fields, title],
   );
 
   const handleSubmit = useCallback(
@@ -188,10 +186,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         const requestPromise = handleRequest(() =>
           fetch(requestEndpoint, {
             method: isUpdating ? 'PUT' : 'POST',
-            headers: {
-              ...requestConfig.headers,
-              ...(adminKey ? { 'x-admin-key': adminKey } : {}),
-            },
+            headers: requestConfig.headers,
             body: requestConfig.body,
           }),
         );
@@ -214,7 +209,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setSaving(false);
       }
     },
-    [adminKey, editingId, endpoint, fields, formState, refreshItems, resetForm, title],
+    [editingId, endpoint, fields, formState, refreshItems, resetForm, title],
   );
 
   const handleDelete = useCallback(
@@ -228,7 +223,6 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
             method: 'DELETE',
             headers: {
               'Content-Type': 'application/json',
-              ...(adminKey ? { 'x-admin-key': adminKey } : {}),
             },
             body: JSON.stringify({ id }),
           }),
@@ -255,7 +249,7 @@ export function useAdminData({ endpoint, title, fields, adminKey }) {
         setDeletingId(null);
       }
     },
-    [adminKey, editingId, endpoint, refreshItems, resetForm, title],
+    [editingId, endpoint, refreshItems, resetForm, title],
   );
 
   return {

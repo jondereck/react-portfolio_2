@@ -5,6 +5,7 @@ import { skillSchema } from '@/lib/validators';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { uploadImageFile } from '@/lib/server/uploads';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { isRateLimited } from '@/lib/server/rate-limit';
 
 const buildSkillInput = async (data: Record<string, unknown>, imageFile?: File) => {
   const image =
@@ -26,6 +27,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -52,6 +57,10 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -84,6 +93,10 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
   if (!isAuthorizedMutation(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
