@@ -1382,17 +1382,6 @@ export default function AlbumDetailPage({ params }) {
                     Video
                   </span>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void handleDownloadMedia(photo);
-                  }}
-                  disabled={downloadingPhotoId === photo.id}
-                  className="absolute right-3 top-3 rounded-full border border-white/30 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-white transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-55"
-                >
-                  {downloadingPhotoId === photo.id ? "..." : "Download"}
-                </button>
               </div>
             </article>
           ))}

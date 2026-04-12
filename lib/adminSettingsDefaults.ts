@@ -4,6 +4,7 @@ export const defaultAdminIntegrations = {
   contactSenderEmail: 'onboarding@resend.dev',
   cloudinaryFolder: 'portfolio',
   googleDriveImportEnabled: true,
+  defaultGalleryView: 'cinematic',
 };
 
 export const defaultAdminSecurity = {

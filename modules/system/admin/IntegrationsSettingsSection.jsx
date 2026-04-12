@@ -14,6 +14,7 @@ const emptyState = {
   contactSenderEmail: '',
   cloudinaryFolder: '',
   googleDriveImportEnabled: true,
+  defaultGalleryView: 'cinematic',
 };
 
 export default function IntegrationsSettingsSection() {
@@ -33,6 +34,7 @@ export default function IntegrationsSettingsSection() {
       contactSenderEmail: data.settings.integrations.contactSenderEmail ?? '',
       cloudinaryFolder: data.settings.integrations.cloudinaryFolder ?? '',
       googleDriveImportEnabled: data.settings.integrations.googleDriveImportEnabled !== false,
+      defaultGalleryView: data.settings.integrations.defaultGalleryView === 'compact' ? 'compact' : 'cinematic',
     });
     setError('');
   }, [data]);
@@ -64,6 +66,7 @@ export default function IntegrationsSettingsSection() {
               contactSenderEmail: integrations.contactSenderEmail.trim(),
               cloudinaryFolder: integrations.cloudinaryFolder.trim(),
               googleDriveImportEnabled: integrations.googleDriveImportEnabled,
+              defaultGalleryView: integrations.defaultGalleryView,
             },
           }),
         }),
@@ -143,6 +146,44 @@ export default function IntegrationsSettingsSection() {
                   }
                 />
               </label>
+            </div>
+            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Private gallery default view</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                    Choose which layout loads by default before visitors switch views on the gallery page.
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {[
+                    { value: 'cinematic', label: 'Cinematic', description: 'Editorial hero slider with floating preview cards.' },
+                    { value: 'compact', label: 'Compact', description: 'Faster browsing view with simpler album emphasis.' },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className={`flex-1 cursor-pointer rounded-xl border px-4 py-3 text-sm transition ${
+                        integrations.defaultGalleryView === option.value
+                          ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                          : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="defaultGalleryView"
+                        value={option.value}
+                        checked={integrations.defaultGalleryView === option.value}
+                        onChange={(event) =>
+                          setIntegrations((previous) => ({ ...previous, defaultGalleryView: event.target.value }))
+                        }
+                        className="sr-only"
+                      />
+                      <span className="block font-semibold">{option.label}</span>
+                      <span className="mt-1 block text-xs opacity-80">{option.description}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 

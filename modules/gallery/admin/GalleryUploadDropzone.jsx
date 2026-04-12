@@ -61,10 +61,10 @@ export default function GalleryUploadDropzone({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+      <div className="mt-4 flex flex-col gap-2">
         <button
           type="button"
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
           onClick={openPicker}
           disabled={uploading}
         >
@@ -72,42 +72,42 @@ export default function GalleryUploadDropzone({
           {uploadLabel}
         </button>
 
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {uploading && uploadProgress
-            ? `Uploading ${uploadProgress.currentFileIndex} of ${uploadProgress.totalFiles} · ${uploadProgress.percent}%`
-            : hasSummary
+        {!uploading ? (
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {hasSummary
               ? `Last batch: ${uploadSummary.uploadedCount} uploaded · ${uploadSummary.skippedCount} skipped · ${uploadSummary.failedCount} failed`
-              : uploading
-                ? 'Uploading files...'
-                : 'Drop files anywhere in this box.'}
-        </p>
+              : 'Drop files anywhere in this box.'}
+          </p>
+        ) : null}
       </div>
 
       {uploading && uploadProgress ? (
-        <div className="mt-4 rounded-2xl border border-sky-200 bg-white/90 p-4 shadow-sm dark:border-sky-900/40 dark:bg-slate-900/80">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="mt-4 rounded-2xl border border-sky-200 bg-white/90 p-3 shadow-sm dark:border-sky-900/40 dark:bg-slate-900/80 sm:p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600 dark:text-sky-300">
                 Upload in progress
               </p>
-              <p className="mt-2 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <p
+                className="mt-2 block max-w-full break-words text-sm font-semibold text-slate-900 dark:text-slate-100 sm:truncate"
+                title={uploadProgress.currentFileName || 'Uploading file'}
+              >
                 {uploadProgress.currentFileName || 'Uploading file'}
               </p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1 break-words text-xs text-slate-500 dark:text-slate-400">
                 File {uploadProgress.currentFileIndex} of {uploadProgress.totalFiles}
-                {lastResult ? ` · Last processed: ${lastResult.fileName}` : ''}
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-xs sm:min-w-[280px]">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
+            <div className="grid w-full min-w-0 grid-cols-1 gap-2 text-xs sm:grid-cols-3 md:w-auto md:flex-none">
+              <div className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200">
                 <p className="font-semibold">{uploadProgress.uploadedCount ?? 0}</p>
                 <p>Uploaded</p>
               </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+              <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
                 <p className="font-semibold">{uploadProgress.skippedCount ?? 0}</p>
                 <p>Skipped</p>
               </div>
-              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
+              <div className="w-full rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
                 <p className="font-semibold">{uploadProgress.failedCount ?? 0}</p>
                 <p>Failed</p>
               </div>
@@ -121,10 +121,13 @@ export default function GalleryUploadDropzone({
             />
           </div>
 
-          <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+          <div className="mt-2 flex flex-col gap-1 text-xs text-slate-500 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <span>{uploadProgress.percent}% complete</span>
             {lastResult ? (
-              <span className="truncate text-right">
+              <span
+                className="block w-full min-w-0 break-words text-left sm:flex-1 sm:truncate sm:text-right"
+                title={lastResult.fileName}
+              >
                 {lastResult.status === 'duplicate-skipped'
                   ? `Latest duplicate skipped: ${lastResult.fileName}`
                   : lastResult.status === 'error'
@@ -137,7 +140,7 @@ export default function GalleryUploadDropzone({
       ) : null}
 
       {hasSummary ? (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:p-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100">
               <div className="flex items-center gap-2">
@@ -162,12 +165,15 @@ export default function GalleryUploadDropzone({
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
             <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
               Processed {uploadSummary.totalFiles} file{uploadSummary.totalFiles === 1 ? '' : 's'}
             </p>
             {lastResult ? (
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+              <p
+                className="w-full min-w-0 break-words text-xs text-slate-500 dark:text-slate-400 sm:flex-1 sm:truncate sm:text-right"
+                title={`${lastResult.fileName} · ${lastResult.reason}`}
+              >
                 Most recent: {lastResult.fileName} · {lastResult.reason}
               </p>
             ) : null}
@@ -188,7 +194,9 @@ export default function GalleryUploadDropzone({
                         : 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-100'
                     }`}
                   >
-                    <p className="font-semibold">{entry.fileName}</p>
+                    <p className="min-w-0 break-words font-semibold" title={entry.fileName}>
+                      {entry.fileName}
+                    </p>
                     <p className="mt-1 text-xs opacity-80">{entry.reason}</p>
                   </div>
                 ))}

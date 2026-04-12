@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { toast } from 'sonner';
 import GlobalLoader from '@/components/GlobalLoader';
-import { downloadFromApi } from '@/lib/download-client';
 import { useLoadingStore } from '@/store/loading';
+
+const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
 
 const fetchJson = async (url) => {
   const response = await fetch(url, { cache: 'no-store' });
@@ -17,6 +17,10 @@ const fetchJson = async (url) => {
   }
   return data;
 };
+
+const joinClassNames = (...values) => values.filter(Boolean).join(' ');
+
+const normalizeGalleryView = (value) => (value === 'compact' ? 'compact' : 'cinematic');
 
 const isVideoUrl = (value) => {
   if (!value || typeof value !== 'string') return false;
@@ -28,19 +32,6 @@ const isVideoUrl = (value) => {
     normalized.endsWith('.webm') ||
     normalized.endsWith('.mkv')
   );
-};
-
-const getPlayableMediaUrl = (value) => {
-  if (!value || typeof value !== 'string') return value;
-  if (!isVideoUrl(value)) return value;
-  if (!value.includes('res.cloudinary.com') || !value.includes('/video/upload/')) return value;
-
-  const [withoutQuery, query] = value.split('?');
-  const transformed = withoutQuery
-    .replace('/video/upload/', '/video/upload/f_mp4,vc_h264,ac_aac,q_auto/')
-    .replace(/\.(mov|mkv|webm)$/i, '.mp4');
-
-  return query ? `${transformed}?${query}` : transformed;
 };
 
 const getVideoPosterUrl = (value) => {
@@ -65,9 +56,21 @@ const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
   return <img src={posterSrc} alt={alt} className={className} />;
 };
 
+const AlbumCover = ({ src, alt, className, fallbackClassName }) => {
+  if (!src) {
+    return <div className={fallbackClassName} />;
+  }
+
+  if (isVideoUrl(src)) {
+    return <VideoPoster src={src} alt={alt} className={className} fallbackClassName={fallbackClassName} />;
+  }
+
+  return <img src={src} alt={alt} className={className} />;
+};
+
 const normalizeLabel = (album) => {
   if (typeof album?.description === 'string' && album.description.trim()) {
-    const firstChunk = album.description.split(/[\.|·]/)[0]?.trim();
+    const firstChunk = album.description.split(/[.|·]/)[0]?.trim();
     if (firstChunk) return firstChunk;
   }
 
@@ -93,6 +96,8 @@ const normalizeAlbumPhotosPayload = (payload) => {
   if (Array.isArray(payload?.photos)) return payload.photos;
   return [];
 };
+
+const resolveAlbumCover = (album) => album?.coverPhoto?.imageUrl || album?.photos?.[0]?.imageUrl || '';
 
 const attachAlbumMediaCounts = async (albums) => {
   const withCounts = await Promise.all(
@@ -144,6 +149,364 @@ const getAlbumMediaCounts = (album) => {
   };
 };
 
+const getDescription = (album) =>
+  album?.description?.trim() || 'A private cinematic album experience with premium storytelling visuals.';
+
+const getSelectionDirection = (currentIndex, targetIndex, total) => {
+  if (total <= 1 || currentIndex === targetIndex) return 1;
+
+  const forwardDistance = (targetIndex - currentIndex + total) % total;
+  const backwardDistance = (currentIndex - targetIndex + total) % total;
+  return forwardDistance <= backwardDistance ? 1 : -1;
+};
+
+function GalleryViewToggle({ currentView, onChange }) {
+  return (
+    <div className="inline-flex w-fit rounded-full border border-white/28 bg-white/10 p-1 backdrop-blur">
+      {[
+        { value: 'cinematic', label: 'Cinematic' },
+        { value: 'compact', label: 'Compact' },
+      ].map((option) => {
+        const isActive = currentView === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={joinClassNames(
+              'rounded-full px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.22em] transition sm:px-5',
+              isActive ? 'bg-white text-slate-900 shadow-sm' : 'text-white/85 hover:bg-white/10',
+            )}
+            aria-pressed={isActive}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function AlbumStats({ counts, pillClassName = '', className = '' }) {
+  return (
+    <div className={joinClassNames('flex flex-wrap items-center gap-2.5', className)}>
+      <span
+        className={joinClassNames(
+          'rounded-full border border-white/28 bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-white/92',
+          pillClassName,
+        )}
+      >
+        {counts.photos} Photos
+      </span>
+      {counts.videos > 0 ? (
+        <span
+          className={joinClassNames(
+            'rounded-full border border-white/28 bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-white/92',
+            pillClassName,
+          )}
+        >
+          {counts.videos} Videos
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function GalleryFooter({ activeIndex, total, onPrev, onNext, className = '' }) {
+  return (
+    <footer
+      className={joinClassNames(
+        'flex items-center justify-between gap-4 border-t border-white/22 pt-4 sm:pt-5',
+        className,
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onPrev}
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-lg text-white transition hover:bg-white/18"
+          aria-label="Previous album"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          onClick={onNext}
+          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-lg text-white transition hover:bg-white/18"
+          aria-label="Next album"
+        >
+          ›
+        </button>
+      </div>
+
+      <div className="flex items-center gap-3 text-[11px] uppercase tracking-[0.28em] text-white/88">
+        <span>{(activeIndex + 1).toString().padStart(2, '0')}</span>
+        <span className="h-px w-12 bg-white/35 sm:w-16" />
+        <span>{total.toString().padStart(2, '0')}</span>
+      </div>
+    </footer>
+  );
+}
+
+function CinematicGalleryView({
+  activeAlbum,
+  activeCounts,
+  headlineTop,
+  headlineBottom,
+  previewAlbums,
+  activeIndex,
+  albumsLength,
+  onSelectAlbum,
+  onPauseAutoplay,
+  onResumeAutoplay,
+  onPrev,
+  onNext,
+}) {
+  return (
+    <>
+      <section className="mt-6 flex flex-col gap-6 lg:mt-10 lg:flex-1 lg:justify-center lg:gap-8">
+        <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(480px,0.96fr)] xl:grid-cols-[minmax(0,1fr)_minmax(640px,0.9fr)] xl:gap-10">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`featured-copy-${activeAlbum.id}`}
+              className="space-y-5 pr-2 sm:pr-5 lg:space-y-6 lg:pr-10"
+              initial={{ opacity: 0, x: -26, scale: 0.985 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 18, scale: 0.99 }}
+              transition={{ duration: 0.44, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="space-y-3 overflow-hidden">
+                <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/88 sm:text-sm">
+                  {normalizeLabel(activeAlbum)}
+                </p>
+
+                <h1 className="max-w-full overflow-hidden font-['Bebas_Neue','Inter',sans-serif] text-[3.2rem] uppercase leading-[0.84] tracking-[0.03em] sm:text-[4.15rem] md:text-[4.8rem] lg:text-[6rem] xl:text-[7rem]">
+                  <span className="block break-words">{headlineTop}</span>
+                  <span className="block break-words">{headlineBottom}</span>
+                </h1>
+              </div>
+
+              <p className="max-w-[35rem] overflow-hidden pr-6 text-[1.02rem] leading-relaxed text-white/86 sm:pr-12 sm:text-[1.06rem] lg:pr-16 lg:text-[1.08rem] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] lg:[display:block] lg:[-webkit-line-clamp:unset]">
+                {getDescription(activeAlbum)}
+              </p>
+
+              <div className="space-y-3.5">
+                <Link
+                  href={`/gallery/${activeAlbum.slug}`}
+                  className="inline-flex h-12 items-center rounded-full bg-white px-6 text-sm font-semibold text-slate-900 transition hover:scale-[1.02] hover:bg-slate-100"
+                >
+                  Open Album
+                </Link>
+
+                <AlbumStats counts={activeCounts} />
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          <div
+            className="relative"
+            onMouseEnter={onPauseAutoplay}
+            onMouseLeave={onResumeAutoplay}
+          >
+            <div
+              className="-mx-5 overflow-x-auto px-5 pb-2 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0 [&::-webkit-scrollbar]:hidden"
+              style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
+            >
+              <div className="flex snap-x snap-mandatory items-stretch gap-3.5 pr-[24vw] sm:pr-[12vw] lg:pr-0">
+                {previewAlbums.map(({ album, index, order }) => {
+                  const coverImage = resolveAlbumCover(album);
+                  const albumCounts = getAlbumMediaCounts(album);
+                  const isNextUp = order === 0;
+
+                  return (
+                    <button
+                      key={album.id}
+                      type="button"
+                      onClick={() => onSelectAlbum(index)}
+                      className={joinClassNames(
+                        'group relative aspect-[0.72] w-[42vw] min-w-[148px] max-w-[188px] shrink-0 snap-start overflow-hidden rounded-[26px] border text-left shadow-[0_24px_60px_rgba(2,6,23,0.32)] transition duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 sm:w-[31vw] sm:min-w-[170px] sm:max-w-[214px] lg:w-[185px] xl:w-[198px]',
+                        isNextUp ? 'border-white/70 ring-2 ring-white/45' : 'border-white/28 hover:border-white/50',
+                      )}
+                      aria-label={`Show album ${album.name}`}
+                    >
+                      <AlbumCover
+                        src={coverImage}
+                        alt={album.name}
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                        fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]"
+                      />
+                      <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.9),rgba(2,6,23,0.08)_62%)]" />
+                      <div className="absolute inset-x-0 bottom-0 space-y-1.5 p-3.5 sm:p-4">
+                        <p className="line-clamp-2 text-[1rem] font-semibold uppercase leading-[1.02] tracking-[0.04em] text-white sm:text-[1.08rem]">
+                          {album.name}
+                        </p>
+                        <p className="text-[11px] uppercase tracking-[0.2em] text-white/82">
+                          {albumCounts.photos} photos{albumCounts.videos > 0 ? ` • ${albumCounts.videos} videos` : ''}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <GalleryFooter
+        activeIndex={activeIndex}
+        total={albumsLength}
+        onPrev={onPrev}
+        onNext={onNext}
+        className="mt-6 lg:mt-auto"
+      />
+    </>
+  );
+}
+
+function CompactGalleryView({
+  activeAlbum,
+  activeCounts,
+  activeIndex,
+  albums,
+  onSelectAlbum,
+  onPrev,
+  onNext,
+}) {
+  const coverImage = resolveAlbumCover(activeAlbum);
+
+  return (
+    <section className="mt-6 space-y-6 pb-8 lg:mt-8 lg:space-y-8 lg:pb-10">
+      <div className="overflow-hidden rounded-[30px] border border-white/16 bg-white/[0.06] shadow-[0_24px_80px_rgba(2,6,23,0.3)] backdrop-blur">
+        <div className="relative min-h-[330px] sm:min-h-[360px]">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`compact-summary-${activeAlbum.id}`}
+              className="absolute inset-0"
+              initial={{ opacity: 0, scale: 1.05 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <AlbumCover
+                src={coverImage}
+                alt={activeAlbum.name}
+                className="h-full w-full object-cover"
+                fallbackClassName="h-full w-full bg-[linear-gradient(135deg,#0f172a,#1e293b,#0b1120)]"
+              />
+            </motion.div>
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(2,6,23,0.92),rgba(2,6,23,0.68)_46%,rgba(2,6,23,0.92))]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_22%,rgba(255,255,255,0.14),transparent_35%)]" />
+
+          <div className="relative z-10 flex min-h-[330px] flex-col justify-end gap-5 p-5 sm:min-h-[360px] sm:p-7 lg:p-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-[44rem] space-y-4 pr-2 sm:pr-4">
+                <div className="space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/84 sm:text-sm">
+                    {normalizeLabel(activeAlbum)}
+                  </p>
+                  <h1 className="max-w-[16ch] font-['Bebas_Neue','Inter',sans-serif] text-[3rem] uppercase leading-[0.84] tracking-[0.03em] sm:text-[3.5rem] lg:text-[4.8rem]">
+                    {activeAlbum.name}
+                  </h1>
+                </div>
+
+                <p className="max-w-[36rem] pr-5 text-[1rem] leading-relaxed text-white/84 sm:pr-8 sm:text-[1.04rem]">
+                  {getDescription(activeAlbum)}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onPrev}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-lg text-white transition hover:bg-white/18"
+                  aria-label="Previous featured album"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={onNext}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-lg text-white transition hover:bg-white/18"
+                  aria-label="Next featured album"
+                >
+                  ›
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href={`/gallery/${activeAlbum.slug}`}
+                className="inline-flex h-12 items-center rounded-full bg-white px-6 text-sm font-semibold text-slate-900 transition hover:scale-[1.02] hover:bg-slate-100"
+              >
+                Open Album
+              </Link>
+              <AlbumStats counts={activeCounts} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {albums.map((album, index) => {
+          const albumCounts = getAlbumMediaCounts(album);
+          const isActive = index === activeIndex;
+
+          return (
+            <article
+              key={album.id}
+              className={joinClassNames(
+                'overflow-hidden rounded-[28px] border bg-white/[0.06] shadow-[0_20px_55px_rgba(2,6,23,0.24)] backdrop-blur transition',
+                isActive ? 'border-white/45 ring-1 ring-white/30' : 'border-white/14 hover:border-white/26',
+              )}
+              onMouseEnter={() => onSelectAlbum(index)}
+            >
+              <div className="relative aspect-[0.86] overflow-hidden">
+                <AlbumCover
+                  src={resolveAlbumCover(album)}
+                  alt={album.name}
+                  className="h-full w-full object-cover transition duration-500 hover:scale-105"
+                  fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]"
+                />
+                <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.9),rgba(2,6,23,0.08)_55%)]" />
+                {isActive ? (
+                  <span className="absolute right-3 top-3 rounded-full border border-white/30 bg-slate-950/45 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/90 backdrop-blur">
+                    Featured
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="space-y-4 p-4 sm:p-5">
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-[0.22em] text-white/62">{normalizeLabel(album)}</p>
+                  <h2 className="text-[1.35rem] font-semibold uppercase leading-[1.02] tracking-[0.04em] text-white sm:text-[1.55rem]">
+                    {album.name}
+                  </h2>
+                  <p className="line-clamp-3 pr-3 text-sm leading-relaxed text-white/72 sm:text-[0.98rem]">
+                    {getDescription(album)}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <AlbumStats counts={albumCounts} pillClassName="border-white/20 bg-white/[0.02] text-white/86" />
+                  <Link
+                    href={`/gallery/${album.slug}`}
+                    className="inline-flex h-10 items-center rounded-full border border-white/24 px-4 text-sm font-medium text-white transition hover:bg-white/10"
+                  >
+                    Open Album
+                  </Link>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function GalleryPage() {
   const router = useRouter();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
@@ -151,12 +514,12 @@ export default function GalleryPage() {
   const [isReady, setIsReady] = useState(false);
   const [albums, setAlbums] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [currentView, setCurrentView] = useState('cinematic');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isAutoplayPaused, setIsAutoplayPaused] = useState(false);
   const [touchStartX, setTouchStartX] = useState(null);
   const [slideDirection, setSlideDirection] = useState(1);
-  const [downloadingAlbumId, setDownloadingAlbumId] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -203,79 +566,43 @@ export default function GalleryPage() {
     setError('');
     startGlobalLoading('Curating the gallery preview');
 
-    const loadAlbums = async () => {
+    const loadGallery = async () => {
       try {
-        const data = await fetchJson('/api/gallery/albums');
-        const publishedAlbums = Array.isArray(data) ? data.filter((item) => item.isPublished) : [];
+        const [settingsPayload, albumsPayload] = await Promise.all([
+          fetchJson('/api/admin/settings').catch(() => null),
+          fetchJson('/api/gallery/albums'),
+        ]);
+
+        const publishedAlbums = Array.isArray(albumsPayload) ? albumsPayload.filter((item) => item.isPublished) : [];
         const albumsWithCounts = await attachAlbumMediaCounts(publishedAlbums);
+        const resolvedDefaultView = normalizeGalleryView(settingsPayload?.settings?.integrations?.defaultGalleryView);
+
         setAlbums(albumsWithCounts);
         setActiveIndex(0);
+
+        let storedView = null;
+        if (typeof window !== 'undefined') {
+          const storedValue = window.localStorage.getItem(GALLERY_VIEW_STORAGE_KEY);
+          storedView = storedValue ? normalizeGalleryView(storedValue) : null;
+        }
+
+        setCurrentView(storedView || resolvedDefaultView);
       } catch (requestError) {
-        setError(requestError.message);
+        setError(requestError instanceof Error ? requestError.message : 'Unable to load the gallery.');
       } finally {
         setLoading(false);
         finalize();
       }
     };
 
-    loadAlbums();
+    loadGallery();
     return () => {
       finalize();
     };
   }, [isReady, startGlobalLoading, stopGlobalLoading]);
 
-  const resolveAlbumCover = (album) => album?.coverPhoto?.imageUrl || album?.photos?.[0]?.imageUrl || '';
-
-  const activeAlbum = albums[activeIndex] || null;
-  const activeCover = activeAlbum ? resolveAlbumCover(activeAlbum) : '';
-  const activeIsVideo = isVideoUrl(activeCover);
-  const activeCounts = getAlbumMediaCounts(activeAlbum);
-  const [headlineTop, headlineBottom] = buildTitleLines(activeAlbum?.name);
-
-  const previewAlbums = useMemo(() => {
-    if (albums.length <= 1) return [];
-
-    const previewCount = Math.min(3, albums.length - 1);
-    return Array.from({ length: previewCount }, (_, offset) => {
-      const index = (activeIndex + offset + 1) % albums.length;
-      return { album: albums[index], index };
-    });
-  }, [albums, activeIndex]);
-
-  const moveSlide = (direction) => {
-    if (albums.length <= 1) return;
-    setSlideDirection(direction >= 0 ? 1 : -1);
-    setActiveIndex((previous) => (previous + direction + albums.length) % albums.length);
-  };
-
-  const handleDownloadAlbum = async (albumToDownload) => {
-    if (!albumToDownload?.id) {
-      return;
-    }
-
-    setDownloadingAlbumId(albumToDownload.id);
-    const toastId = toast.loading(`Preparing ${albumToDownload.name || 'album'}...`);
-    try {
-      const result = await downloadFromApi(
-        `/api/gallery/albums/${albumToDownload.id}/download`,
-        `${albumToDownload.slug || 'album'}.zip`,
-      );
-      if (result.skippedCount > 0) {
-        toast.success(`Downloaded ${result.filename} (${result.includedCount} items, ${result.skippedCount} skipped).`, {
-          id: toastId,
-        });
-      } else {
-        toast.success(`Downloaded ${result.filename}.`, { id: toastId });
-      }
-    } catch (downloadError) {
-      toast.error(downloadError instanceof Error ? downloadError.message : 'Download failed.', { id: toastId });
-    } finally {
-      setDownloadingAlbumId(null);
-    }
-  };
-
   useEffect(() => {
-    if (!isReady || isAutoplayPaused || albums.length <= 1) {
+    if (!isReady || currentView !== 'cinematic' || isAutoplayPaused || albums.length <= 1) {
       return;
     }
 
@@ -285,9 +612,53 @@ export default function GalleryPage() {
     }, 5500);
 
     return () => clearInterval(timer);
-  }, [isReady, isAutoplayPaused, albums.length]);
+  }, [isReady, currentView, isAutoplayPaused, albums.length]);
+
+  const activeAlbum = albums[activeIndex] || null;
+  const activeCover = activeAlbum ? resolveAlbumCover(activeAlbum) : '';
+  const activeCounts = getAlbumMediaCounts(activeAlbum);
+  const [headlineTop, headlineBottom] = buildTitleLines(activeAlbum?.name);
+
+  const previewAlbums = useMemo(() => {
+    if (albums.length <= 1) return [];
+
+    return Array.from({ length: albums.length - 1 }, (_, offset) => {
+      const index = (activeIndex + offset + 1) % albums.length;
+      return { album: albums[index], index, order: offset };
+    });
+  }, [albums, activeIndex]);
+
+  const moveSlide = (direction) => {
+    if (albums.length <= 1) return;
+    setSlideDirection(direction >= 0 ? 1 : -1);
+    setActiveIndex((previous) => (previous + direction + albums.length) % albums.length);
+  };
+
+  const selectAlbum = (targetIndex) => {
+    if (albums.length <= 1 || targetIndex === activeIndex) {
+      return;
+    }
+
+    setSlideDirection(getSelectionDirection(activeIndex, targetIndex, albums.length));
+    setActiveIndex(targetIndex);
+  };
+
+  const handleViewChange = (nextView) => {
+    const normalizedView = normalizeGalleryView(nextView);
+    setCurrentView(normalizedView);
+    setIsAutoplayPaused(false);
+    setTouchStartX(null);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(GALLERY_VIEW_STORAGE_KEY, normalizedView);
+    }
+  };
 
   const onKeyDown = (event) => {
+    if (currentView !== 'cinematic') {
+      return;
+    }
+
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
       moveSlide(-1);
@@ -301,10 +672,18 @@ export default function GalleryPage() {
   };
 
   const onTouchStart = (event) => {
+    if (currentView !== 'cinematic') {
+      return;
+    }
+
     setTouchStartX(event.touches?.[0]?.clientX ?? null);
   };
 
   const onTouchEnd = (event) => {
+    if (currentView !== 'cinematic') {
+      return;
+    }
+
     const endX = event.changedTouches?.[0]?.clientX ?? null;
     if (touchStartX === null || endX === null) {
       setTouchStartX(null);
@@ -324,12 +703,12 @@ export default function GalleryPage() {
 
   return (
     <main
-      className="relative min-h-screen overflow-hidden bg-slate-950 text-white"
+      className="relative min-h-[100svh] overflow-x-hidden bg-slate-950 text-white lg:min-h-screen"
       onKeyDown={onKeyDown}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
       tabIndex={0}
-      aria-label="Private gallery slider"
+      aria-label={currentView === 'compact' ? 'Private gallery browser' : 'Private gallery slider'}
     >
       <AnimatePresence mode="wait">
         {activeCover ? (
@@ -338,28 +717,20 @@ export default function GalleryPage() {
             className="absolute inset-0"
             initial={{
               opacity: 0,
-              scale: slideDirection > 0 ? 1.18 : 1.1,
-              x: slideDirection > 0 ? 32 : -32,
+              scale: currentView === 'cinematic' ? (slideDirection > 0 ? 1.18 : 1.11) : 1.04,
+              x: currentView === 'cinematic' ? (slideDirection > 0 ? 34 : -34) : 0,
               filter: 'blur(6px)',
             }}
             animate={{ opacity: 1, scale: 1, x: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, scale: 0.96, filter: 'blur(4px)' }}
+            exit={{ opacity: 0, scale: 0.97, filter: 'blur(4px)' }}
             transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
           >
-            {activeIsVideo ? (
-              <VideoPoster
-                src={activeCover}
-                alt={activeAlbum?.name || 'Active album'}
-                className="h-full w-full object-cover"
-                fallbackClassName="h-full w-full bg-[linear-gradient(135deg,#1e293b,#334155,#0f172a)]"
-              />
-            ) : (
-              <img
-                src={activeCover}
-                alt={activeAlbum?.name || 'Active album'}
-                className="h-full w-full object-cover"
-              />
-            )}
+            <AlbumCover
+              src={activeCover}
+              alt={activeAlbum?.name || 'Active album'}
+              className="h-full w-full object-cover"
+              fallbackClassName="h-full w-full bg-[linear-gradient(135deg,#0f172a,#1e293b,#0b1120)]"
+            />
           </motion.div>
         ) : (
           <motion.div
@@ -372,179 +743,72 @@ export default function GalleryPage() {
         )}
       </AnimatePresence>
 
-      <div className="absolute inset-0 bg-[linear-gradient(108deg,rgba(2,6,23,0.84),rgba(2,6,23,0.36)_48%,rgba(2,6,23,0.92))]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_34%,rgba(255,255,255,0.15),transparent_42%)]" />
+      <div
+        className={joinClassNames(
+          'absolute inset-0',
+          currentView === 'compact'
+            ? 'bg-[linear-gradient(135deg,rgba(2,6,23,0.95),rgba(2,6,23,0.82)_42%,rgba(2,6,23,0.95))]'
+            : 'bg-[linear-gradient(108deg,rgba(2,6,23,0.84),rgba(2,6,23,0.36)_48%,rgba(2,6,23,0.92))]',
+        )}
+      />
+      <div
+        className={joinClassNames(
+          'absolute inset-0',
+          currentView === 'compact'
+            ? 'bg-[radial-gradient(circle_at_78%_18%,rgba(255,255,255,0.12),transparent_32%)]'
+            : 'bg-[radial-gradient(circle_at_72%_34%,rgba(255,255,255,0.15),transparent_42%)]',
+        )}
+      />
 
-      <div className="relative z-10 mx-auto flex min-h-screen max-w-[1380px] flex-col px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-        <header className="flex items-center justify-between">
+      <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-[1480px] flex-col px-5 py-5 sm:px-6 sm:py-6 lg:min-h-screen lg:px-10 lg:py-8">
+        <header className="flex items-center justify-between gap-4">
           <p className="text-xs uppercase tracking-[0.32em] text-white/85">Private Gallery</p>
-          <div className="rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-white/90 backdrop-blur">
+          <div className="rounded-full border border-white/30 bg-white/10 px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/90 backdrop-blur">
             Secure Session
           </div>
         </header>
+
+        <div className="mt-4 flex items-center gap-3">
+          <GalleryViewToggle currentView={currentView} onChange={handleViewChange} />
+        </div>
 
         {loading ? <p className="mt-8 text-sm text-white/80">Loading albums...</p> : null}
         {error ? <p className="mt-8 text-sm text-rose-300">{error}</p> : null}
 
         {!loading && !error && albums.length === 0 ? (
-          <section className="my-auto max-w-xl rounded-2xl border border-white/20 bg-white/10 p-8 backdrop-blur">
+          <section className="mt-8 max-w-xl rounded-2xl border border-white/20 bg-white/10 p-8 backdrop-blur lg:my-auto">
             <p className="text-2xl font-semibold">No albums yet</p>
             <p className="mt-2 text-sm text-white/80">Add and publish albums in admin to show them here.</p>
           </section>
         ) : null}
 
         {!loading && !error && activeAlbum ? (
-          <>
-            <section className="my-auto grid gap-6 pt-8 md:grid-cols-[minmax(0,1fr)_minmax(360px,0.9fr)] lg:grid-cols-[minmax(0,1fr)_minmax(560px,0.78fr)]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`featured-copy-${activeAlbum.id}`}
-                  className="flex min-h-[360px] flex-col justify-end space-y-6 pb-2"
-                  initial={{ opacity: 0, x: -30, scale: 0.97 }}
-                  animate={{ opacity: 1, x: 0, scale: 1 }}
-                  exit={{ opacity: 0, x: 18, scale: 0.985 }}
-                  transition={{ duration: 0.44, ease: [0.22, 1, 0.36, 1] }}
-                >
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium uppercase tracking-[0.2em] text-white/90">{normalizeLabel(activeAlbum)}</p>
-                    <h1 className="font-['Bebas_Neue','Inter',sans-serif] text-[3.1rem] uppercase leading-[0.86] tracking-[0.02em] sm:text-[4.4rem] xl:text-[5.25rem]">
-                      <span className="block">{headlineTop}</span>
-                      <span className="block">{headlineBottom}</span>
-                    </h1>
-                  </div>
-
-                  <p className="max-w-xl text-sm leading-relaxed text-white/85 sm:text-base">
-                    {activeAlbum.description || 'A private cinematic album experience with premium storytelling visuals.'}
-                  </p>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Link
-                      href={`/gallery/${activeAlbum.slug}`}
-                      className="inline-flex h-11 items-center rounded-full bg-white px-5 text-sm font-semibold text-slate-900 transition hover:scale-[1.02] hover:bg-slate-100"
-                    >
-                      Open Album
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadAlbum(activeAlbum)}
-                      disabled={downloadingAlbumId === activeAlbum.id}
-                      className="inline-flex h-11 items-center rounded-full border border-white/35 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {downloadingAlbumId === activeAlbum.id ? 'Preparing ZIP...' : 'Download Album'}
-                    </button>
-                    <span className="rounded-full border border-white/35 px-4 py-2 text-xs uppercase tracking-[0.15em] text-white/90">
-                      {activeCounts.photos} Photos
-                    </span>
-                    {activeCounts.videos > 0 ? (
-                      <span className="rounded-full border border-white/35 px-4 py-2 text-xs uppercase tracking-[0.15em] text-white/90">
-                        {activeCounts.videos} Videos
-                      </span>
-                    ) : null}
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-
-              <div
-                className="relative flex min-h-[340px] items-end md:items-center"
-                onMouseEnter={() => setIsAutoplayPaused(true)}
-                onMouseLeave={() => setIsAutoplayPaused(false)}
-              >
-                <div className="w-full overflow-hidden pb-2">
-                  <div className="flex items-stretch gap-3 pr-1">
-                    {previewAlbums.map(({ album, index }) => {
-                      const coverImage = resolveAlbumCover(album);
-                      const coverIsVideo = isVideoUrl(coverImage);
-                      const isHighlighted = index === (activeIndex + 1) % albums.length;
-                      const albumCounts = getAlbumMediaCounts(album);
-
-                      return (
-                        <div key={album.id} className="flex flex-col gap-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const delta = (index - activeIndex + albums.length) % albums.length;
-                              setSlideDirection(delta > 0 ? 1 : -1);
-                              setActiveIndex(index);
-                            }}
-                            className={`group relative h-[250px] w-[165px] overflow-hidden rounded-2xl border text-left shadow-xl shadow-black/40 transition duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 sm:h-[280px] sm:w-[175px] lg:w-[180px] ${
-                              isHighlighted
-                                ? 'border-white/70 ring-2 ring-white/50'
-                                : 'border-white/28 hover:border-white/50'
-                            }`}
-                            aria-label={`Show album ${album.name}`}
-                          >
-                            {coverImage ? coverIsVideo ? (
-                              <VideoPoster
-                                src={coverImage}
-                                alt={album.name}
-                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                                fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]"
-                              />
-                            ) : (
-                              <img
-                                src={coverImage}
-                                alt={album.name}
-                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                              />
-                            ) : (
-                              <div className="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]" />
-                            )}
-
-                            <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.86),rgba(2,6,23,0.18))]" />
-                            <div className="absolute bottom-0 w-full space-y-1 p-3">
-                              <p className="line-clamp-2 text-xs font-bold uppercase tracking-[0.08em] text-white">{album.name}</p>
-                              <p className="text-[10px] uppercase tracking-[0.15em] text-white/80">
-                                {albumCounts.photos} photos{albumCounts.videos > 0 ? ` • ${albumCounts.videos} videos` : ''}
-                              </p>
-                            </div>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadAlbum(album)}
-                            disabled={downloadingAlbumId === album.id}
-                            className="h-8 w-full rounded-full border border-white/30 bg-white/10 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {downloadingAlbumId === album.id ? 'Preparing ZIP...' : 'Download Album'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <footer className="mt-auto flex items-center justify-between border-t border-white/25 pt-4">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    moveSlide(-1);
-                  }}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-white/10 text-lg text-white transition hover:bg-white/20"
-                  aria-label="Previous album"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    moveSlide(1);
-                  }}
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/35 bg-white/10 text-lg text-white transition hover:bg-white/20"
-                  aria-label="Next album"
-                >
-                  ›
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3 text-xs uppercase tracking-[0.22em] text-white/85">
-                <span>{(activeIndex + 1).toString().padStart(2, '0')}</span>
-                <span className="h-px w-14 bg-white/40" />
-                <span>{albums.length.toString().padStart(2, '0')}</span>
-              </div>
-            </footer>
-          </>
+          currentView === 'compact' ? (
+            <CompactGalleryView
+              activeAlbum={activeAlbum}
+              activeCounts={activeCounts}
+              activeIndex={activeIndex}
+              albums={albums}
+              onSelectAlbum={selectAlbum}
+              onPrev={() => moveSlide(-1)}
+              onNext={() => moveSlide(1)}
+            />
+          ) : (
+            <CinematicGalleryView
+              activeAlbum={activeAlbum}
+              activeCounts={activeCounts}
+              headlineTop={headlineTop}
+              headlineBottom={headlineBottom}
+              previewAlbums={previewAlbums}
+              activeIndex={activeIndex}
+              albumsLength={albums.length}
+              onSelectAlbum={selectAlbum}
+              onPauseAutoplay={() => setIsAutoplayPaused(true)}
+              onResumeAutoplay={() => setIsAutoplayPaused(false)}
+              onPrev={() => moveSlide(-1)}
+              onNext={() => moveSlide(1)}
+            />
+          )
         ) : null}
       </div>
     </main>

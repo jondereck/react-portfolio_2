@@ -157,6 +157,7 @@ export const integrationsSettingsSchema = z.object({
       .optional(),
   ),
   googleDriveImportEnabled: z.boolean().optional().default(true),
+  defaultGalleryView: z.enum(['cinematic', 'compact']).optional().default('cinematic'),
 });
 
 export const securitySettingsSchema = z.object({
