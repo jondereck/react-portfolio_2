@@ -47,21 +47,21 @@ export default function AdminTopbar({ onLogout }) {
 
   return (
     <>
-      <header className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-1">
+      <header className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm md:p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div className="space-y-3 md:hidden">
+          <div className="space-y-2">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{title}</h1>
-            <div className="hidden md:block">
+            <h1 className="text-2xl font-bold leading-tight text-slate-900 dark:text-slate-100">{title}</h1>
+            <div className="pt-0.5">
               <AdminBreadcrumbs />
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-950/40">
             <button
               type="button"
               onClick={() => setIsMenuOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:bg-slate-100 md:hidden dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               aria-label="Open menu"
               title="Open menu"
             >
@@ -70,15 +70,31 @@ export default function AdminTopbar({ onLogout }) {
             <button
               type="button"
               onClick={onLogout}
-              className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+              className="h-9 rounded-lg px-3.5 text-sm font-medium text-slate-600 transition hover:bg-slate-200/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100"
             >
               Logout
             </button>
           </div>
         </div>
 
-        <div className="mt-3 md:hidden">
-          <AdminBreadcrumbs />
+        <div className="hidden md:flex md:flex-row md:items-start md:justify-between">
+          <div className="space-y-1">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{title}</h1>
+            <div>
+              <AdminBreadcrumbs />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 

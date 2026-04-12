@@ -77,9 +77,17 @@ export default async function GalleryAdminPage() {
           Each card now opens a dedicated route with only the relevant tools visible. The advanced all-in-one workspace remains
           available separately for power workflows, but it is no longer the default destination.
         </p>
-        <Link href="/admin/gallery/workspace" className="mt-3 inline-flex text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-200">
-          Open advanced workspace
-        </Link>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Link href="/admin/gallery/workspace" className="inline-flex text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-200">
+            Open advanced workspace
+          </Link>
+          <Link
+            href="/gallery"
+            className="inline-flex text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
+          >
+            Open live gallery
+          </Link>
+        </div>
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3">

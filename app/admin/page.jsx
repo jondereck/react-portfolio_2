@@ -1,4 +1,5 @@
 import { BriefcaseBusiness, Images, Settings2 } from 'lucide-react';
+import Link from 'next/link';
 import AdminOverviewCard from '@/components/admin/shared/AdminOverviewCard';
 
 const adminOverviewCards = [
@@ -32,10 +33,21 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-xl font-semibold"> Admin Control Center</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Administration is organized by domain. Each module has its own overview and workspace pages to keep boundaries clear.
-        </p>
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold"> Admin Control Center</h2>
+            <p className="mt-2 max-w-2xl text-sm text-slate-500">
+              Administration is organized by domain. Each module has its own overview and workspace pages to keep boundaries clear.
+            </p>
+          </div>
+
+          <Link
+            href="/gallery"
+            className="inline-flex h-10 shrink-0 items-center justify-center rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+          >
+            Open Live Gallery
+          </Link>
+        </div>
       </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -8,6 +8,7 @@ import GlobalLoader from '@/components/GlobalLoader';
 import { useLoadingStore } from '@/store/loading';
 
 const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
+const GALLERY_ADMIN_HOLD_MS = 700;
 
 const fetchJson = async (url) => {
   const response = await fetch(url, { cache: 'no-store' });
@@ -483,6 +484,7 @@ export default function GalleryPage() {
   const router = useRouter();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
+  const galleryAdminHoldTimerRef = useRef(null);
   const [isReady, setIsReady] = useState(false);
   const [albums, setAlbums] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -698,6 +700,27 @@ export default function GalleryPage() {
     setTouchStartX(null);
   };
 
+  const clearGalleryAdminHold = () => {
+    if (galleryAdminHoldTimerRef.current) {
+      window.clearTimeout(galleryAdminHoldTimerRef.current);
+      galleryAdminHoldTimerRef.current = null;
+    }
+  };
+
+  const startGalleryAdminHold = (event) => {
+    if ('button' in event && event.button !== 0) {
+      return;
+    }
+
+    clearGalleryAdminHold();
+    galleryAdminHoldTimerRef.current = window.setTimeout(() => {
+      galleryAdminHoldTimerRef.current = null;
+      router.push('/admin/gallery');
+    }, GALLERY_ADMIN_HOLD_MS);
+  };
+
+  useEffect(() => () => clearGalleryAdminHold(), []);
+
   if (!isReady) {
     return <GlobalLoader forceVisible message="Checking gallery access" hint="Verifying the secure gallery session." />;
   }
@@ -764,9 +787,18 @@ export default function GalleryPage() {
       <div className="relative z-10 mx-auto flex min-h-[100svh] max-w-[1480px] flex-col px-5 py-5 sm:px-6 sm:py-6 lg:min-h-screen lg:px-10 lg:py-8">
         <header className="flex items-center justify-between gap-4">
           <p className="text-xs uppercase tracking-[0.32em] text-white/85">Private Gallery</p>
-          <div className="rounded-full border border-white/30 bg-white/10 px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/90 backdrop-blur">
+          <button
+            type="button"
+            onPointerDown={startGalleryAdminHold}
+            onPointerUp={clearGalleryAdminHold}
+            onPointerLeave={clearGalleryAdminHold}
+            onPointerCancel={clearGalleryAdminHold}
+            onContextMenu={(event) => event.preventDefault()}
+            className="rounded-full border border-white/30 bg-white/10 px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/90 backdrop-blur transition hover:bg-white/14"
+            aria-label="Secure session. Long press to open gallery admin."
+          >
             Secure Session
-          </div>
+          </button>
         </header>
 
         <div className="mt-4 flex items-center gap-3">
