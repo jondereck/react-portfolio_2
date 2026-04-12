@@ -12,6 +12,16 @@ export const buttonStyles =
 export const ghostButtonStyles =
   'h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800';
 
+export function toRequestError(data, fallbackMessage = 'Request failed', status) {
+  const error = new Error(data?.error || fallbackMessage);
+  error.status = status;
+  error.errorCode = data?.errorCode;
+  error.details = data?.details;
+  error.duplicate = data?.duplicate;
+  error.payload = data;
+  return error;
+}
+
 export const galleryPageMeta = {
   albums: {
     eyebrow: 'Album Management',
@@ -53,7 +63,7 @@ export async function fetchJson(url, init) {
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data?.error || 'Request failed');
+    throw toRequestError(data, 'Request failed', response.status);
   }
 
   return data;
@@ -87,11 +97,11 @@ export function uploadFormDataWithProgress(url, formData, { method = 'POST', onP
         return;
       }
 
-      reject(new Error(data?.error || 'Request failed'));
+      reject(toRequestError(data, 'Request failed', xhr.status));
     };
 
     xhr.onerror = () => {
-      reject(new Error('Request failed'));
+      reject(toRequestError({}, 'Network request failed'));
     };
 
     xhr.send(formData);

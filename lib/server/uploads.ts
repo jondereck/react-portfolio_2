@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { v2 as cloudinary } from 'cloudinary';
 import { getCloudinaryFolderPath } from '@/lib/server/admin-settings';
 
@@ -15,12 +16,22 @@ export const ALLOWED_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'mkv']);
 export class RequestValidationError extends Error {
   status: number;
   details?: Record<string, string[]>;
+  errorCode?: string;
+  meta?: Record<string, unknown>;
 
-  constructor(message: string, status = 400, details?: Record<string, string[]>) {
+  constructor(
+    message: string,
+    status = 400,
+    details?: Record<string, string[]>,
+    errorCode?: string,
+    meta?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = 'RequestValidationError';
     this.status = status;
     this.details = details;
+    this.errorCode = errorCode;
+    this.meta = meta;
   }
 }
 
@@ -34,14 +45,16 @@ export function validateImageFile(file: File, fieldName = 'imageFile') {
       `${fieldName} must be a PNG, JPG, WEBP, or GIF image.`,
       400,
       { [fieldName]: ['Unsupported file type.'] },
+      'UNSUPPORTED_MEDIA_TYPE',
     );
   }
 
   if (file.size > MAX_IMAGE_FILE_SIZE) {
     throw new RequestValidationError(
       `${fieldName} must be 5MB or smaller.`,
-      400,
+      413,
       { [fieldName]: ['File is too large.'] },
+      'IMAGE_TOO_LARGE',
     );
   }
 }
@@ -64,14 +77,16 @@ export function validateMediaFile(file: File, fieldName = 'imageFile') {
         `${fieldName} video format is not allowed. Use MP4, MOV, WEBM, or MKV.`,
         400,
         { [fieldName]: ['Unsupported video extension.'] },
+        'UNSUPPORTED_MEDIA_TYPE',
       );
     }
 
     if (file.size > MAX_VIDEO_FILE_SIZE) {
       throw new RequestValidationError(
         `${fieldName} video must be 120MB or smaller.`,
-        400,
+        413,
         { [fieldName]: ['Video file is too large.'] },
+        'VIDEO_TOO_LARGE',
       );
     }
     return;
@@ -81,6 +96,7 @@ export function validateMediaFile(file: File, fieldName = 'imageFile') {
     `${fieldName} must be a supported image or video format.`,
     400,
     { [fieldName]: ['Unsupported media type.'] },
+    'UNSUPPORTED_MEDIA_TYPE',
   );
 }
 
@@ -93,7 +109,7 @@ const getCloudinaryConfig = () => {
   const apiSecret = process.env.CLOUDINARY_SECRET || process.env.CLOUDINARY_API_SECRET;
 
   if (!cloudName || !apiKey || !apiSecret) {
-    throw new RequestValidationError('Upload service not configured.', 500);
+    throw new RequestValidationError('Upload service not configured.', 500, undefined, 'UPLOAD_NOT_CONFIGURED');
   }
 
   return { cloudName, apiKey, apiSecret };
@@ -187,62 +203,101 @@ export async function uploadImageFile(file: File, folder: string) {
   if (!isSupportedImageBuffer(buffer)) {
     throw new RequestValidationError('Uploaded content does not match a supported image format.', 400, {
       imageFile: ['Invalid image content.'],
-    });
+    }, 'INVALID_IMAGE_CONTENT');
   }
-  const result = await new Promise<{ secure_url?: string }>((resolve, reject) => {
-    cloudinary.uploader
-      .upload_stream({ folder: resolvedFolder }, (error, uploadResult) => {
-        if (error) {
-          reject(error);
-          return;
-        }
+  let result;
+  try {
+    result = await new Promise<{ secure_url?: string }>((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream({ folder: resolvedFolder }, (error, uploadResult) => {
+          if (error) {
+            reject(error);
+            return;
+          }
 
-        resolve(uploadResult ?? {});
-      })
-      .end(buffer);
-  });
+          resolve(uploadResult ?? {});
+        })
+        .end(buffer);
+    });
+  } catch (error) {
+    throw new RequestValidationError(
+      error instanceof Error && error.message ? `Image upload failed: ${error.message}` : 'Image upload failed.',
+      502,
+      undefined,
+      'IMAGE_UPLOAD_FAILED',
+    );
+  }
 
   if (!result.secure_url) {
-    throw new RequestValidationError('Image upload failed.', 502);
+    throw new RequestValidationError('Image upload failed.', 502, undefined, 'IMAGE_UPLOAD_FAILED');
   }
 
   return result.secure_url;
 }
 
-export async function uploadMediaFile(file: File, folder: string) {
+export type PreparedMediaUpload = {
+  buffer: Buffer;
+  contentHash: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+};
+
+export async function prepareMediaUpload(file: File): Promise<PreparedMediaUpload> {
   validateMediaFile(file);
-  configureCloudinary();
-  const resolvedFolder = await resolveCloudinaryFolder(folder);
 
   const buffer = Buffer.from(await file.arrayBuffer());
   if (ALLOWED_IMAGE_MIME_TYPES.has(file.type) && !isSupportedImageBuffer(buffer)) {
     throw new RequestValidationError('Uploaded content does not match a supported image format.', 400, {
       imageFile: ['Invalid image content.'],
-    });
+    }, 'INVALID_IMAGE_CONTENT');
   }
 
-  const result = await new Promise<{
-    secure_url?: string;
-    public_id?: string;
-    resource_type?: 'image' | 'video' | 'raw' | 'auto';
-    format?: string;
-    bytes?: number;
-    original_filename?: string;
-  }>((resolve, reject) => {
-    cloudinary.uploader
-      .upload_stream({ folder: resolvedFolder, resource_type: 'auto' }, (error, uploadResult) => {
-        if (error) {
-          reject(error);
-          return;
-        }
+  return {
+    buffer,
+    contentHash: createHash('sha256').update(buffer).digest('hex'),
+    originalFilename: file.name,
+    mimeType: file.type,
+    fileSizeBytes: file.size,
+  };
+}
 
-        resolve(uploadResult ?? {});
-      })
-      .end(buffer);
-  });
+export async function uploadPreparedMediaFile(prepared: PreparedMediaUpload, folder: string) {
+  configureCloudinary();
+  const resolvedFolder = await resolveCloudinaryFolder(folder);
+
+  let result;
+  try {
+    result = await new Promise<{
+      secure_url?: string;
+      public_id?: string;
+      resource_type?: 'image' | 'video' | 'raw' | 'auto';
+      format?: string;
+      bytes?: number;
+      original_filename?: string;
+    }>((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream({ folder: resolvedFolder, resource_type: 'auto' }, (error, uploadResult) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve(uploadResult ?? {});
+        })
+        .end(prepared.buffer);
+    });
+  } catch (error) {
+    throw new RequestValidationError(
+      error instanceof Error && error.message ? `Media upload failed: ${error.message}` : 'Media upload failed.',
+      502,
+      undefined,
+      'MEDIA_UPLOAD_FAILED',
+    );
+  }
 
   if (!result.secure_url) {
-    throw new RequestValidationError('Media upload failed.', 502);
+    throw new RequestValidationError('Media upload failed.', 502, undefined, 'MEDIA_UPLOAD_FAILED');
   }
 
   const isVideoResource = result.resource_type === 'video';
@@ -259,9 +314,9 @@ export async function uploadMediaFile(file: File, folder: string) {
   if (process.env.NODE_ENV !== 'production') {
     // eslint-disable-next-line no-console
     console.info('[gallery upload]', {
-      name: file.name,
-      mime: file.type,
-      size: file.size,
+      name: prepared.originalFilename,
+      mime: prepared.mimeType,
+      size: prepared.fileSizeBytes,
       cloudinaryResourceType: result.resource_type,
       cloudinaryFormat: result.format,
       publicId: result.public_id,
@@ -279,4 +334,9 @@ export async function uploadMediaFile(file: File, folder: string) {
     bytes: result.bytes,
     originalFilename: result.original_filename,
   };
+}
+
+export async function uploadMediaFile(file: File, folder: string) {
+  const prepared = await prepareMediaUpload(file);
+  return uploadPreparedMediaFile(prepared, folder);
 }

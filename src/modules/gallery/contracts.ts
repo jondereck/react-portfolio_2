@@ -23,6 +23,10 @@ export const photoCreateSchema = z.object({
   caption: z.string().trim().max(500).optional(),
   dateTaken: z.string().datetime().optional(),
   cloudinaryPublicId: z.string().trim().max(300).optional(),
+  contentHash: z.string().trim().length(64).optional(),
+  originalFilename: z.string().trim().max(300).optional(),
+  mimeType: z.string().trim().max(120).optional(),
+  fileSizeBytes: z.number().int().nonnegative().max(2_147_483_647).optional(),
   sourceType: z.enum(['upload', 'gdrive']).optional().default('upload'),
   sourceId: z.string().trim().max(300).optional(),
 });

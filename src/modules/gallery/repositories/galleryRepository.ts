@@ -7,6 +7,10 @@ const photoSelect = {
   albumId: true,
   imageUrl: true,
   cloudinaryPublicId: true,
+  contentHash: true,
+  originalFilename: true,
+  mimeType: true,
+  fileSizeBytes: true,
   caption: true,
   dateTaken: true,
   uploadedAt: true,
@@ -109,10 +113,28 @@ export class GalleryRepository {
     });
   }
 
+  async findAlbumPhotoByContentHash(albumId: number, contentHash: string) {
+    return prisma.albumPhoto.findFirst({
+      where: { albumId, contentHash },
+      select: photoSelect,
+    });
+  }
+
+  async findAlbumPhotoBySourceId(albumId: number, sourceType: PhotoSourceType, sourceId: string) {
+    return prisma.albumPhoto.findFirst({
+      where: { albumId, sourceType, sourceId },
+      select: photoSelect,
+    });
+  }
+
   async createAlbumPhoto(data: {
     albumId: number;
     imageUrl: string;
     cloudinaryPublicId?: string;
+    contentHash?: string;
+    originalFilename?: string;
+    mimeType?: string;
+    fileSizeBytes?: number;
     caption?: string;
     dateTaken?: Date;
     sourceType?: PhotoSourceType;
@@ -129,6 +151,10 @@ export class GalleryRepository {
         albumId: data.albumId,
         imageUrl: data.imageUrl,
         cloudinaryPublicId: data.cloudinaryPublicId ?? null,
+        contentHash: data.contentHash ?? null,
+        originalFilename: data.originalFilename ?? null,
+        mimeType: data.mimeType ?? null,
+        fileSizeBytes: data.fileSizeBytes ?? null,
         caption: data.caption ?? null,
         dateTaken: data.dateTaken,
         sourceType: data.sourceType ?? PhotoSourceType.upload,

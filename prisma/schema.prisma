@@ -146,6 +146,10 @@ model AlbumPhoto {
   albumId          Int
   imageUrl         String
   cloudinaryPublicId String?
+  contentHash      String?
+  originalFilename String?
+  mimeType         String?
+  fileSizeBytes    Int?
   caption          String?
   dateTaken        DateTime?
   uploadedAt       DateTime        @default(now())
@@ -160,5 +164,7 @@ model AlbumPhoto {
   @@index([albumId, sortOrder])
   @@index([albumId, dateTaken])
   @@index([albumId, uploadedAt])
+  @@index([albumId, sourceType, sourceId])
+  @@unique([albumId, contentHash])
 }
 

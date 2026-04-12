@@ -3,7 +3,6 @@ import { isAuthorizedMutation } from '@/lib/adminAuth';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
-import { uploadMediaFile } from '@/lib/server/uploads';
 import { gallerySortSchema, photoCreateSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
@@ -56,39 +55,24 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const { data, imageFile } = await parseMultipartOrJson(request);
-    const uploadedMedia = imageFile
-      ? await uploadMediaFile(imageFile, `portfolio/gallery/${albumId}`)
-      : null;
-    const imageUrl = uploadedMedia
-      ? uploadedMedia.playbackUrl
-      : typeof data.imageUrl === 'string'
-        ? data.imageUrl
-        : '';
-    const cloudinaryPublicId = uploadedMedia?.publicId
-      ? uploadedMedia.publicId
-      : typeof data.cloudinaryPublicId === 'string'
-        ? data.cloudinaryPublicId
-        : undefined;
+    const created = imageFile
+      ? await galleryService.addUploadedAlbumPhoto(albumId, {
+          file: imageFile,
+          input: photoCreateSchema.omit({ imageUrl: true }).parse({
+            ...data,
+            sourceType: data.sourceType || 'upload',
+          }),
+        })
+      : await galleryService.addAlbumPhoto(
+          albumId,
+          photoCreateSchema.parse({
+            ...data,
+            imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : '',
+            cloudinaryPublicId: typeof data.cloudinaryPublicId === 'string' ? data.cloudinaryPublicId : undefined,
+            sourceType: data.sourceType || 'upload',
+          }),
+        );
 
-    const parsed = photoCreateSchema.parse({
-      ...data,
-      imageUrl,
-      cloudinaryPublicId,
-      sourceType: data.sourceType || 'upload',
-    });
-
-    if (process.env.NODE_ENV !== 'production' && uploadedMedia) {
-      // eslint-disable-next-line no-console
-      console.info('[gallery photo create]', {
-        albumId,
-        imageUrl,
-        cloudinaryPublicId,
-        resourceType: uploadedMedia.resourceType,
-        format: uploadedMedia.format,
-      });
-    }
-
-    const created = await galleryService.addAlbumPhoto(albumId, parsed);
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
     return toErrorResponse(error, 'Unable to add photo.');

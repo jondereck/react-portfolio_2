@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Check, Trash2, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import ConfirmModal from '@/components/ConfirmModal';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import GalleryMediaViewer from './GalleryMediaViewer';
 import {
@@ -22,8 +24,8 @@ export default function GalleryMediaPanel({ controller }) {
     loadingPhotos,
     uploadingFiles,
     uploadProgress,
+    uploadSummary,
     uploadFiles,
-    deletePhoto,
     deleteSelectedPhotos,
     selectedPhotoIds,
     togglePhotoSelect,
@@ -33,9 +35,30 @@ export default function GalleryMediaPanel({ controller }) {
   const selectedCount = selectedPhotoIds.length;
   const showSelectionBar = selectedCount > 0;
   const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
-    <div className={`space-y-6 ${showSelectionBar ? 'pb-28 sm:pb-24' : ''}`}>
+    <div className={`space-y-6 ${showSelectionBar ? 'pb-36 sm:pb-28' : ''}`}>
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title={`Delete ${selectedCount} selected media item${selectedCount === 1 ? '' : 's'}?`}
+        description="This action cannot be undone."
+        confirmLabel={selectedCount === 1 ? 'Delete item' : `Delete ${selectedCount} items`}
+        loading={confirmingDelete}
+        destructive
+        onConfirm={async () => {
+          try {
+            setConfirmingDelete(true);
+            await deleteSelectedPhotos({ skipConfirm: true });
+            setConfirmDeleteOpen(false);
+          } finally {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
+
       <GalleryPageHeader
         eyebrow="Media Intake"
         title="Media"
@@ -60,6 +83,7 @@ export default function GalleryMediaPanel({ controller }) {
               <GalleryUploadDropzone
                 uploading={uploadingFiles}
                 uploadProgress={uploadProgress}
+                uploadSummary={uploadSummary}
                 onUploadFiles={uploadFiles}
                 title="Upload media"
                 description="Drag and drop images or videos here, or choose files from your device."
@@ -71,7 +95,7 @@ export default function GalleryMediaPanel({ controller }) {
             <GalleryPanelCard
               title="Selected album media"
               description="Review the current album's intake list and manage individual items."
-              className={showSelectionBar ? 'pb-24 sm:pb-6' : ''}
+              className={showSelectionBar ? 'pb-28 sm:pb-8' : ''}
             >
               {loadingPhotos ? (
                 <p className="text-sm text-slate-500 dark:text-slate-400">Loading media...</p>
@@ -128,13 +152,6 @@ export default function GalleryMediaPanel({ controller }) {
                         <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100 sm:text-sm">
                           {photo.caption || 'Untitled media'}
                         </p>
-                        <button
-                          type="button"
-                          className="w-full rounded-md border border-red-300 px-2 py-2 text-xs font-medium text-red-700 hover:bg-red-50 dark:border-red-900/50 dark:text-red-300 dark:hover:bg-red-950/30 sm:px-2 sm:py-1"
-                          onClick={() => deletePhoto(photo.id)}
-                        >
-                          Delete
-                        </button>
                       </div>
                     </article>
                   ))}
@@ -142,7 +159,7 @@ export default function GalleryMediaPanel({ controller }) {
               )}
 
               {showSelectionBar ? (
-                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 shadow-[0_-10px_30px_-18px_rgba(15,23,42,0.4)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-10px_30px_-18px_rgba(15,23,42,0.4)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
                   <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -152,23 +169,26 @@ export default function GalleryMediaPanel({ controller }) {
                         Use delete to remove all checked items at once.
                       </p>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
+                    <div className="flex w-full gap-2 sm:w-auto sm:flex-wrap">
+                      <Button
                         type="button"
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-sky-300 bg-white px-3 text-sm font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:bg-slate-900 dark:text-sky-200 dark:hover:bg-sky-950/40"
-                        onClick={deleteSelectedPhotos}
+                        variant="destructive"
+                        className="h-12 flex-1 sm:h-10 sm:flex-none"
+                        onClick={() => setConfirmDeleteOpen(true)}
+                        disabled={confirmingDelete}
                       >
                         <Trash2 className="size-4" />
                         Delete selected
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
-                        className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        variant="outline"
+                        className="h-12 flex-1 sm:h-10 sm:flex-none"
                         onClick={clearPhotoSelection}
                       >
                         <X className="size-4" />
                         Clear selection
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>

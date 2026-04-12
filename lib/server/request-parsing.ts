@@ -42,7 +42,7 @@ export async function parseMultipartOrJson(request: Request): Promise<ParsedRequ
 
       if (isFile(value)) {
         if (value.size > 0) {
-          throw new RequestValidationError(`Unexpected file field "${key}".`, 400);
+          throw new RequestValidationError(`Unexpected file field "${key}".`, 400, undefined, 'UNEXPECTED_FILE_FIELD');
         }
         continue;
       }
@@ -55,11 +55,11 @@ export async function parseMultipartOrJson(request: Request): Promise<ParsedRequ
 
   if (rawContentType.includes('application/json') || rawContentType === '') {
     const payload = await request.json().catch(() => {
-      throw new RequestValidationError('Malformed JSON request body.', 400);
+      throw new RequestValidationError('Malformed JSON request body.', 400, undefined, 'MALFORMED_JSON');
     });
 
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      throw new RequestValidationError('Request body must be a JSON object.', 400);
+      throw new RequestValidationError('Request body must be a JSON object.', 400, undefined, 'INVALID_PAYLOAD');
     }
 
     return { data: payload as Record<string, unknown>, contentType: 'json' };
@@ -68,6 +68,8 @@ export async function parseMultipartOrJson(request: Request): Promise<ParsedRequ
   throw new RequestValidationError(
     'Unsupported Content-Type. Use application/json or multipart/form-data.',
     415,
+    undefined,
+    'UNSUPPORTED_CONTENT_TYPE',
   );
 }
 

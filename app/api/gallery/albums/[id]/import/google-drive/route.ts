@@ -36,13 +36,21 @@ export async function POST(request: Request, context: RouteContext) {
 
     const body = await request.json();
     const parsed = driveImportSchema.parse(body);
-    const photos = await galleryService.importGoogleDriveFolder(albumId, {
+    const result = await galleryService.importGoogleDriveFolder(albumId, {
       folderId: String(parsed.folderId),
       accessToken: String(parsed.accessToken),
       limit: Number(parsed.limit ?? 50),
     });
 
-    return NextResponse.json({ importedCount: photos.length, photos }, { status: 201 });
+    return NextResponse.json(
+      {
+        importedCount: result.created.length,
+        skippedCount: result.skipped.length,
+        photos: result.created,
+        skipped: result.skipped,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     return toErrorResponse(error, 'Unable to import Google Drive folder.');
   }

@@ -16,8 +16,6 @@ export default function GalleryImportPanel({ controller }) {
     loadingAlbums,
     driveForm,
     setDriveForm,
-    duplicateMode,
-    setDuplicateMode,
     importingDrive,
     importSummary,
     handleDriveImport,
@@ -76,19 +74,9 @@ export default function GalleryImportPanel({ controller }) {
               </form>
             </GalleryPanelCard>
 
-            <GalleryPanelCard title="Duplicate handling" description="Choose how duplicate source IDs and URLs should be handled.">
-              <div className="flex flex-wrap gap-4 text-sm text-slate-700 dark:text-slate-200">
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="duplicateMode" checked={duplicateMode === 'keep'} onChange={() => setDuplicateMode('keep')} />
-                  Keep all imported media
-                </label>
-                <label className="flex items-center gap-2">
-                  <input type="radio" name="duplicateMode" checked={duplicateMode === 'skip'} onChange={() => setDuplicateMode('skip')} />
-                  Skip duplicates by source ID / URL
-                </label>
-              </div>
+            <GalleryPanelCard title="Duplicate handling" description="Google Drive imports now skip duplicates automatically before new records are created.">
               <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                Preview: importing up to {Number(driveForm.limit) || 50} items from folder {driveForm.folderId || '...'}.
+                Duplicates are matched by Google Drive source ID inside the selected album. Preview: importing up to {Number(driveForm.limit) || 50} items from folder {driveForm.folderId || '...'}.
               </p>
             </GalleryPanelCard>
 
@@ -96,8 +84,21 @@ export default function GalleryImportPanel({ controller }) {
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">
                 <p className="font-semibold text-emerald-900 dark:text-emerald-100">Last import summary</p>
                 <p className="mt-1 text-emerald-900/80 dark:text-emerald-100/80">
-                  Imported: {importSummary.importedCount} | Kept: {importSummary.keptCount} | Duplicates removed: {importSummary.duplicateRemoved}
+                  Imported: {importSummary.importedCount} | Duplicates skipped: {importSummary.skippedCount}
                 </p>
+                {Array.isArray(importSummary.skipped) && importSummary.skipped.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {importSummary.skipped.map((item, index) => (
+                      <div
+                        key={`${item.sourceId}-${index}`}
+                        className="rounded-lg border border-emerald-300/70 bg-white/70 px-3 py-2 text-xs text-emerald-950 dark:border-emerald-800/60 dark:bg-slate-900/40 dark:text-emerald-100"
+                      >
+                        <p className="font-semibold">{item.caption || item.sourceId}</p>
+                        <p className="mt-1 opacity-80">{item.reason}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

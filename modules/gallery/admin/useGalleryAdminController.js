@@ -4,10 +4,35 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
   areIdListsEqual,
-  getPhotoDedupeKey,
   getPhotoSortTime,
 } from '@/app/admin/gallery/utils';
-import { fetchJson, uploadFormDataWithProgress } from './galleryAdminShared';
+import { fetchJson } from './galleryAdminShared';
+import {
+  createEmptyUploadSummary,
+  getUploadSummaryToast,
+  uploadAlbumFiles,
+} from './galleryUploadBatch';
+
+const galleryAdminSelectedAlbumStorageKey = 'galleryAdminSelectedAlbumId';
+
+const readStoredAlbumId = () => {
+  if (typeof window === 'undefined') return null;
+
+  const storedValue = window.localStorage.getItem(galleryAdminSelectedAlbumStorageKey);
+  const parsedValue = Number.parseInt(storedValue ?? '', 10);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+};
+
+const persistSelectedAlbumId = (albumId) => {
+  if (typeof window === 'undefined') return;
+
+  if (albumId) {
+    window.localStorage.setItem(galleryAdminSelectedAlbumStorageKey, String(albumId));
+    return;
+  }
+
+  window.localStorage.removeItem(galleryAdminSelectedAlbumStorageKey);
+};
 
 export function useGalleryAdminController() {
   const [albums, setAlbums] = useState([]);
@@ -24,6 +49,7 @@ export function useGalleryAdminController() {
 
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [uploadSummary, setUploadSummary] = useState(null);
 
   const [detailsForm, setDetailsForm] = useState({ name: '', slug: '', description: '', isPublished: true });
   const [detailsDirty, setDetailsDirty] = useState(false);
@@ -40,7 +66,6 @@ export function useGalleryAdminController() {
 
   const [driveForm, setDriveForm] = useState({ folderId: '', accessToken: '', limit: 50 });
   const [importingDrive, setImportingDrive] = useState(false);
-  const [duplicateMode, setDuplicateMode] = useState('keep');
   const [importSummary, setImportSummary] = useState(null);
 
   const selectedAlbum = useMemo(
@@ -76,9 +101,16 @@ export function useGalleryAdminController() {
       const nextAlbums = Array.isArray(data) ? data : [];
       setAlbums(nextAlbums);
       setSelectedAlbumId((previousId) => {
+        const storedAlbumId = readStoredAlbumId();
+
         if (previousId && nextAlbums.some((album) => album.id === previousId)) {
           return previousId;
         }
+
+        if (storedAlbumId && nextAlbums.some((album) => album.id === storedAlbumId)) {
+          return storedAlbumId;
+        }
+
         return nextAlbums[0]?.id ?? null;
       });
     } catch (error) {
@@ -110,10 +142,19 @@ export function useGalleryAdminController() {
   }, []);
 
   useEffect(() => {
+    persistSelectedAlbumId(selectedAlbumId);
+  }, [selectedAlbumId]);
+
+  useEffect(() => {
     if (selectedAlbumId) {
       loadPhotos(selectedAlbumId, sortMode);
     }
   }, [selectedAlbumId, sortMode]);
+
+  useEffect(() => {
+    setUploadProgress(null);
+    setUploadSummary(null);
+  }, [selectedAlbumId]);
 
   useEffect(() => {
     if (!selectedAlbum) {
@@ -167,7 +208,7 @@ export function useGalleryAdminController() {
       toast.success('Album created');
       setAlbumForm({ name: '', slug: '', description: '', isPublished: true });
       await loadAlbums();
-      setSelectedAlbumId(created.id);
+      selectAlbum(created.id);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -175,17 +216,20 @@ export function useGalleryAdminController() {
     }
   };
 
-  const deleteAlbum = async (albumId = selectedAlbumId) => {
+  const deleteAlbum = async (albumId = selectedAlbumId, options = {}) => {
     if (!albumId) return;
+    const { skipConfirm = false } = options;
 
-    const confirmed = window.confirm('Delete this album and all photos? This cannot be undone.');
-    if (!confirmed) return;
+    if (!skipConfirm) {
+      const confirmed = window.confirm('Delete this album and all photos? This cannot be undone.');
+      if (!confirmed) return;
+    }
 
     try {
       await fetchJson(`/api/gallery/albums/${albumId}`, { method: 'DELETE' });
       toast.success('Album deleted');
       if (albumId === selectedAlbumId) {
-        setSelectedAlbumId(null);
+        selectAlbum(null);
         setPhotos([]);
       }
       await loadAlbums();
@@ -223,53 +267,34 @@ export function useGalleryAdminController() {
     if (!selectedAlbumId || nextFiles.length === 0) return;
 
     setUploadingFiles(true);
-    const totalBytes = Math.max(nextFiles.reduce((sum, file) => sum + (file.size || 0), 0), 1);
-    let completedBytes = 0;
-    setUploadProgress({
-      percent: 0,
-      currentFileName: nextFiles[0]?.name ?? '',
-      currentFileIndex: 1,
-      totalFiles: nextFiles.length,
-    });
+    setUploadSummary(createEmptyUploadSummary());
 
     try {
-      for (let index = 0; index < nextFiles.length; index += 1) {
-        const file = nextFiles[index];
-        const formData = new FormData();
-        formData.append('imageFile', file);
-        formData.append('caption', file.name);
+      const summary = await uploadAlbumFiles({
+        albumId: selectedAlbumId,
+        files: nextFiles,
+        onProgressChange: setUploadProgress,
+      });
 
-        await uploadFormDataWithProgress(`/api/gallery/albums/${selectedAlbumId}/photos`, formData, {
-          onProgress: ({ loaded }) => {
-            const progressBytes = completedBytes + Math.min(loaded, file.size || loaded);
-            const percent = Math.min(100, Math.round((progressBytes / totalBytes) * 100));
+      setUploadSummary(summary);
 
-            setUploadProgress({
-              percent,
-              currentFileName: file.name,
-              currentFileIndex: index + 1,
-              totalFiles: nextFiles.length,
-            });
-          },
-        });
-
-        completedBytes += file.size || 0;
-        setUploadProgress({
-          percent: Math.min(100, Math.round((completedBytes / totalBytes) * 100)),
-          currentFileName: file.name,
-          currentFileIndex: index + 1,
-          totalFiles: nextFiles.length,
-        });
+      const summaryMessage = getUploadSummaryToast(summary);
+      if (summary.failedCount > 0 && summary.uploadedCount === 0) {
+        toast.error(summaryMessage);
+      } else if (summary.failedCount > 0 || summary.skippedCount > 0) {
+        toast.message(summaryMessage);
+      } else {
+        toast.success(summaryMessage);
       }
 
-      toast.success(`${nextFiles.length} file(s) uploaded`);
-      await loadPhotos(selectedAlbumId, sortMode);
+      if (summary.uploadedCount > 0) {
+        await loadPhotos(selectedAlbumId, sortMode);
+      }
       await loadAlbums();
     } catch (error) {
       toast.error(error.message);
     } finally {
       setUploadingFiles(false);
-      setUploadProgress(null);
     }
   };
 
@@ -292,14 +317,17 @@ export function useGalleryAdminController() {
     }
   };
 
-  const deleteSelectedPhotos = async () => {
+  const deleteSelectedPhotos = async (options = {}) => {
     const photoIds = [...selectedPhotoIds];
     if (!selectedAlbumId || photoIds.length === 0) return;
+    const { skipConfirm = false } = options;
 
-    const confirmed = window.confirm(
-      `Delete ${photoIds.length} selected media item${photoIds.length === 1 ? '' : 's'}? This cannot be undone.`,
-    );
-    if (!confirmed) return;
+    if (!skipConfirm) {
+      const confirmed = window.confirm(
+        `Delete ${photoIds.length} selected media item${photoIds.length === 1 ? '' : 's'}? This cannot be undone.`,
+      );
+      if (!confirmed) return;
+    }
 
     try {
       for (const photoId of photoIds) {
@@ -346,7 +374,6 @@ export function useGalleryAdminController() {
     setImportSummary(null);
 
     try {
-      const existingKeys = new Set(photos.map(getPhotoDedupeKey).filter(Boolean));
       const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/import/google-drive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -357,33 +384,18 @@ export function useGalleryAdminController() {
         }),
       });
 
-      let duplicateRemoved = 0;
-      if (duplicateMode === 'skip' && Array.isArray(result.photos) && result.photos.length > 0) {
-        const seenKeys = new Set(existingKeys);
-
-        for (const importedPhoto of result.photos) {
-          const key = getPhotoDedupeKey(importedPhoto);
-          if (!key) continue;
-
-          if (seenKeys.has(key)) {
-            await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos/${importedPhoto.id}`, {
-              method: 'DELETE',
-            });
-            duplicateRemoved += 1;
-          } else {
-            seenKeys.add(key);
-          }
-        }
-      }
-
       const importedCount = Number(result.importedCount) || 0;
-      const keptCount = Math.max(importedCount - duplicateRemoved, 0);
+      const skippedCount = Number(result.skippedCount) || 0;
 
-      setImportSummary({ importedCount, duplicateRemoved, keptCount, mode: duplicateMode });
+      setImportSummary({
+        importedCount,
+        skippedCount,
+        skipped: Array.isArray(result.skipped) ? result.skipped : [],
+      });
       toast.success(
-        duplicateMode === 'skip'
-          ? `Imported ${keptCount} items (${duplicateRemoved} duplicates skipped)`
-          : `Imported ${importedCount} photos from Google Drive`,
+        skippedCount > 0
+          ? `Imported ${importedCount} item(s) and skipped ${skippedCount} duplicate(s)`
+          : `Imported ${importedCount} photo(s) from Google Drive`,
       );
 
       await loadPhotos(selectedAlbumId, sortMode);
@@ -508,6 +520,7 @@ export function useGalleryAdminController() {
   };
 
   const selectAlbum = (albumId) => {
+    persistSelectedAlbumId(albumId);
     setSelectedAlbumId(albumId);
   };
 
@@ -529,6 +542,7 @@ export function useGalleryAdminController() {
     savingAlbum,
     uploadingFiles,
     uploadProgress,
+    uploadSummary,
     detailsForm,
     setDetailsForm,
     detailsDirty,
@@ -543,8 +557,6 @@ export function useGalleryAdminController() {
     driveForm,
     setDriveForm,
     importingDrive,
-    duplicateMode,
-    setDuplicateMode,
     importSummary,
     saveState,
     selectedAlbumMediaCount,

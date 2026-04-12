@@ -152,23 +152,16 @@ const SortableMediaCard = memo(function SortableMediaCard({
           </button>
         </div>
 
-        <div className="min-w-0 space-y-1">
-          <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100 md:text-sm">
-            {photo.caption || 'Untitled media'}
-          </p>
-       
-        </div>
-
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            {isCover ? (
-              <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                Cover
-              </span>
-            ) : null}
+        {isCover ? (
+          <div className="flex justify-center">
+            <span className="rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              Cover
+            </span>
           </div>
+        ) : null}
 
-          {onSetCover ? (
+        {onSetCover ? (
+          <div className="flex justify-center">
             <button
               type="button"
               className="shrink-0 rounded-md border border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800"
@@ -179,8 +172,8 @@ const SortableMediaCard = memo(function SortableMediaCard({
             >
               Set cover
             </button>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </div>
     </article>
   );

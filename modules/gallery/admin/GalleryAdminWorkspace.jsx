@@ -9,12 +9,16 @@ import GalleryUploadDropzone from '@/modules/gallery/admin/GalleryUploadDropzone
 import {
   areIdListsEqual,
   formatLocalDate,
-  getPhotoDedupeKey,
   getPhotoSortTime,
 } from '@/app/admin/gallery/utils';
 import GalleryMobileWorkspaceNav from '@/modules/gallery/admin/GalleryMobileWorkspaceNav';
 import { normalizeGalleryWorkspaceTab } from '@/modules/gallery/admin/workspaceConfig';
-import { uploadFormDataWithProgress } from './galleryAdminShared';
+import { fetchJson } from './galleryAdminShared';
+import {
+  createEmptyUploadSummary,
+  getUploadSummaryToast,
+  uploadAlbumFiles,
+} from './galleryUploadBatch';
 
 const inputStyles =
   'h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950';
@@ -22,6 +26,26 @@ const buttonStyles =
   'h-10 rounded-md bg-slate-900 px-4 text-sm font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200';
 const ghostButtonStyles =
   'h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800';
+const galleryAdminSelectedAlbumStorageKey = 'galleryAdminSelectedAlbumId';
+
+const readStoredAlbumId = () => {
+  if (typeof window === 'undefined') return null;
+
+  const storedValue = window.localStorage.getItem(galleryAdminSelectedAlbumStorageKey);
+  const parsedValue = Number.parseInt(storedValue ?? '', 10);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+};
+
+const persistSelectedAlbumId = (albumId) => {
+  if (typeof window === 'undefined') return;
+
+  if (albumId) {
+    window.localStorage.setItem(galleryAdminSelectedAlbumStorageKey, String(albumId));
+    return;
+  }
+
+  window.localStorage.removeItem(galleryAdminSelectedAlbumStorageKey);
+};
 
 const workspaceTabCards = [
   {
@@ -55,20 +79,6 @@ const workspaceTabCards = [
     accent: 'slate',
   },
 ];
-
-const fetchJson = async (url, init) => {
-  const response = await fetch(url, {
-    cache: 'no-store',
-    ...init,
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data?.error || 'Request failed');
-  }
-
-  return data;
-};
 
 const getSaveState = ({
   savingAlbum,
@@ -163,6 +173,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
   const [savingAlbum, setSavingAlbum] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+  const [uploadSummary, setUploadSummary] = useState(null);
 
   const [detailsForm, setDetailsForm] = useState({ name: '', slug: '', description: '', isPublished: true });
   const [detailsDirty, setDetailsDirty] = useState(false);
@@ -179,7 +190,6 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
 
   const [driveForm, setDriveForm] = useState({ folderId: '', accessToken: '', limit: 50 });
   const [importingDrive, setImportingDrive] = useState(false);
-  const [duplicateMode, setDuplicateMode] = useState('keep');
   const [importSummary, setImportSummary] = useState(null);
 
   const selectedAlbum = useMemo(
@@ -218,6 +228,11 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
+  const selectAlbumById = (albumId) => {
+    persistSelectedAlbumId(albumId);
+    setSelectedAlbumId(albumId);
+  };
+
   useEffect(() => {
     setActiveTab(normalizeGalleryWorkspaceTab(initialTab));
   }, [initialTab]);
@@ -229,9 +244,16 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       const nextAlbums = Array.isArray(data) ? data : [];
       setAlbums(nextAlbums);
       setSelectedAlbumId((previousId) => {
+        const storedAlbumId = readStoredAlbumId();
+
         if (previousId && nextAlbums.some((album) => album.id === previousId)) {
           return previousId;
         }
+
+        if (storedAlbumId && nextAlbums.some((album) => album.id === storedAlbumId)) {
+          return storedAlbumId;
+        }
+
         return nextAlbums[0]?.id ?? null;
       });
     } catch (error) {
@@ -263,10 +285,19 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
   }, []);
 
   useEffect(() => {
+    persistSelectedAlbumId(selectedAlbumId);
+  }, [selectedAlbumId]);
+
+  useEffect(() => {
     if (selectedAlbumId) {
       loadPhotos(selectedAlbumId, sortMode);
     }
   }, [selectedAlbumId, sortMode]);
+
+  useEffect(() => {
+    setUploadProgress(null);
+    setUploadSummary(null);
+  }, [selectedAlbumId]);
 
   useEffect(() => {
     if (!selectedAlbum) {
@@ -356,7 +387,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       toast.success('Album created');
       setAlbumForm({ name: '', slug: '', description: '', isPublished: true });
       await loadAlbums();
-      setSelectedAlbumId(created.id);
+      selectAlbumById(created.id);
       syncWorkspaceTab('media');
     } catch (error) {
       toast.error(error.message);
@@ -374,7 +405,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
     try {
       await fetchJson(`/api/gallery/albums/${selectedAlbumId}`, { method: 'DELETE' });
       toast.success('Album deleted');
-      setSelectedAlbumId(null);
+      selectAlbumById(null);
       setPhotos([]);
       await loadAlbums();
     } catch (error) {
@@ -411,53 +442,34 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
     if (!selectedAlbumId || nextFiles.length === 0) return;
 
     setUploadingFiles(true);
-    const totalBytes = Math.max(nextFiles.reduce((sum, file) => sum + (file.size || 0), 0), 1);
-    let completedBytes = 0;
-    setUploadProgress({
-      percent: 0,
-      currentFileName: nextFiles[0]?.name ?? '',
-      currentFileIndex: 1,
-      totalFiles: nextFiles.length,
-    });
+    setUploadSummary(createEmptyUploadSummary());
 
     try {
-      for (let index = 0; index < nextFiles.length; index += 1) {
-        const file = nextFiles[index];
-        const formData = new FormData();
-        formData.append('imageFile', file);
-        formData.append('caption', file.name);
+      const summary = await uploadAlbumFiles({
+        albumId: selectedAlbumId,
+        files: nextFiles,
+        onProgressChange: setUploadProgress,
+      });
 
-        await uploadFormDataWithProgress(`/api/gallery/albums/${selectedAlbumId}/photos`, formData, {
-          onProgress: ({ loaded }) => {
-            const progressBytes = completedBytes + Math.min(loaded, file.size || loaded);
-            const percent = Math.min(100, Math.round((progressBytes / totalBytes) * 100));
+      setUploadSummary(summary);
 
-            setUploadProgress({
-              percent,
-              currentFileName: file.name,
-              currentFileIndex: index + 1,
-              totalFiles: nextFiles.length,
-            });
-          },
-        });
-
-        completedBytes += file.size || 0;
-        setUploadProgress({
-          percent: Math.min(100, Math.round((completedBytes / totalBytes) * 100)),
-          currentFileName: file.name,
-          currentFileIndex: index + 1,
-          totalFiles: nextFiles.length,
-        });
+      const summaryMessage = getUploadSummaryToast(summary);
+      if (summary.failedCount > 0 && summary.uploadedCount === 0) {
+        toast.error(summaryMessage);
+      } else if (summary.failedCount > 0 || summary.skippedCount > 0) {
+        toast.message(summaryMessage);
+      } else {
+        toast.success(summaryMessage);
       }
 
-      toast.success(`${nextFiles.length} file(s) uploaded`);
-      await loadPhotos(selectedAlbumId, sortMode);
+      if (summary.uploadedCount > 0) {
+        await loadPhotos(selectedAlbumId, sortMode);
+      }
       await loadAlbums();
     } catch (error) {
       toast.error(error.message);
     } finally {
       setUploadingFiles(false);
-      setUploadProgress(null);
     }
   };
 
@@ -505,8 +517,6 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
     setImportSummary(null);
 
     try {
-      const existingKeys = new Set(photos.map(getPhotoDedupeKey).filter(Boolean));
-
       const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/import/google-drive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -517,33 +527,18 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
         }),
       });
 
-      let duplicateRemoved = 0;
-      if (duplicateMode === 'skip' && Array.isArray(result.photos) && result.photos.length > 0) {
-        const seenKeys = new Set(existingKeys);
-
-        for (const importedPhoto of result.photos) {
-          const key = getPhotoDedupeKey(importedPhoto);
-          if (!key) continue;
-
-          if (seenKeys.has(key)) {
-            await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos/${importedPhoto.id}`, {
-              method: 'DELETE',
-            });
-            duplicateRemoved += 1;
-          } else {
-            seenKeys.add(key);
-          }
-        }
-      }
-
       const importedCount = Number(result.importedCount) || 0;
-      const keptCount = Math.max(importedCount - duplicateRemoved, 0);
+      const skippedCount = Number(result.skippedCount) || 0;
 
-      setImportSummary({ importedCount, duplicateRemoved, keptCount, mode: duplicateMode });
+      setImportSummary({
+        importedCount,
+        skippedCount,
+        skipped: Array.isArray(result.skipped) ? result.skipped : [],
+      });
       toast.success(
-        duplicateMode === 'skip'
-          ? `Imported ${keptCount} items (${duplicateRemoved} duplicates skipped)`
-          : `Imported ${importedCount} photos from Google Drive`,
+        skippedCount > 0
+          ? `Imported ${importedCount} item(s) and skipped ${skippedCount} duplicate(s)`
+          : `Imported ${importedCount} photo(s) from Google Drive`,
       );
 
       await loadPhotos(selectedAlbumId, sortMode);
@@ -725,7 +720,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                       ? 'border-slate-900 bg-slate-100 dark:border-slate-100 dark:bg-slate-800'
                       : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
                   }`}
-                  onClick={() => setSelectedAlbumId(album.id)}
+                  onClick={() => selectAlbumById(album.id)}
                 >
                   <p className="truncate text-sm font-semibold">{album.name}</p>
                   <p className="mt-1 text-xs text-slate-500">{album._count?.photos ?? 0} photos</p>
@@ -937,6 +932,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                       <GalleryUploadDropzone
                         uploading={uploadingFiles}
                         uploadProgress={uploadProgress}
+                        uploadSummary={uploadSummary}
                         onUploadFiles={uploadFiles}
                         title="Upload media"
                         description="Drag and drop images or videos here, or choose files from your device."
@@ -1161,28 +1157,12 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
 
                     <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                       <p className="text-sm font-semibold">Duplicate handling</p>
-                      <div className="mt-2 flex flex-wrap gap-4 text-sm">
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            name="duplicateMode"
-                            checked={duplicateMode === 'keep'}
-                            onChange={() => setDuplicateMode('keep')}
-                          />
-                          Keep all imported media
-                        </label>
-                        <label className="flex items-center gap-2">
-                          <input
-                            type="radio"
-                            name="duplicateMode"
-                            checked={duplicateMode === 'skip'}
-                            onChange={() => setDuplicateMode('skip')}
-                          />
-                          Skip duplicates by source ID / URL
-                        </label>
-                      </div>
+                      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                        Google Drive imports now skip duplicates automatically before new records are created.
+                      </p>
                       <p className="mt-2 text-xs text-slate-500">
-                        Preview: importing up to {Number(driveForm.limit) || 50} items from folder {driveForm.folderId || '...'}.
+                        Duplicates are matched by Google Drive source ID inside the selected album. Preview: importing up to{' '}
+                        {Number(driveForm.limit) || 50} items from folder {driveForm.folderId || '...'}.
                       </p>
                     </div>
 
@@ -1190,9 +1170,21 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                       <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">
                         <p className="font-semibold">Last import summary</p>
                         <p className="mt-1">
-                          Imported: {importSummary.importedCount} | Kept: {importSummary.keptCount} | Duplicates removed:{' '}
-                          {importSummary.duplicateRemoved}
+                          Imported: {importSummary.importedCount} | Duplicates skipped: {importSummary.skippedCount}
                         </p>
+                        {Array.isArray(importSummary.skipped) && importSummary.skipped.length > 0 ? (
+                          <div className="mt-3 space-y-2">
+                            {importSummary.skipped.map((item, index) => (
+                              <div
+                                key={`${item.sourceId}-${index}`}
+                                className="rounded-lg border border-emerald-300/70 bg-white/70 px-3 py-2 text-xs text-emerald-950 dark:border-emerald-800/60 dark:bg-slate-900/40 dark:text-emerald-100"
+                              >
+                                <p className="font-semibold">{item.caption || item.sourceId}</p>
+                                <p className="mt-1 opacity-80">{item.reason}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                     </section>

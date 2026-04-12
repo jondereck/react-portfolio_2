@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { Trash2, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import ConfirmModal from '@/components/ConfirmModal';
 import SortableMediaGrid from '@/app/admin/gallery/components/SortableMediaGrid';
 import GalleryArrangeMobileControls from '@/modules/gallery/admin/GalleryArrangeMobileControls';
 import GalleryMediaViewer from './GalleryMediaViewer';
@@ -27,6 +30,8 @@ export default function GalleryArrangePanel({ controller }) {
     orderSaving,
     arrangeDragState,
     selectedPhotoIds,
+    deleteSelectedPhotos,
+    clearPhotoSelection,
     setSelectedAlbumId,
     setCoverPhoto,
     reorderChange,
@@ -40,17 +45,40 @@ export default function GalleryArrangePanel({ controller }) {
   } = controller;
 
   const isDragging = Boolean(arrangeDragState.isDragging);
+  const selectedCount = selectedPhotoIds.length;
+  const showSelectionBar = selectedCount > 0;
   const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   return (
     <div className="space-y-6">
+      <ConfirmModal
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title={`Delete ${selectedCount} selected media item${selectedCount === 1 ? '' : 's'}?`}
+        description="This action cannot be undone."
+        confirmLabel={selectedCount === 1 ? 'Delete item' : `Delete ${selectedCount} items`}
+        loading={confirmingDelete}
+        destructive
+        onConfirm={async () => {
+          try {
+            setConfirmingDelete(true);
+            await deleteSelectedPhotos({ skipConfirm: true });
+            setConfirmDeleteOpen(false);
+          } finally {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
+
       <GalleryPageHeader
         eyebrow="Sorting Workspace"
         title="Arrange"
         description="A dedicated ordering workspace for the selected album with selection, reordering, and save controls only."
       />
 
-      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="space-y-6">
         <GalleryAlbumPicker
           albums={albums}
           selectedAlbumId={selectedAlbumId}
@@ -63,7 +91,7 @@ export default function GalleryArrangePanel({ controller }) {
           <GalleryPanelCard
             title={`Arrange ${selectedAlbum.name}`}
             description="Use manual sorting, selection, and save controls without upload, delete, or settings clutter."
-            className="relative overflow-visible pb-24 md:pb-0"
+            className={`relative overflow-visible ${showSelectionBar ? 'pb-32 md:pb-16' : 'pb-24 md:pb-0'}`}
           >
             {isDragging ? (
               <div className="rounded-xl border border-blue-200 bg-blue-50/95 px-3 py-2 text-xs font-medium text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-200">
@@ -117,6 +145,7 @@ export default function GalleryArrangePanel({ controller }) {
               </div>
             )}
 
+            {!showSelectionBar ? (
             <div className="md:hidden">
               <GalleryArrangeMobileControls
                 orderDirty={orderDirty}
@@ -136,6 +165,7 @@ export default function GalleryArrangePanel({ controller }) {
                 onUndo={undoOrder}
               />
             </div>
+            ) : null}
 
             {loadingPhotos ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">Loading media...</p>
@@ -162,6 +192,42 @@ export default function GalleryArrangePanel({ controller }) {
             photo={previewPhoto}
             onClose={() => setPreviewPhoto(null)}
           />
+
+          {showSelectionBar ? (
+            <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-10px_30px_-18px_rgba(15,23,42,0.4)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
+              <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {selectedCount} media item{selectedCount === 1 ? '' : 's'} selected
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Use delete to remove all checked items at once.
+                  </p>
+                </div>
+                <div className="flex w-full gap-2 sm:w-auto sm:flex-wrap">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="h-12 flex-1 sm:h-10 sm:flex-none"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                    disabled={confirmingDelete}
+                  >
+                    <Trash2 className="size-4" />
+                    Delete selected
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-12 flex-1 sm:h-10 sm:flex-none"
+                    onClick={clearPhotoSelection}
+                  >
+                    <X className="size-4" />
+                    Clear selection
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           </GalleryPanelCard>
         ) : (
           <GalleryPanelCard title="Select an album" description="Choose an album before opening the arrange workspace.">
