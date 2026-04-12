@@ -264,12 +264,12 @@ function CinematicGalleryView({
 }) {
   return (
     <>
-      <section className="mt-6 flex flex-col gap-6 lg:mt-10 lg:flex-1 lg:justify-center lg:gap-8">
-        <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(480px,0.96fr)] xl:grid-cols-[minmax(0,1fr)_minmax(640px,0.9fr)] xl:gap-10">
+      <section className="mt-6 flex-1 pt-4 sm:pt-6 lg:mt-10 lg:flex lg:flex-1 lg:flex-col lg:justify-center lg:pt-0">
+        <div className="grid h-full content-between gap-7 lg:h-auto lg:content-normal lg:grid-cols-[minmax(0,1fr)_minmax(480px,0.96fr)] xl:grid-cols-[minmax(0,1fr)_minmax(640px,0.9fr)] xl:gap-10">
           <AnimatePresence mode="wait">
             <motion.div
               key={`featured-copy-${activeAlbum.id}`}
-              className="space-y-5 pr-2 sm:pr-5 lg:space-y-6 lg:pr-10"
+              className="space-y-5 pr-4 sm:pr-6 lg:space-y-6 lg:pr-10"
               initial={{ opacity: 0, x: -26, scale: 0.985 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 18, scale: 0.99 }}
@@ -286,7 +286,7 @@ function CinematicGalleryView({
                 </h1>
               </div>
 
-              <p className="max-w-[35rem] overflow-hidden pr-6 text-[1.02rem] leading-relaxed text-white/86 sm:pr-12 sm:text-[1.06rem] lg:pr-16 lg:text-[1.08rem] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] lg:[display:block] lg:[-webkit-line-clamp:unset]">
+              <p className="max-w-[calc(100vw-3.5rem)] break-words overflow-hidden pr-10 text-[0.98rem] leading-relaxed text-white/86 sm:max-w-[31rem] sm:pr-12 sm:text-[1.04rem] lg:max-w-[35rem] lg:pr-16 lg:text-[1.08rem] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] lg:[display:block] lg:[-webkit-line-clamp:unset]">
                 {getDescription(activeAlbum)}
               </p>
 
@@ -358,99 +358,53 @@ function CinematicGalleryView({
         total={albumsLength}
         onPrev={onPrev}
         onNext={onNext}
-        className="mt-6 lg:mt-auto"
+        className="mt-4 lg:mt-auto"
       />
     </>
   );
 }
 
 function CompactGalleryView({
-  activeAlbum,
-  activeCounts,
   activeIndex,
   albums,
+  searchQuery,
+  onSearchChange,
   onSelectAlbum,
-  onPrev,
-  onNext,
 }) {
-  const coverImage = resolveAlbumCover(activeAlbum);
+  const router = useRouter();
+
+  const handleCardActivate = (index, slug) => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches) {
+      router.push(`/gallery/${slug}`);
+      return;
+    }
+
+    onSelectAlbum(index);
+  };
 
   return (
-    <section className="mt-6 space-y-6 pb-8 lg:mt-8 lg:space-y-8 lg:pb-10">
-      <div className="overflow-hidden rounded-[30px] border border-white/16 bg-white/[0.06] shadow-[0_24px_80px_rgba(2,6,23,0.3)] backdrop-blur">
-        <div className="relative min-h-[330px] sm:min-h-[360px]">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`compact-summary-${activeAlbum.id}`}
-              className="absolute inset-0"
-              initial={{ opacity: 0, scale: 1.05 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <AlbumCover
-                src={coverImage}
-                alt={activeAlbum.name}
-                className="h-full w-full object-cover"
-                fallbackClassName="h-full w-full bg-[linear-gradient(135deg,#0f172a,#1e293b,#0b1120)]"
-              />
-            </motion.div>
-          </AnimatePresence>
-          <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(2,6,23,0.92),rgba(2,6,23,0.68)_46%,rgba(2,6,23,0.92))]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_22%,rgba(255,255,255,0.14),transparent_35%)]" />
+    <section className="mt-6 space-y-4 pb-28 sm:pb-8 lg:mt-8 lg:space-y-5 lg:pb-10">
+      <div className="space-y-4">
+        <label className="hidden space-y-2 sm:block">
+          <span className="text-[11px] font-medium uppercase tracking-[0.22em] text-white/72">Search album</span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search album"
+            className="w-full rounded-full border border-white/18 bg-white/[0.08] px-4 py-3 text-sm text-white outline-none backdrop-blur placeholder:text-white/45 focus:border-white/40"
+          />
+        </label>
 
-          <div className="relative z-10 flex min-h-[330px] flex-col justify-end gap-5 p-5 sm:min-h-[360px] sm:p-7 lg:p-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="max-w-[44rem] space-y-4 pr-2 sm:pr-4">
-                <div className="space-y-3">
-                  <p className="text-xs font-medium uppercase tracking-[0.24em] text-white/84 sm:text-sm">
-                    {normalizeLabel(activeAlbum)}
-                  </p>
-                  <h1 className="max-w-[16ch] font-['Bebas_Neue','Inter',sans-serif] text-[3rem] uppercase leading-[0.84] tracking-[0.03em] sm:text-[3.5rem] lg:text-[4.8rem]">
-                    {activeAlbum.name}
-                  </h1>
-                </div>
-
-                <p className="max-w-[36rem] pr-5 text-[1rem] leading-relaxed text-white/84 sm:pr-8 sm:text-[1.04rem]">
-                  {getDescription(activeAlbum)}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onPrev}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-lg text-white transition hover:bg-white/18"
-                  aria-label="Previous featured album"
-                >
-                  ‹
-                </button>
-                <button
-                  type="button"
-                  onClick={onNext}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/35 bg-white/10 text-lg text-white transition hover:bg-white/18"
-                  aria-label="Next featured album"
-                >
-                  ›
-                </button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                href={`/gallery/${activeAlbum.slug}`}
-                className="inline-flex h-12 items-center rounded-full bg-white px-6 text-sm font-semibold text-slate-900 transition hover:scale-[1.02] hover:bg-slate-100"
-              >
-                Open Album
-              </Link>
-              <AlbumStats counts={activeCounts} />
-            </div>
+        {albums.length === 0 ? (
+          <div className="rounded-[24px] border border-white/14 bg-white/[0.05] px-5 py-8 text-center text-sm text-white/70">
+            No albums matched your search.
           </div>
-        </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {albums.map((album, index) => {
+      <div className="grid grid-cols-2 gap-3.5 sm:gap-5 xl:grid-cols-3">
+        {albums.map(({ album, index }) => {
           const albumCounts = getAlbumMediaCounts(album);
           const isActive = index === activeIndex;
 
@@ -458,9 +412,10 @@ function CompactGalleryView({
             <article
               key={album.id}
               className={joinClassNames(
-                'overflow-hidden rounded-[28px] border bg-white/[0.06] shadow-[0_20px_55px_rgba(2,6,23,0.24)] backdrop-blur transition',
+                'cursor-pointer overflow-hidden rounded-[28px] border bg-white/[0.06] shadow-[0_20px_55px_rgba(2,6,23,0.24)] backdrop-blur transition',
                 isActive ? 'border-white/45 ring-1 ring-white/30' : 'border-white/14 hover:border-white/26',
               )}
+              onClick={() => handleCardActivate(index, album.slug)}
               onMouseEnter={() => onSelectAlbum(index)}
             >
               <div className="relative aspect-[0.86] overflow-hidden">
@@ -478,22 +433,26 @@ function CompactGalleryView({
                 ) : null}
               </div>
 
-              <div className="space-y-4 p-4 sm:p-5">
+              <div className="space-y-3 p-3.5 sm:space-y-4 sm:p-5">
                 <div className="space-y-2">
                   <p className="text-[11px] uppercase tracking-[0.22em] text-white/62">{normalizeLabel(album)}</p>
-                  <h2 className="text-[1.35rem] font-semibold uppercase leading-[1.02] tracking-[0.04em] text-white sm:text-[1.55rem]">
+                  <h2 className="text-[1.05rem] font-semibold uppercase leading-[1.02] tracking-[0.04em] text-white sm:text-[1.55rem]">
                     {album.name}
                   </h2>
-                  <p className="line-clamp-3 pr-3 text-sm leading-relaxed text-white/72 sm:text-[0.98rem]">
+                  <p className="line-clamp-2 pr-1 text-[12px] leading-relaxed text-white/72 sm:line-clamp-3 sm:pr-3 sm:text-[0.98rem]">
                     {getDescription(album)}
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <AlbumStats counts={albumCounts} pillClassName="border-white/20 bg-white/[0.02] text-white/86" />
+                <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                  <AlbumStats
+                    counts={albumCounts}
+                    className="flex-nowrap gap-1.5 overflow-x-auto pr-1 [&::-webkit-scrollbar]:hidden"
+                    pillClassName="whitespace-nowrap border-white/20 bg-white/[0.02] px-2.5 py-1.5 text-[9px] tracking-[0.15em] text-white/86 sm:px-3 sm:text-[10px]"
+                  />
                   <Link
                     href={`/gallery/${album.slug}`}
-                    className="inline-flex h-10 items-center rounded-full border border-white/24 px-4 text-sm font-medium text-white transition hover:bg-white/10"
+                    className="hidden h-9 items-center rounded-full border border-white/24 px-3.5 text-xs font-medium text-white transition hover:bg-white/10 sm:inline-flex sm:h-10 sm:px-4 sm:text-sm"
                   >
                     Open Album
                   </Link>
@@ -502,6 +461,19 @@ function CompactGalleryView({
             </article>
           );
         })}
+      </div>
+
+      <div className="fixed inset-x-0 bottom-4 z-20 px-4 sm:hidden">
+        <label className="block rounded-full border border-white/18 bg-slate-950/78 p-1.5 shadow-[0_18px_40px_rgba(2,6,23,0.35)] backdrop-blur">
+          <span className="sr-only">Search album</span>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+            placeholder="Search album"
+            className="w-full rounded-full bg-transparent px-4 py-3 text-sm text-white outline-none placeholder:text-white/45"
+          />
+        </label>
       </div>
     </section>
   );
@@ -520,6 +492,7 @@ export default function GalleryPage() {
   const [isAutoplayPaused, setIsAutoplayPaused] = useState(false);
   const [touchStartX, setTouchStartX] = useState(null);
   const [slideDirection, setSlideDirection] = useState(1);
+  const [compactSearchQuery, setCompactSearchQuery] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -628,6 +601,23 @@ export default function GalleryPage() {
     });
   }, [albums, activeIndex]);
 
+  const compactAlbumEntries = useMemo(() => {
+    const query = compactSearchQuery.trim().toLowerCase();
+
+    return albums
+      .map((album, index) => ({ album, index }))
+      .filter(({ album }) => {
+        if (!query) return true;
+
+        const haystack = [album?.name, album?.description, album?.slug]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        return haystack.includes(query);
+      });
+  }, [albums, compactSearchQuery]);
+
   const moveSlide = (direction) => {
     if (albums.length <= 1) return;
     setSlideDirection(direction >= 0 ? 1 : -1);
@@ -642,6 +632,17 @@ export default function GalleryPage() {
     setSlideDirection(getSelectionDirection(activeIndex, targetIndex, albums.length));
     setActiveIndex(targetIndex);
   };
+
+  useEffect(() => {
+    if (currentView !== 'compact' || compactAlbumEntries.length === 0) {
+      return;
+    }
+
+    const activeStillVisible = compactAlbumEntries.some((entry) => entry.index === activeIndex);
+    if (!activeStillVisible) {
+      setActiveIndex(compactAlbumEntries[0].index);
+    }
+  }, [currentView, compactAlbumEntries, activeIndex]);
 
   const handleViewChange = (nextView) => {
     const normalizedView = normalizeGalleryView(nextView);
@@ -785,13 +786,11 @@ export default function GalleryPage() {
         {!loading && !error && activeAlbum ? (
           currentView === 'compact' ? (
             <CompactGalleryView
-              activeAlbum={activeAlbum}
-              activeCounts={activeCounts}
               activeIndex={activeIndex}
-              albums={albums}
+              albums={compactAlbumEntries}
+              searchQuery={compactSearchQuery}
+              onSearchChange={setCompactSearchQuery}
               onSelectAlbum={selectAlbum}
-              onPrev={() => moveSlide(-1)}
-              onNext={() => moveSlide(1)}
             />
           ) : (
             <CinematicGalleryView
