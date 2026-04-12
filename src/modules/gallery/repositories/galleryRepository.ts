@@ -71,7 +71,8 @@ export class GalleryRepository {
       include: {
         photos: {
           select: photoSelect,
-          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+          // Keep manual arrangement first, then use stable fallbacks for legacy/duplicate values.
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
         },
       },
     });

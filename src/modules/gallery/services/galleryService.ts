@@ -66,6 +66,24 @@ export class GalleryService {
     return this.repo.listAlbums(!canViewDrafts);
   }
 
+  private sortPhotosByManualArrangement(photos: AlbumPhotoRecord[]) {
+    return [...photos].sort((left, right) => {
+      const leftOrder = Number.isFinite(left.sortOrder) ? left.sortOrder : Number.MAX_SAFE_INTEGER;
+      const rightOrder = Number.isFinite(right.sortOrder) ? right.sortOrder : Number.MAX_SAFE_INTEGER;
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+
+      const leftCreatedAt = new Date(left.createdAt ?? left.uploadedAt).getTime();
+      const rightCreatedAt = new Date(right.createdAt ?? right.uploadedAt).getTime();
+      if (leftCreatedAt !== rightCreatedAt) {
+        return leftCreatedAt - rightCreatedAt;
+      }
+
+      return left.id - right.id;
+    });
+  }
+
   async getAlbumById(id: number, canViewDrafts: boolean) {
     const album = await this.repo.getAlbumById(id);
     if (!album || (!canViewDrafts && !album.isPublished)) {
@@ -133,8 +151,9 @@ export class GalleryService {
       return null;
     }
 
-    const downloadablePhotos = albumWithPhotos.photos.filter((photo) => photo.sourceType === PhotoSourceType.upload);
-    const skippedPhotos = albumWithPhotos.photos.filter((photo) => photo.sourceType !== PhotoSourceType.upload);
+    const manuallySortedPhotos = this.sortPhotosByManualArrangement(albumWithPhotos.photos);
+    const downloadablePhotos = manuallySortedPhotos.filter((photo) => photo.sourceType === PhotoSourceType.upload);
+    const skippedPhotos = manuallySortedPhotos.filter((photo) => photo.sourceType !== PhotoSourceType.upload);
 
     return {
       album: albumWithPhotos,

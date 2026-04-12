@@ -181,10 +181,11 @@ export const createAlbumZipStream = async (photos: AlbumPhotoRecord[]) => {
   const output = new PassThrough();
   const nameCounts = new Map<string, number>();
   let includedCount = 0;
+  const sequenceWidth = Math.max(2, String(Math.max(photos.length, 1)).length);
 
   archive.pipe(output);
 
-  const appendOne = async (photo: AlbumPhotoRecord) => {
+  const appendOne = async (photo: AlbumPhotoRecord, index: number) => {
     const { response } = await fetchPhotoDownload(photo);
     if (!response.body) {
       return;
@@ -198,16 +199,19 @@ export const createAlbumZipStream = async (photos: AlbumPhotoRecord[]) => {
         ? preferredName
         : `${preferredName.replace(/(\.[a-z0-9]{2,8})$/i, '')}-${seen + 1}${preferredName.match(/(\.[a-z0-9]{2,8})$/i)?.[1] || ''}`;
 
+    const sequence = String(index + 1).padStart(sequenceWidth, '0');
+    const orderedName = `${sequence}-${dedupedName}`;
     const stream = Readable.fromWeb(response.body as unknown as ReadableStream<Uint8Array>);
-    archive.append(stream, { name: dedupedName });
+    archive.append(stream, { name: orderedName });
     includedCount += 1;
   };
 
   void (async () => {
     try {
-      for (const photo of photos) {
+      for (let index = 0; index < photos.length; index += 1) {
+        const photo = photos[index];
         try {
-          await appendOne(photo);
+          await appendOne(photo, index);
         } catch {
           // Skip individual media failures so the zip still completes.
         }
