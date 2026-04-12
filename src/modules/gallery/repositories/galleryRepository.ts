@@ -28,6 +28,7 @@ const albumInclude = {
 
 export type AlbumRecord = Prisma.AlbumGetPayload<{ include: typeof albumInclude }>;
 export type AlbumPhotoRecord = Prisma.AlbumPhotoGetPayload<{ select: typeof photoSelect }>;
+export type AlbumDownloadRecord = Prisma.AlbumGetPayload<{ include: { photos: { select: typeof photoSelect } } }>;
 
 const resolvePhotoOrderBy = (sort: GallerySort): Prisma.AlbumPhotoOrderByWithRelationInput[] => {
   if (sort === 'dateAsc') {
@@ -61,6 +62,18 @@ export class GalleryRepository {
         ...(onlyPublished ? { isPublished: true } : {}),
       },
       include: albumInclude,
+    });
+  }
+
+  async getAlbumWithPhotosForDownload(id: number): Promise<AlbumDownloadRecord | null> {
+    return prisma.album.findUnique({
+      where: { id },
+      include: {
+        photos: {
+          select: photoSelect,
+          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        },
+      },
     });
   }
 
@@ -110,6 +123,16 @@ export class GalleryRepository {
       },
       select: photoSelect,
       orderBy: [{ id: 'asc' }],
+    });
+  }
+
+  async getAlbumPhotoById(albumId: number, photoId: number): Promise<AlbumPhotoRecord | null> {
+    return prisma.albumPhoto.findFirst({
+      where: {
+        albumId,
+        id: photoId,
+      },
+      select: photoSelect,
     });
   }
 

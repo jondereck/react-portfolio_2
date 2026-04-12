@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import GlobalLoader from '@/components/GlobalLoader';
+import { downloadFromApi } from "@/lib/download-client";
 import {
   ChevronLeft,
   ChevronRight,
@@ -412,6 +414,8 @@ export default function AlbumDetailPage({ params }) {
   const [mediaErrors, setMediaErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [isAlbumDownloadPending, setIsAlbumDownloadPending] = useState(false);
+  const [downloadingPhotoId, setDownloadingPhotoId] = useState(null);
   const activeVideoRef = useRef(null);
   const splitLeftVideoRef = useRef(null);
   const splitRightVideoRef = useRef(null);
@@ -532,6 +536,64 @@ export default function AlbumDetailPage({ params }) {
     return true;
   });
   const filteredPhotoCount = filteredPhotos.length;
+  const handleDownloadAlbumZip = useCallback(async () => {
+    if (!album?.id) {
+      return;
+    }
+
+    setIsAlbumDownloadPending(true);
+    const toastId = toast.loading(`Preparing ${album.name || "album"}...`);
+    try {
+      const result = await downloadFromApi(
+        `/api/gallery/albums/${album.id}/download`,
+        `${album.slug || "album"}.zip`,
+      );
+      if (result.skippedCount > 0) {
+        toast.success(
+          `Downloaded ${result.filename} (${result.includedCount} items, ${result.skippedCount} skipped).`,
+          { id: toastId },
+        );
+      } else {
+        toast.success(`Downloaded ${result.filename}.`, { id: toastId });
+      }
+    } catch (downloadError) {
+      toast.error(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Album download failed.",
+        { id: toastId },
+      );
+    } finally {
+      setIsAlbumDownloadPending(false);
+    }
+  }, [album]);
+
+  const handleDownloadMedia = useCallback(async (photo) => {
+    if (!album?.id || !photo?.id) {
+      return;
+    }
+
+    setDownloadingPhotoId(photo.id);
+    const label = photo.caption || `Media ${photo.id}`;
+    const toastId = toast.loading(`Preparing ${label}...`);
+    try {
+      const result = await downloadFromApi(
+        `/api/gallery/albums/${album.id}/photos/${photo.id}/download`,
+        `${label}.bin`,
+      );
+      toast.success(`Downloaded ${result.filename}.`, { id: toastId });
+    } catch (downloadError) {
+      toast.error(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Media download failed.",
+        { id: toastId },
+      );
+    } finally {
+      setDownloadingPhotoId((current) => (current === photo.id ? null : current));
+    }
+  }, [album]);
+
   const invalidatePendingNavigation = useCallback(() => {
     navigationEpochRef.current += 1;
   }, []);
@@ -1264,6 +1326,14 @@ export default function AlbumDetailPage({ params }) {
             >
               Slideshow
             </button>
+            <button
+              type="button"
+              onClick={handleDownloadAlbumZip}
+              disabled={isAlbumDownloadPending || !album?.id}
+              className="h-10 w-full rounded-md border border-sky-300/50 bg-sky-500/20 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-sky-100 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+            >
+              {isAlbumDownloadPending ? "Preparing ZIP..." : "Download ZIP"}
+            </button>
           </div>
         </header>
 
@@ -1312,6 +1382,17 @@ export default function AlbumDetailPage({ params }) {
                     Video
                   </span>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void handleDownloadMedia(photo);
+                  }}
+                  disabled={downloadingPhotoId === photo.id}
+                  className="absolute right-3 top-3 rounded-full border border-white/30 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-white transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {downloadingPhotoId === photo.id ? "..." : "Download"}
+                </button>
               </div>
             </article>
           ))}
@@ -1343,6 +1424,18 @@ export default function AlbumDetailPage({ params }) {
                   : `${activeIndex + 1} / ${filteredPhotos.length} · ${activeItem.caption || "Untitled media"}`}
               </p>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    void handleDownloadMedia(activeItem);
+                  }}
+                  disabled={downloadingPhotoId === activeItem.id}
+                  aria-label="Download media"
+                  title="Download media"
+                  className="inline-flex h-8 items-center justify-center rounded-md border border-white/25 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {downloadingPhotoId === activeItem.id ? "..." : "Download"}
+                </button>
                 <button
                   type="button"
                   onClick={() => {

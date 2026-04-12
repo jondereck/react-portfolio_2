@@ -148,7 +148,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
             aria-label={`Drag to reorder ${photo.caption || `media ${photo.id}`}`}
           >
             <GripVertical className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Drag</span>
+       
           </button>
         </div>
 

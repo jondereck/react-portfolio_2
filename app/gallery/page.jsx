@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
+import { toast } from 'sonner';
 import GlobalLoader from '@/components/GlobalLoader';
+import { downloadFromApi } from '@/lib/download-client';
 import { useLoadingStore } from '@/store/loading';
 
 const fetchJson = async (url) => {
@@ -154,6 +156,7 @@ export default function GalleryPage() {
   const [isAutoplayPaused, setIsAutoplayPaused] = useState(false);
   const [touchStartX, setTouchStartX] = useState(null);
   const [slideDirection, setSlideDirection] = useState(1);
+  const [downloadingAlbumId, setDownloadingAlbumId] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -243,6 +246,32 @@ export default function GalleryPage() {
     if (albums.length <= 1) return;
     setSlideDirection(direction >= 0 ? 1 : -1);
     setActiveIndex((previous) => (previous + direction + albums.length) % albums.length);
+  };
+
+  const handleDownloadAlbum = async (albumToDownload) => {
+    if (!albumToDownload?.id) {
+      return;
+    }
+
+    setDownloadingAlbumId(albumToDownload.id);
+    const toastId = toast.loading(`Preparing ${albumToDownload.name || 'album'}...`);
+    try {
+      const result = await downloadFromApi(
+        `/api/gallery/albums/${albumToDownload.id}/download`,
+        `${albumToDownload.slug || 'album'}.zip`,
+      );
+      if (result.skippedCount > 0) {
+        toast.success(`Downloaded ${result.filename} (${result.includedCount} items, ${result.skippedCount} skipped).`, {
+          id: toastId,
+        });
+      } else {
+        toast.success(`Downloaded ${result.filename}.`, { id: toastId });
+      }
+    } catch (downloadError) {
+      toast.error(downloadError instanceof Error ? downloadError.message : 'Download failed.', { id: toastId });
+    } finally {
+      setDownloadingAlbumId(null);
+    }
   };
 
   useEffect(() => {
@@ -395,6 +424,14 @@ export default function GalleryPage() {
                     >
                       Open Album
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadAlbum(activeAlbum)}
+                      disabled={downloadingAlbumId === activeAlbum.id}
+                      className="inline-flex h-11 items-center rounded-full border border-white/35 bg-white/10 px-5 text-sm font-semibold text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {downloadingAlbumId === activeAlbum.id ? 'Preparing ZIP...' : 'Download Album'}
+                    </button>
                     <span className="rounded-full border border-white/35 px-4 py-2 text-xs uppercase tracking-[0.15em] text-white/90">
                       {activeCounts.photos} Photos
                     </span>
@@ -421,46 +458,55 @@ export default function GalleryPage() {
                       const albumCounts = getAlbumMediaCounts(album);
 
                       return (
-                        <button
-                          key={album.id}
-                          type="button"
-                          onClick={() => {
-                            const delta = (index - activeIndex + albums.length) % albums.length;
-                            setSlideDirection(delta > 0 ? 1 : -1);
-                            setActiveIndex(index);
-                          }}
-                          className={`group relative h-[250px] w-[165px] overflow-hidden rounded-2xl border text-left shadow-xl shadow-black/40 transition duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 sm:h-[280px] sm:w-[175px] lg:w-[180px] ${
-                            isHighlighted
-                              ? 'border-white/70 ring-2 ring-white/50'
-                              : 'border-white/28 hover:border-white/50'
-                          }`}
-                          aria-label={`Show album ${album.name}`}
-                        >
-                          {coverImage ? coverIsVideo ? (
-                            <VideoPoster
-                              src={coverImage}
-                              alt={album.name}
-                              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                              fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]"
-                            />
-                          ) : (
-                            <img
-                              src={coverImage}
-                              alt={album.name}
-                              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                            />
-                          ) : (
-                            <div className="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]" />
-                          )}
+                        <div key={album.id} className="flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const delta = (index - activeIndex + albums.length) % albums.length;
+                              setSlideDirection(delta > 0 ? 1 : -1);
+                              setActiveIndex(index);
+                            }}
+                            className={`group relative h-[250px] w-[165px] overflow-hidden rounded-2xl border text-left shadow-xl shadow-black/40 transition duration-300 hover:-translate-y-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 sm:h-[280px] sm:w-[175px] lg:w-[180px] ${
+                              isHighlighted
+                                ? 'border-white/70 ring-2 ring-white/50'
+                                : 'border-white/28 hover:border-white/50'
+                            }`}
+                            aria-label={`Show album ${album.name}`}
+                          >
+                            {coverImage ? coverIsVideo ? (
+                              <VideoPoster
+                                src={coverImage}
+                                alt={album.name}
+                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                                fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]"
+                              />
+                            ) : (
+                              <img
+                                src={coverImage}
+                                alt={album.name}
+                                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                              />
+                            ) : (
+                              <div className="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]" />
+                            )}
 
-                          <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.86),rgba(2,6,23,0.18))]" />
-                          <div className="absolute bottom-0 w-full space-y-1 p-3">
-                            <p className="line-clamp-2 text-xs font-bold uppercase tracking-[0.08em] text-white">{album.name}</p>
-                            <p className="text-[10px] uppercase tracking-[0.15em] text-white/80">
-                              {albumCounts.photos} photos{albumCounts.videos > 0 ? ` • ${albumCounts.videos} videos` : ''}
-                            </p>
-                          </div>
-                        </button>
+                            <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.86),rgba(2,6,23,0.18))]" />
+                            <div className="absolute bottom-0 w-full space-y-1 p-3">
+                              <p className="line-clamp-2 text-xs font-bold uppercase tracking-[0.08em] text-white">{album.name}</p>
+                              <p className="text-[10px] uppercase tracking-[0.15em] text-white/80">
+                                {albumCounts.photos} photos{albumCounts.videos > 0 ? ` • ${albumCounts.videos} videos` : ''}
+                              </p>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadAlbum(album)}
+                            disabled={downloadingAlbumId === album.id}
+                            className="h-8 w-full rounded-full border border-white/30 bg-white/10 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {downloadingAlbumId === album.id ? 'Preparing ZIP...' : 'Download Album'}
+                          </button>
+                        </div>
                       );
                     })}
                   </div>

@@ -122,6 +122,41 @@ export class GalleryService {
     return { album, photos };
   }
 
+  async getAlbumDownloadPayload(albumId: number, canViewDrafts: boolean) {
+    const album = await this.getAlbumById(albumId, canViewDrafts);
+    if (!album) {
+      return null;
+    }
+
+    const albumWithPhotos = await this.repo.getAlbumWithPhotosForDownload(albumId);
+    if (!albumWithPhotos) {
+      return null;
+    }
+
+    const downloadablePhotos = albumWithPhotos.photos.filter((photo) => photo.sourceType === PhotoSourceType.upload);
+    const skippedPhotos = albumWithPhotos.photos.filter((photo) => photo.sourceType !== PhotoSourceType.upload);
+
+    return {
+      album: albumWithPhotos,
+      downloadablePhotos,
+      skippedPhotos,
+    };
+  }
+
+  async getAlbumPhotoDownloadPayload(albumId: number, photoId: number, canViewDrafts: boolean) {
+    const album = await this.getAlbumById(albumId, canViewDrafts);
+    if (!album) {
+      return null;
+    }
+
+    const photo = await this.repo.getAlbumPhotoById(albumId, photoId);
+    if (!photo) {
+      return null;
+    }
+
+    return { album, photo };
+  }
+
   async addAlbumPhoto(albumId: number, input: PhotoCreateInput) {
     if (input.contentHash) {
       const existing = await this.repo.findAlbumPhotoByContentHash(albumId, input.contentHash);
