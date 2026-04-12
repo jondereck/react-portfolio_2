@@ -24,7 +24,10 @@ export default function ConfirmModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" showCloseButton={!loading}>
+      <DialogContent
+        className="max-w-md border border-slate-200 bg-white text-slate-900 shadow-2xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        showCloseButton={false}
+      >
         <DialogHeader className="gap-3">
           <div className="inline-flex size-9 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
             <AlertTriangle className="size-5" />
@@ -33,7 +36,7 @@ export default function ConfirmModal({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter className="mx-0 mb-0 rounded-none border-t border-slate-200 bg-transparent p-0 pt-3 dark:border-slate-700">
           <Button
             type="button"
             variant="outline"
@@ -55,4 +58,3 @@ export default function ConfirmModal({
     </Dialog>
   );
 }
-
