@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { isAnchorOrSafeHttpUrl, isSafeHttpUrl } from '@/lib/url-safety';
 
 const textField = (min: number, max: number) => z.string().trim().min(min).max(max);
+const optionalTextField = (min: number, max: number) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() || undefined : value),
+    z.string().min(min).max(max).optional(),
+  );
 const urlField = (max: number) =>
   z
     .string()
@@ -9,7 +14,22 @@ const urlField = (max: number) =>
     .url()
     .max(max)
     .refine((value) => isSafeHttpUrl(value), { message: 'Only http/https URLs are allowed.' });
+const optionalUrlField = (max: number) =>
+  z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() || undefined : value),
+    z
+      .string()
+      .url()
+      .max(max)
+      .refine((value) => isSafeHttpUrl(value), { message: 'Only http/https URLs are allowed.' })
+      .optional(),
+  );
 const emailField = () => z.string().trim().email().max(120);
+const optionalEmailField = () =>
+  z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() || undefined : value),
+    z.string().email().max(120).optional(),
+  );
 const orderField = (max = 9999) => z.number().int().min(0).max(max).optional().default(0);
 const publishField = () => z.boolean().optional().default(true);
 
@@ -80,8 +100,27 @@ export const aboutSchema = z.object({
 });
 
 export const siteConfigSchema = z.object({
-  logoText: textField(1, 80).optional(),
-  logoImage: urlField(500).optional(),
+  logoText: optionalTextField(1, 80),
+  logoImage: optionalUrlField(500),
+  navigation: z
+    .object({
+      links: z
+        .array(
+          z.object({
+            label: textField(1, 40),
+            target: textField(1, 200).refine((value) => isAnchorOrSafeHttpUrl(value), {
+              message: 'Must be an anchor link or an http/https URL.',
+            }),
+            type: z.enum(['section', 'url']),
+            isVisible: z.boolean().optional().default(true),
+            sortOrder: z.number().int().min(0).max(999).optional().default(0),
+          }),
+        )
+        .min(1)
+        .max(12),
+      showAdminButton: z.boolean().optional().default(true),
+    })
+    .optional(),
 });
 
 export const socialLinkSchema = z.object({
@@ -90,18 +129,45 @@ export const socialLinkSchema = z.object({
 });
 
 export const contactSchema = z.object({
-  email: emailField().optional(),
-  phone: textField(3, 60).optional(),
-  location: textField(1, 120).optional(),
-  calendarLink: urlField(500).optional(),
+  email: optionalEmailField(),
+  phone: optionalTextField(3, 60),
+  location: optionalTextField(1, 120),
+  calendarLink: optionalUrlField(500),
   socialLinks: z.array(socialLinkSchema).max(6).optional(),
 });
 
 export const seoSchema = z.object({
-  title: textField(1, 120).optional(),
-  description: textField(10, 300).optional(),
-  ogImage: urlField(500).optional(),
+  title: optionalTextField(1, 120),
+  description: optionalTextField(10, 300),
+  ogImage: optionalUrlField(500),
   keywords: z.array(textField(1, 30)).max(20).optional(),
+});
+
+export const integrationsSettingsSchema = z.object({
+  contactRecipientEmail: optionalEmailField(),
+  contactSenderName: optionalTextField(1, 120),
+  contactSenderEmail: optionalEmailField(),
+  cloudinaryFolder: z.preprocess(
+    (value) => (typeof value === 'string' ? value.trim() || undefined : value),
+    z
+      .string()
+      .min(1)
+      .max(160)
+      .regex(/^[A-Za-z0-9/_-]+$/, 'Use letters, numbers, "/", "_" or "-".')
+      .optional(),
+  ),
+  googleDriveImportEnabled: z.boolean().optional().default(true),
+});
+
+export const securitySettingsSchema = z.object({
+  sessionTtlHours: z.number().int().min(1).max(168).optional(),
+  loginRateLimitMax: z.number().int().min(1).max(500).optional(),
+  loginRateLimitWindowSeconds: z.number().int().min(1).max(3600).optional(),
+  mutationRateLimitMax: z.number().int().min(1).max(2000).optional(),
+  mutationRateLimitWindowSeconds: z.number().int().min(1).max(3600).optional(),
+  contactRateLimitMax: z.number().int().min(1).max(500).optional(),
+  contactRateLimitWindowSeconds: z.number().int().min(1).max(3600).optional(),
+  sessionVersion: z.number().int().min(1).max(999999).optional(),
 });
 
 export const portfolioSchema = z.object({

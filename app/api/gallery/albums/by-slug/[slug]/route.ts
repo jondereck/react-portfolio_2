@@ -6,7 +6,7 @@ import { galleryService } from '@/src/modules/gallery/services/galleryService';
 type RouteContext = { params: Promise<{ slug: string }> };
 
 export async function GET(request: Request, context: RouteContext) {
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

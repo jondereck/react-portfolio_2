@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import { hasValidAdminSession } from '@/lib/server/admin-session';
 
-export function isAuthorizedMutation(request: Request): boolean {
+export async function isAuthorizedMutation(request: Request): Promise<boolean> {
   return hasValidAdminSession(request);
 }
 

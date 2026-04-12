@@ -34,11 +34,11 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
-  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

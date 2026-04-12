@@ -14,7 +14,7 @@ const parseId = (value: string) => {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -37,11 +37,11 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function PUT(request: Request, context: RouteContext) {
-  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -66,11 +66,11 @@ export async function PUT(request: Request, context: RouteContext) {
 }
 
 export async function DELETE(request: Request, context: RouteContext) {
-  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

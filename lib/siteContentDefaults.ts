@@ -58,7 +58,20 @@ export const defaultSiteContent = {
   seo: defaultSeo,
 };
 
+export const defaultNavigation = {
+  links: [
+    { label: 'Home', target: '#home', type: 'section', isVisible: true, sortOrder: 1 },
+    { label: 'About', target: '#about', type: 'section', isVisible: true, sortOrder: 2 },
+    { label: 'Portfolio', target: '#portfolio', type: 'section', isVisible: true, sortOrder: 3 },
+    { label: 'Experience', target: '#experience', type: 'section', isVisible: true, sortOrder: 4 },
+    { label: 'Certificates', target: '#certificates', type: 'section', isVisible: true, sortOrder: 5 },
+    { label: 'Contact', target: '#contact', type: 'section', isVisible: true, sortOrder: 6 },
+  ],
+  showAdminButton: true,
+};
+
 export const defaultSiteConfig = {
   logoText: 'Jon',
   logoImage: '',
+  navigation: defaultNavigation,
 };

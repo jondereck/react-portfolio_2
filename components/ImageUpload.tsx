@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CldUploadWidget } from 'next-cloudinary';
 import { toast } from 'sonner';
+import { fetcher } from '@/modules/system/admin/settingsShared';
 
 type UploadResult = {
   info?: {
@@ -29,6 +30,28 @@ export default function ImageUpload({ id = 'image-upload', label = 'Image', valu
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
   const previewUrl = typeof value === 'string' ? value.trim() : '';
+  const [folder, setFolder] = useState('portfolio');
+
+  useEffect(() => {
+    let active = true;
+
+    fetcher('/api/admin/settings')
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+
+        const nextFolder = data?.settings?.integrations?.cloudinaryFolder;
+        if (typeof nextFolder === 'string' && nextFolder.trim()) {
+          setFolder(nextFolder.trim());
+        }
+      })
+      .catch(() => null);
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const dismissUploadToast = () => {
     if (uploadToastIdRef.current !== null) {
@@ -71,6 +94,7 @@ export default function ImageUpload({ id = 'image-upload', label = 'Image', valu
       croppingAspectRatio: 1,
       croppingShowDimensions: true,
       multiple: false,
+      folder,
     },
     onEvent: (event: string) => {
       if (event === 'queues-start') {

@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { defaultSiteContent } from '../lib/siteContentDefaults';
+import { defaultAdminSettings } from '../lib/adminSettingsDefaults';
+import { defaultSiteConfig, defaultSiteContent } from '../lib/siteContentDefaults';
 
 const prisma = new PrismaClient();
 
@@ -9,10 +10,15 @@ async function main() {
     prisma.skill.deleteMany(),
     prisma.experience.deleteMany(),
     prisma.portfolio.deleteMany(),
+    prisma.adminAuditEvent.deleteMany(),
+    prisma.adminSettings.deleteMany(),
+    prisma.siteConfig.deleteMany(),
     prisma.siteContent.deleteMany(),
   ]);
 
   await prisma.siteContent.create({ data: defaultSiteContent });
+  await prisma.siteConfig.create({ data: defaultSiteConfig });
+  await prisma.adminSettings.create({ data: defaultAdminSettings });
 
   await prisma.skill.createMany({
     data: [

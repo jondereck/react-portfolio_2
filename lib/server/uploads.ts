@@ -1,7 +1,8 @@
 import { v2 as cloudinary } from 'cloudinary';
+import { getCloudinaryFolderPath } from '@/lib/server/admin-settings';
 
 export const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
-export const MAX_VIDEO_FILE_SIZE = 60 * 1024 * 1024;
+export const MAX_VIDEO_FILE_SIZE = 120 * 1024 * 1024;
 export const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 export const ALLOWED_VIDEO_MIME_TYPES = new Set([
   'video/mp4',
@@ -68,7 +69,7 @@ export function validateMediaFile(file: File, fieldName = 'imageFile') {
 
     if (file.size > MAX_VIDEO_FILE_SIZE) {
       throw new RequestValidationError(
-        `${fieldName} video must be 60MB or smaller.`,
+        `${fieldName} video must be 120MB or smaller.`,
         400,
         { [fieldName]: ['Video file is too large.'] },
       );
@@ -106,6 +107,24 @@ const configureCloudinary = () => {
     api_secret: apiSecret,
   });
 };
+
+async function resolveCloudinaryFolder(folder: string) {
+  const normalized = folder.trim().replace(/^\/+|\/+$/g, '');
+
+  if (!normalized) {
+    return getCloudinaryFolderPath();
+  }
+
+  if (normalized === 'portfolio') {
+    return getCloudinaryFolderPath();
+  }
+
+  if (normalized.startsWith('portfolio/')) {
+    return getCloudinaryFolderPath(normalized.slice('portfolio/'.length));
+  }
+
+  return normalized;
+}
 
 function isSupportedImageBuffer(buffer: Buffer): boolean {
   // PNG
@@ -162,6 +181,7 @@ function isSupportedImageBuffer(buffer: Buffer): boolean {
 export async function uploadImageFile(file: File, folder: string) {
   validateImageFile(file);
   configureCloudinary();
+  const resolvedFolder = await resolveCloudinaryFolder(folder);
 
   const buffer = Buffer.from(await file.arrayBuffer());
   if (!isSupportedImageBuffer(buffer)) {
@@ -171,7 +191,7 @@ export async function uploadImageFile(file: File, folder: string) {
   }
   const result = await new Promise<{ secure_url?: string }>((resolve, reject) => {
     cloudinary.uploader
-      .upload_stream({ folder }, (error, uploadResult) => {
+      .upload_stream({ folder: resolvedFolder }, (error, uploadResult) => {
         if (error) {
           reject(error);
           return;
@@ -192,6 +212,7 @@ export async function uploadImageFile(file: File, folder: string) {
 export async function uploadMediaFile(file: File, folder: string) {
   validateMediaFile(file);
   configureCloudinary();
+  const resolvedFolder = await resolveCloudinaryFolder(folder);
 
   const buffer = Buffer.from(await file.arrayBuffer());
   if (ALLOWED_IMAGE_MIME_TYPES.has(file.type) && !isSupportedImageBuffer(buffer)) {
@@ -209,7 +230,7 @@ export async function uploadMediaFile(file: File, folder: string) {
     original_filename?: string;
   }>((resolve, reject) => {
     cloudinary.uploader
-      .upload_stream({ folder, resource_type: 'auto' }, (error, uploadResult) => {
+      .upload_stream({ folder: resolvedFolder, resource_type: 'auto' }, (error, uploadResult) => {
         if (error) {
           reject(error);
           return;

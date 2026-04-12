@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { z } from 'zod';
+import { getAdminSettings } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -19,11 +20,12 @@ const escapeHtml = (value: string) =>
   });
 
 export async function POST(req: Request) {
-  if (isRateLimited(req, 'contact-submit', 8, 60_000)) {
+  if (await isRateLimited(req, 'contact-submit', 8, 60_000)) {
     return Response.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
   }
 
   try {
+    const settings = await getAdminSettings();
     const payload = await req.json();
     const parsed = contactSchema.safeParse(payload);
     if (!parsed.success) {
@@ -35,8 +37,8 @@ export async function POST(req: Request) {
     const message = escapeHtml(parsed.data.message).replace(/\n/g, '<br/>');
 
     await resend.emails.send({
-      from: 'Portfolio <onboarding@resend.dev>', // default works
-      to: 'jonderecknifas@gmail.com', // 🔥 change to your email
+      from: `${settings.integrations.contactSenderName} <${settings.integrations.contactSenderEmail}>`,
+      to: settings.integrations.contactRecipientEmail,
       subject: `New Contact from ${name}`,
       replyTo: email,
       html: `

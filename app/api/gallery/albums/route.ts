@@ -7,7 +7,7 @@ import { galleryService } from '@/src/modules/gallery/services/galleryService';
 import { slugify } from '@/src/modules/gallery/domain/slug';
 
 export async function GET(request: Request) {
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -20,11 +20,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

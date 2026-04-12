@@ -73,7 +73,7 @@ const serializePortfolio = (project: Record<string, unknown>) => ({
 });
 
 export async function GET(request: Request) {
-  const canViewDrafts = isAuthorizedMutation(request);
+  const canViewDrafts = await isAuthorizedMutation(request);
   const projects = await prisma.portfolio.findMany({
     where: canViewDrafts ? undefined : { isPublished: true },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
@@ -82,11 +82,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -119,11 +119,11 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -162,11 +162,11 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

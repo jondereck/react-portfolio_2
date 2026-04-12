@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { getAdminSettings } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
 import { driveImportSchema } from '@/src/modules/gallery/contracts';
@@ -13,15 +14,20 @@ const parseId = (value: string) => {
 };
 
 export async function POST(request: Request, context: RouteContext) {
-  if (isRateLimited(request, 'admin-mutation', 60, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 60, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
+    const settings = await getAdminSettings();
+    if (!settings.integrations.googleDriveImportEnabled) {
+      return NextResponse.json({ error: 'Google Drive imports are disabled.' }, { status: 403 });
+    }
+
     const { id: idParam } = await context.params;
     const albumId = parseId(idParam);
     if (!albumId) {

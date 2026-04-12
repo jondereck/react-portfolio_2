@@ -1,0 +1,233 @@
+import { Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
+import { defaultAdminIntegrations, defaultAdminSecurity, defaultAdminSettings } from '@/lib/adminSettingsDefaults';
+import { integrationsSettingsSchema, securitySettingsSchema } from '@/lib/validators';
+
+type AdminSettingsSnapshot = {
+  integrations: typeof defaultAdminIntegrations;
+  security: typeof defaultAdminSecurity;
+};
+
+type IntegrationStatus = {
+  key: 'database' | 'cloudinary' | 'resend' | 'googleDrive';
+  label: string;
+  configured: boolean;
+  state: 'connected' | 'warning' | 'disabled';
+  description: string;
+};
+
+type AdminAuditEventPayload = {
+  type: string;
+  details?: Record<string, unknown>;
+};
+
+const ADMIN_SETTINGS_ID = 1;
+const CACHE_TTL_MS = 5_000;
+
+let cachedSettings: { value: AdminSettingsSnapshot; expiresAt: number } | null = null;
+
+const normalizeIntegrations = (value: unknown) => {
+  const parsed = integrationsSettingsSchema.partial().safeParse(value);
+  return {
+    ...defaultAdminIntegrations,
+    ...(parsed.success ? parsed.data : {}),
+  };
+};
+
+const normalizeSecurity = (value: unknown) => {
+  const parsed = securitySettingsSchema.partial().safeParse(value);
+  return {
+    ...defaultAdminSecurity,
+    ...(parsed.success ? parsed.data : {}),
+  };
+};
+
+const toSnapshot = (record: { integrations: Prisma.JsonValue; security: Prisma.JsonValue }): AdminSettingsSnapshot => ({
+  integrations: normalizeIntegrations(record.integrations),
+  security: normalizeSecurity(record.security),
+});
+
+export function clearAdminSettingsCache() {
+  cachedSettings = null;
+}
+
+export async function ensureAdminSettings() {
+  await prisma.adminSettings.upsert({
+    where: { id: ADMIN_SETTINGS_ID },
+    update: {},
+    create: {
+      id: ADMIN_SETTINGS_ID,
+      integrations: defaultAdminSettings.integrations,
+      security: defaultAdminSettings.security,
+    },
+  });
+}
+
+export async function getAdminSettings(options?: { fresh?: boolean }): Promise<AdminSettingsSnapshot> {
+  const now = Date.now();
+  if (!options?.fresh && cachedSettings && cachedSettings.expiresAt > now) {
+    return cachedSettings.value;
+  }
+
+  await ensureAdminSettings();
+  const record = await prisma.adminSettings.findUnique({ where: { id: ADMIN_SETTINGS_ID } });
+  const value = record
+    ? toSnapshot({ integrations: record.integrations, security: record.security })
+    : {
+        integrations: { ...defaultAdminSettings.integrations },
+        security: { ...defaultAdminSettings.security },
+      };
+
+  cachedSettings = {
+    value,
+    expiresAt: now + CACHE_TTL_MS,
+  };
+
+  return value;
+}
+
+export async function updateAdminSettings(input: {
+  integrations?: Partial<typeof defaultAdminIntegrations>;
+  security?: Partial<typeof defaultAdminSecurity>;
+}) {
+  const current = await getAdminSettings({ fresh: true });
+  const nextIntegrations = {
+    ...current.integrations,
+    ...(input.integrations ?? {}),
+  };
+  const nextSecurity = {
+    ...current.security,
+    ...(input.security ?? {}),
+  };
+
+  const record = await prisma.adminSettings.upsert({
+    where: { id: ADMIN_SETTINGS_ID },
+    update: {
+      integrations: nextIntegrations as Prisma.InputJsonObject,
+      security: nextSecurity as Prisma.InputJsonObject,
+    },
+    create: {
+      id: ADMIN_SETTINGS_ID,
+      integrations: nextIntegrations as Prisma.InputJsonObject,
+      security: nextSecurity as Prisma.InputJsonObject,
+    },
+  });
+
+  clearAdminSettingsCache();
+  return toSnapshot({ integrations: record.integrations, security: record.security });
+}
+
+export async function logAdminAuditEvent({ type, details }: AdminAuditEventPayload) {
+  try {
+    await prisma.adminAuditEvent.create({
+      data: {
+        type,
+        details: details ? (details as Prisma.InputJsonObject) : undefined,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to write admin audit event', error);
+  }
+}
+
+export async function bumpSessionVersion(details?: Record<string, unknown>) {
+  const current = await getAdminSettings({ fresh: true });
+  const nextVersion = current.security.sessionVersion + 1;
+  const updated = await updateAdminSettings({
+    security: {
+      sessionVersion: nextVersion,
+    },
+  });
+
+  await logAdminAuditEvent({
+    type: 'force_sign_out_all_sessions',
+    details: {
+      sessionVersion: nextVersion,
+      ...(details ?? {}),
+    },
+  });
+
+  return updated.security.sessionVersion;
+}
+
+export async function getCloudinaryFolderPath(pathSuffix = '') {
+  const settings = await getAdminSettings();
+  const baseFolder = settings.integrations.cloudinaryFolder.replace(/^\/+|\/+$/g, '');
+  const suffix = pathSuffix.replace(/^\/+|\/+$/g, '');
+
+  return suffix ? `${baseFolder}/${suffix}` : baseFolder;
+}
+
+export async function getAdminSettingsDashboardData() {
+  const settings = await getAdminSettings({ fresh: true });
+
+  const statuses: IntegrationStatus[] = [];
+
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    statuses.push({
+      key: 'database',
+      label: 'Database',
+      configured: true,
+      state: 'connected',
+      description: 'Database-backed portfolio and admin settings are reachable.',
+    });
+  } catch {
+    statuses.push({
+      key: 'database',
+      label: 'Database',
+      configured: false,
+      state: 'warning',
+      description: 'The database connection could not be confirmed.',
+    });
+  }
+
+  const cloudinaryConfigured = Boolean(
+    process.env.CLOUDINARY_NAME ||
+      process.env.CLOUDINARY_CLOUD_NAME ||
+      process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  ) &&
+    Boolean(process.env.CLOUDINARY_KEY || process.env.CLOUDINARY_API_KEY) &&
+    Boolean(process.env.CLOUDINARY_SECRET || process.env.CLOUDINARY_API_SECRET);
+  statuses.push({
+    key: 'cloudinary',
+    label: 'Cloudinary',
+    configured: cloudinaryConfigured,
+    state: cloudinaryConfigured ? 'connected' : 'warning',
+    description: cloudinaryConfigured
+      ? `Uploads will use the "${settings.integrations.cloudinaryFolder}" base folder.`
+      : 'Upload env variables are missing. Media uploads will fail until env configuration is restored.',
+  });
+
+  const resendConfigured = Boolean(process.env.RESEND_API_KEY);
+  statuses.push({
+    key: 'resend',
+    label: 'Resend',
+    configured: resendConfigured,
+    state: resendConfigured ? 'connected' : 'warning',
+    description: resendConfigured
+      ? `Contact form email is configured for ${settings.integrations.contactRecipientEmail}.`
+      : 'RESEND_API_KEY is missing. Contact submissions cannot be delivered.',
+  });
+
+  statuses.push({
+    key: 'googleDrive',
+    label: 'Google Drive Import',
+    configured: settings.integrations.googleDriveImportEnabled,
+    state: settings.integrations.googleDriveImportEnabled ? 'connected' : 'disabled',
+    description: settings.integrations.googleDriveImportEnabled
+      ? 'Google Drive imports are enabled. Access tokens are still supplied per import session.'
+      : 'Google Drive imports are disabled by admin settings.',
+  });
+
+  const events = await prisma.adminAuditEvent.findMany({
+    take: 20,
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return {
+    settings,
+    statuses,
+    events,
+  };
+}

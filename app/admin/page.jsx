@@ -32,7 +32,7 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-xl font-semibold">Unified Admin Control Center</h2>
+        <h2 className="text-xl font-semibold"> Admin Control Center</h2>
         <p className="mt-2 text-sm text-slate-500">
           Administration is organized by domain. Each module has its own overview and workspace pages to keep boundaries clear.
         </p>

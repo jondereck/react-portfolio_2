@@ -98,8 +98,27 @@ model SiteConfig {
   id        Int      @id @default(1)
   logoText  String?
   logoImage String?
+  navigation Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model AdminSettings {
+  id           Int      @id @default(1)
+  integrations Json
+  security     Json
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model AdminAuditEvent {
+  id        Int      @id @default(autoincrement())
+  type      String
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([type, createdAt])
+  @@index([createdAt])
 }
 
 enum PhotoSourceType {

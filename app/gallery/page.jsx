@@ -86,6 +86,62 @@ const buildTitleLines = (name) => {
   return [words.slice(0, midpoint).join(' '), words.slice(midpoint).join(' ')];
 };
 
+const normalizeAlbumPhotosPayload = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.photos)) return payload.photos;
+  return [];
+};
+
+const attachAlbumMediaCounts = async (albums) => {
+  const withCounts = await Promise.all(
+    albums.map(async (album) => {
+      try {
+        const payload = await fetchJson(`/api/gallery/albums/${album.id}/photos?sort=custom`);
+        const mediaItems = normalizeAlbumPhotosPayload(payload);
+        const videos = mediaItems.reduce((total, item) => (isVideoUrl(item?.imageUrl) ? total + 1 : total), 0);
+
+        return {
+          ...album,
+          mediaCount: {
+            photos: Math.max(mediaItems.length - videos, 0),
+            videos,
+          },
+        };
+      } catch {
+        return {
+          ...album,
+          mediaCount: {
+            photos: album?._count?.photos ?? 0,
+            videos: 0,
+          },
+        };
+      }
+    }),
+  );
+
+  return withCounts;
+};
+
+const getAlbumMediaCounts = (album) => {
+  if (typeof album?.mediaCount?.photos === 'number' && typeof album?.mediaCount?.videos === 'number') {
+    return album.mediaCount;
+  }
+
+  const mediaItems = Array.isArray(album?.photos) ? album.photos : [];
+  if (!mediaItems.length) {
+    return {
+      photos: album?._count?.photos ?? 0,
+      videos: 0,
+    };
+  }
+
+  const videos = mediaItems.reduce((total, item) => (isVideoUrl(item?.imageUrl) ? total + 1 : total), 0);
+  return {
+    photos: Math.max(mediaItems.length - videos, 0),
+    videos,
+  };
+};
+
 export default function GalleryPage() {
   const router = useRouter();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
@@ -148,7 +204,8 @@ export default function GalleryPage() {
       try {
         const data = await fetchJson('/api/gallery/albums');
         const publishedAlbums = Array.isArray(data) ? data.filter((item) => item.isPublished) : [];
-        setAlbums(publishedAlbums);
+        const albumsWithCounts = await attachAlbumMediaCounts(publishedAlbums);
+        setAlbums(albumsWithCounts);
         setActiveIndex(0);
       } catch (requestError) {
         setError(requestError.message);
@@ -169,6 +226,7 @@ export default function GalleryPage() {
   const activeAlbum = albums[activeIndex] || null;
   const activeCover = activeAlbum ? resolveAlbumCover(activeAlbum) : '';
   const activeIsVideo = isVideoUrl(activeCover);
+  const activeCounts = getAlbumMediaCounts(activeAlbum);
   const [headlineTop, headlineBottom] = buildTitleLines(activeAlbum?.name);
 
   const previewAlbums = useMemo(() => {
@@ -338,8 +396,13 @@ export default function GalleryPage() {
                       Open Album
                     </Link>
                     <span className="rounded-full border border-white/35 px-4 py-2 text-xs uppercase tracking-[0.15em] text-white/90">
-                      {activeAlbum._count?.photos ?? 0} Photos
+                      {activeCounts.photos} Photos
                     </span>
+                    {activeCounts.videos > 0 ? (
+                      <span className="rounded-full border border-white/35 px-4 py-2 text-xs uppercase tracking-[0.15em] text-white/90">
+                        {activeCounts.videos} Videos
+                      </span>
+                    ) : null}
                   </div>
                 </motion.div>
               </AnimatePresence>
@@ -355,6 +418,7 @@ export default function GalleryPage() {
                       const coverImage = resolveAlbumCover(album);
                       const coverIsVideo = isVideoUrl(coverImage);
                       const isHighlighted = index === (activeIndex + 1) % albums.length;
+                      const albumCounts = getAlbumMediaCounts(album);
 
                       return (
                         <button
@@ -392,7 +456,9 @@ export default function GalleryPage() {
                           <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.86),rgba(2,6,23,0.18))]" />
                           <div className="absolute bottom-0 w-full space-y-1 p-3">
                             <p className="line-clamp-2 text-xs font-bold uppercase tracking-[0.08em] text-white">{album.name}</p>
-                            <p className="text-[10px] uppercase tracking-[0.15em] text-white/80">{album._count?.photos ?? 0} photos</p>
+                            <p className="text-[10px] uppercase tracking-[0.15em] text-white/80">
+                              {albumCounts.photos} photos{albumCounts.videos > 0 ? ` • ${albumCounts.videos} videos` : ''}
+                            </p>
                           </div>
                         </button>
                       );

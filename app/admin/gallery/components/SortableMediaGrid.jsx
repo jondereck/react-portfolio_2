@@ -4,7 +4,8 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   defaultDropAnimationSideEffects,
   useSensor,
@@ -17,6 +18,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { GripVertical, Move, ScanLine } from 'lucide-react';
 import MediaPreview from './MediaPreview';
 
 const SortableMediaCard = memo(function SortableMediaCard({
@@ -69,7 +71,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
         isDragging
           ? 'z-20 scale-[0.985] border-slate-400/80 opacity-45 shadow-none ring-2 ring-slate-300/80 dark:border-slate-500 dark:ring-slate-700/70'
           : isDropTarget
-            ? 'border-blue-500 bg-blue-50/90 ring-2 ring-blue-300 shadow-md dark:border-blue-400 dark:bg-blue-950/25 dark:ring-blue-700/70'
+            ? 'border-blue-500 bg-blue-50/90 shadow-[0_18px_40px_-24px_rgba(37,99,235,0.7)] ring-2 ring-blue-300 dark:border-blue-400 dark:bg-blue-950/25 dark:ring-blue-700/70'
             : isSelected
               ? 'border-blue-500 ring-2 ring-blue-200 dark:border-blue-400 dark:ring-blue-900/40'
               : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-500'
@@ -88,7 +90,10 @@ const SortableMediaCard = memo(function SortableMediaCard({
       {isDropTarget ? (
         <>
           <span className="pointer-events-none absolute inset-x-3 top-2 h-1 rounded bg-blue-500/90" aria-hidden />
+          <span className="pointer-events-none absolute inset-x-3 bottom-2 h-1 rounded bg-blue-500/90" aria-hidden />
           <span className="pointer-events-none absolute inset-y-3 left-2 w-1 rounded bg-blue-500/80" aria-hidden />
+          <span className="pointer-events-none absolute inset-y-3 right-2 w-1 rounded bg-blue-500/80" aria-hidden />
+          <span className="pointer-events-none absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-dashed border-blue-400/80" aria-hidden />
         </>
       ) : null}
 
@@ -111,20 +116,14 @@ const SortableMediaCard = memo(function SortableMediaCard({
       </div>
 
       <div className="grid gap-2 p-2.5 md:gap-3 md:p-3">
-        <div
-          ref={setActivatorNodeRef}
-          {...attributes}
-          {...listeners}
-          className="aspect-square cursor-grab overflow-hidden rounded-xl border border-slate-200 bg-slate-100 active:cursor-grabbing touch-none dark:border-slate-700 dark:bg-slate-800 md:aspect-[4/3]"
-        >
+        <div className="relative aspect-square overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800 md:aspect-[4/3]">
           <button
             type="button"
-            className="block h-full w-full"
+            className="block h-full w-full touch-manipulation"
             onClick={(event) => {
               event.stopPropagation();
               onPreview?.(photo);
             }}
-            onPointerDown={(event) => event.stopPropagation()}
             aria-label={`View ${photo.caption || `media ${photo.id}`}`}
           >
             <MediaPreview
@@ -134,13 +133,30 @@ const SortableMediaCard = memo(function SortableMediaCard({
               controls={false}
             />
           </button>
+
+          <button
+            ref={setActivatorNodeRef}
+            type="button"
+            {...attributes}
+            {...listeners}
+            className={`absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-1.5 text-[10px] font-semibold shadow-sm transition active:scale-[0.97] touch-none md:text-[11px] ${
+              isDropTarget || dragActive
+                ? 'border-blue-300 bg-white/95 text-blue-700 backdrop-blur dark:border-blue-700 dark:bg-slate-950/90 dark:text-blue-200'
+                : 'border-slate-300 bg-white/92 text-slate-700 backdrop-blur hover:bg-white dark:border-slate-600 dark:bg-slate-950/88 dark:text-slate-200 dark:hover:bg-slate-950'
+            }`}
+            onClick={(event) => event.stopPropagation()}
+            aria-label={`Drag to reorder ${photo.caption || `media ${photo.id}`}`}
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Drag</span>
+          </button>
         </div>
 
         <div className="min-w-0 space-y-1">
           <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100 md:text-sm">
             {photo.caption || 'Untitled media'}
           </p>
-          <p className="hidden text-[11px] leading-5 text-slate-500 dark:text-slate-400 md:block">{photo.sourceType}</p>
+       
         </div>
 
         <div className="flex items-center justify-between gap-2">
@@ -184,7 +200,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
 const OverlayCard = memo(function OverlayCard({ photo, draggingCount }) {
   if (!photo) return null;
   return (
-    <article className="relative w-[200px] scale-[1.02] overflow-hidden rounded-xl border border-slate-300/90 bg-white/95 p-2 shadow-[0_20px_60px_-22px_rgba(15,23,42,0.6)] backdrop-blur dark:border-slate-500 dark:bg-slate-900/95 sm:w-[240px]">
+    <article className="relative w-[200px] scale-[1.02] overflow-hidden rounded-xl border border-slate-300/90 bg-white/95 p-2 shadow-[0_24px_70px_-24px_rgba(15,23,42,0.65)] backdrop-blur dark:border-slate-500 dark:bg-slate-900/95 sm:w-[240px]">
       {draggingCount > 1 ? (
         <span className="absolute right-2 top-2 z-10 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-semibold text-white">
           {draggingCount}
@@ -199,6 +215,10 @@ const OverlayCard = memo(function OverlayCard({ photo, draggingCount }) {
         />
       </div>
       <p className="truncate text-xs font-medium">{photo.caption || 'Untitled media'}</p>
+      <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+        <Move className="h-3 w-3" />
+        Drop into the blue guide
+      </div>
     </article>
   );
 });
@@ -264,8 +284,11 @@ export default function SortableMediaGrid({
   }, [items, dragActive]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { delay: 80, tolerance: 4 },
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 180, tolerance: 10 },
     }),
   );
 
@@ -346,10 +369,27 @@ export default function SortableMediaGrid({
     >
       <SortableContext items={sortableIds} strategy={rectSortingStrategy}>
         <div
-          className={`relative grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 ${
+          className={`relative grid grid-cols-3 gap-2 overscroll-y-contain sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 ${
             dragActive ? 'rounded-xl bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:20px_20px] p-3' : ''
           }`}
         >
+          {dragActive ? (
+            <div className="pointer-events-none col-span-full mb-1 flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-blue-300/90 bg-white/80 px-3 py-2 text-[11px] font-medium text-slate-600 shadow-sm backdrop-blur dark:border-blue-800/70 dark:bg-slate-950/80 dark:text-slate-300">
+              <span className="inline-flex items-center gap-1.5 text-blue-700 dark:text-blue-300">
+                <ScanLine className="h-3.5 w-3.5" />
+                Blue guides show the drop target
+              </span>
+              <span className="hidden sm:inline text-slate-400 dark:text-slate-500">|</span>
+              <span className="inline-flex items-center gap-1.5">
+                <GripVertical className="h-3.5 w-3.5" />
+                {draggedIds.length > 1 ? 'Move the selected stack together' : 'Drag with the handle for smoother control'}
+              </span>
+            </div>
+          ) : (
+            <div className="col-span-full rounded-xl border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-[11px] font-medium text-slate-600 dark:border-slate-700/80 dark:bg-slate-900/60 dark:text-slate-300 md:hidden">
+              Press and hold the handle on a photo, then drag. Tap the image itself to preview.
+            </div>
+          )}
           {visibleItems.map((photo, index) => (
             <SortableMediaCard
               key={photo.id}

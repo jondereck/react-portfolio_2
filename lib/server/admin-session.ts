@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
+import { getAdminSettings } from '@/lib/server/admin-settings';
 
 const ADMIN_SESSION_COOKIE = 'admin_session';
-const SESSION_TTL_SECONDS = 60 * 60 * 8; // 8 hours
 
 const textEncoder = new TextEncoder();
 
@@ -44,22 +44,25 @@ const parseCookies = (request: Request) => {
   }, {});
 };
 
-export function createAdminSessionToken(): string | null {
+export async function createAdminSessionToken(): Promise<string | null> {
   const secret = getSessionSecret();
   if (!secret) {
     return null;
   }
 
+  const settings = await getAdminSettings();
+  const sessionTtlSeconds = settings.security.sessionTtlHours * 60 * 60;
   const payload = base64UrlEncode(
     JSON.stringify({
-      exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
+      exp: Math.floor(Date.now() / 1000) + sessionTtlSeconds,
+      v: settings.security.sessionVersion,
     }),
   );
   const signature = signPayload(payload, secret);
   return `${payload}.${signature}`;
 }
 
-export function isValidAdminSessionToken(token: string): boolean {
+export async function isValidAdminSessionToken(token: string): Promise<boolean> {
   const secret = getSessionSecret();
   if (!secret || !token) {
     return false;
@@ -76,18 +79,24 @@ export function isValidAdminSessionToken(token: string): boolean {
   }
 
   try {
-    const decoded = JSON.parse(base64UrlDecode(payload)) as { exp?: number };
+    const decoded = JSON.parse(base64UrlDecode(payload)) as { exp?: number; v?: number };
     if (typeof decoded.exp !== 'number') {
       return false;
     }
 
-    return decoded.exp > Math.floor(Date.now() / 1000);
+    if (decoded.exp <= Math.floor(Date.now() / 1000)) {
+      return false;
+    }
+
+    const settings = await getAdminSettings();
+    const tokenVersion = typeof decoded.v === 'number' ? decoded.v : 1;
+    return tokenVersion === settings.security.sessionVersion;
   } catch {
     return false;
   }
 }
 
-export function hasValidAdminSession(request: Request): boolean {
+export async function hasValidAdminSession(request: Request): Promise<boolean> {
   const cookies = parseCookies(request);
   const token = cookies[ADMIN_SESSION_COOKIE];
   if (!token) {
@@ -97,7 +106,10 @@ export function hasValidAdminSession(request: Request): boolean {
   return isValidAdminSessionToken(token);
 }
 
-export function setAdminSessionCookie(response: NextResponse, token: string) {
+export async function setAdminSessionCookie(response: NextResponse, token: string) {
+  const settings = await getAdminSettings();
+  const sessionTtlSeconds = settings.security.sessionTtlHours * 60 * 60;
+
   response.cookies.set({
     name: ADMIN_SESSION_COOKIE,
     value: token,
@@ -105,7 +117,7 @@ export function setAdminSessionCookie(response: NextResponse, token: string) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
     path: '/',
-    maxAge: SESSION_TTL_SECONDS,
+    maxAge: sessionTtlSeconds,
   });
 }
 
@@ -120,4 +132,3 @@ export function clearAdminSessionCookie(response: NextResponse) {
     maxAge: 0,
   });
 }
-

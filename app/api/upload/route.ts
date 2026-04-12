@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { getCloudinaryFolderPath } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { uploadImageFile } from '@/lib/server/uploads';
 
@@ -10,11 +11,11 @@ const isFile = (value: FormDataEntryValue | null): value is File => {
 };
 
 export async function POST(request: Request) {
-  if (isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!isAuthorizedMutation(request)) {
+  if (!(await isAuthorizedMutation(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'File is required' }, { status: 400 });
     }
 
-    const secureUrl = await uploadImageFile(fileValue, 'portfolio/uploads');
+    const secureUrl = await uploadImageFile(fileValue, await getCloudinaryFolderPath('uploads'));
     return NextResponse.json({ secure_url: secureUrl });
   } catch {
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
