@@ -1,10 +1,9 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 
 const PASSWORD_PREFIX = 'scrypt';
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
-
-export const MIN_PASSWORD_LENGTH = 12;
 
 export function validatePasswordPolicy(password: string) {
   return typeof password === 'string' && password.trim().length >= MIN_PASSWORD_LENGTH;

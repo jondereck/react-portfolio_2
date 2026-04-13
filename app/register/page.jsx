@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
+import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -24,6 +25,18 @@ export default function RegisterPage() {
 
     if (form.password !== form.confirmPassword) {
       setError('Passwords do not match.');
+      setSubmitting(false);
+      return;
+    }
+
+    if (form.name.trim().length < 2) {
+      setError('Full name must be at least 2 characters.');
+      setSubmitting(false);
+      return;
+    }
+
+    if (form.password.trim().length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       setSubmitting(false);
       return;
     }
@@ -88,7 +101,7 @@ export default function RegisterPage() {
           <Input
             type="password"
             value={form.password}
-            placeholder="Password"
+            placeholder={`Password (${MIN_PASSWORD_LENGTH}+ characters)`}
             autoComplete="new-password"
             disabled={submitting}
             onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}

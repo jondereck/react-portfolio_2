@@ -24,6 +24,7 @@ const pageTitles = {
   '/admin/gallery/arrange': 'Media Arrangement',
   '/admin/gallery/import': 'Media Import',
   '/admin/gallery/settings': 'Gallery Settings',
+  '/admin/account': 'My Account',
   '/admin/settings': 'System Settings',
   '/admin/users': 'User Management',
 };

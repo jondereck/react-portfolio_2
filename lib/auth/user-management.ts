@@ -22,7 +22,10 @@ type ManagedUserRecord = {
   profile: Pick<Profile, 'id' | 'slug' | 'displayName'> | null;
 };
 
-function deriveManagedStatus(user: Pick<ManagedUserRecord, 'isActive' | 'emailVerified'>): ManagedUserStatus {
+function deriveManagedStatus(user: Pick<ManagedUserRecord, 'isActive' | 'emailVerified' | 'role'>): ManagedUserStatus {
+  if (user.role === 'super_admin') {
+    return user.isActive ? 'active' : 'suspended';
+  }
   if (!user.emailVerified) return 'pending';
   return user.isActive ? 'active' : 'suspended';
 }

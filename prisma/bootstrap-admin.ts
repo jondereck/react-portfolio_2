@@ -35,6 +35,7 @@ async function main() {
           name: displayName,
           role: 'super_admin',
           isActive: true,
+          emailVerified: baseUser.emailVerified ?? new Date(),
           passwordHash,
         },
       })
@@ -45,6 +46,7 @@ async function main() {
           name: displayName,
           role: 'super_admin',
           isActive: true,
+          emailVerified: new Date(),
           passwordHash,
         },
       });
