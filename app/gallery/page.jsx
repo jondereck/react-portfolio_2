@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import GlobalLoader from '@/components/GlobalLoader';
 import { useLoadingStore } from '@/store/loading';
 
 const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
@@ -485,7 +484,6 @@ export default function GalleryPage() {
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const galleryAdminHoldTimerRef = useRef(null);
-  const [isReady, setIsReady] = useState(false);
   const [albums, setAlbums] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [currentView, setCurrentView] = useState('cinematic');
@@ -497,36 +495,6 @@ export default function GalleryPage() {
   const [compactSearchQuery, setCompactSearchQuery] = useState('');
 
   useEffect(() => {
-    let mounted = true;
-
-    const verifySession = async () => {
-      try {
-        const response = await fetch('/api/admin/verify', { cache: 'no-store' });
-        if (!response.ok) {
-          router.replace('/');
-          return;
-        }
-
-        if (mounted) {
-          setIsReady(true);
-        }
-      } catch {
-        router.replace('/');
-      }
-    };
-
-    verifySession();
-
-    return () => {
-      mounted = false;
-    };
-  }, [router]);
-
-  useEffect(() => {
-    if (!isReady) {
-      return;
-    }
-
     let finished = false;
     const finalize = () => {
       if (finished) {
@@ -574,10 +542,10 @@ export default function GalleryPage() {
     return () => {
       finalize();
     };
-  }, [isReady, startGlobalLoading, stopGlobalLoading]);
+  }, [startGlobalLoading, stopGlobalLoading]);
 
   useEffect(() => {
-    if (!isReady || currentView !== 'cinematic' || isAutoplayPaused || albums.length <= 1) {
+    if (currentView !== 'cinematic' || isAutoplayPaused || albums.length <= 1) {
       return;
     }
 
@@ -587,7 +555,7 @@ export default function GalleryPage() {
     }, 5500);
 
     return () => clearInterval(timer);
-  }, [isReady, currentView, isAutoplayPaused, albums.length]);
+  }, [currentView, isAutoplayPaused, albums.length]);
 
   const activeAlbum = albums[activeIndex] || null;
   const activeCover = activeAlbum ? resolveAlbumCover(activeAlbum) : '';
@@ -720,10 +688,6 @@ export default function GalleryPage() {
   };
 
   useEffect(() => () => clearGalleryAdminHold(), []);
-
-  if (!isReady) {
-    return <GlobalLoader forceVisible message="Checking gallery access" hint="Verifying the secure gallery session." />;
-  }
 
   return (
     <main

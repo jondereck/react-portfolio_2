@@ -8,9 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "seed": "ts-node --project tsconfig.seed.json prisma/seed.ts",
+    "bootstrap-admin": "ts-node --project tsconfig.seed.json prisma/bootstrap-admin.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.11.1",
     "@base-ui/react": "^1.3.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -27,6 +29,7 @@
     "framer-motion": "^10.12.16",
     "lucide-react": "^1.8.0",
     "next": "^15.2.4",
+    "next-auth": "^5.0.0-beta.30",
     "next-cloudinary": "^6.17.5",
     "pg": "^8.20.0",
     "radix-ui": "^1.4.3",

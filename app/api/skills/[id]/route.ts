@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { canMutateContent } from '@/lib/auth/roles';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { skillSchema } from '@/lib/validators';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { uploadImageFile } from '@/lib/server/uploads';
 import { toErrorResponse } from '@/lib/server/api-responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
+import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,10 +23,20 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
   }
 
-  const canViewDrafts = await isAuthorizedMutation(request);
-  const skill = await prisma.skill.findUnique({ where: { id } });
+  const access = await resolvePublicProfileFromRequest(request);
+  if (!access || (!access.profile.isPublic && !access.canViewDrafts)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
-  if (!skill || (!canViewDrafts && !skill.isPublished)) {
+  const skill = await prisma.skill.findFirst({
+    where: {
+      id,
+      profileId: access.profile.id,
+      ...(access.canViewDrafts ? {} : { isPublished: true }),
+    },
+  });
+
+  if (!skill) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
@@ -36,10 +48,6 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const { id: idParam } = await context.params;
   const id = parseId(idParam);
   if (!id) {
@@ -48,6 +56,14 @@ export async function PUT(request: Request, context: RouteContext) {
 
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
+    const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
+    if (!canMutateContent(actor.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    const existing = await prisma.skill.findFirst({ where: { id, profileId: profile.id } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const image =
       imageFile ? await uploadImageFile(imageFile, 'portfolio/skills') : typeof data.image === 'string' ? data.image : undefined;
     const parsed = skillSchema.parse({
@@ -70,6 +86,10 @@ export async function PUT(request: Request, context: RouteContext) {
 
     return NextResponse.json(updated);
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to update skill.');
   }
 }

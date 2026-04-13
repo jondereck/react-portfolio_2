@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { canManageGlobalSettings } from '@/lib/auth/roles';
+import { resolveRequestActor } from '@/lib/auth/session';
 import { bumpSessionVersion, getAdminSettingsDashboardData, logAdminAuditEvent, updateAdminSettings } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { integrationsSettingsSchema, securitySettingsSchema } from '@/lib/validators';
@@ -11,8 +12,12 @@ type SettingsPayload = {
 };
 
 export async function GET(request: Request) {
-  if (!(await isAuthorizedMutation(request))) {
+  const actor = await resolveRequestActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!canManageGlobalSettings(actor.user.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const data = await getAdminSettingsDashboardData();
@@ -24,8 +29,12 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
+  const actor = await resolveRequestActor(request);
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!canManageGlobalSettings(actor.user.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
@@ -51,6 +60,7 @@ export async function PUT(request: Request) {
       });
 
       await logAdminAuditEvent({
+        actorUserId: actor.user.id,
         type: 'settings_updated',
         details: {
           scope: [

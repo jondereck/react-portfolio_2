@@ -14,6 +14,15 @@ const fetcher = (url) =>
     return response.json();
   });
 
+const withProfile = (path, profileSlug) => {
+  if (!profileSlug) {
+    return path;
+  }
+
+  const joiner = path.includes('?') ? '&' : '?';
+  return `${path}${joiner}profile=${encodeURIComponent(profileSlug)}`;
+};
+
 const normalizeTech = (value) => {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string') {
@@ -38,10 +47,10 @@ const normalizeDescriptions = (value) => {
   return [];
 };
 
-const Projects = () => {
+const Projects = ({ profileSlug = null }) => {
   const [page, setPage] = useState(1);
   const itemsPerPage = 6;
-  const { data, error, isLoading: loading } = useSWR('/api/portfolio', fetcher);
+  const { data, error, isLoading: loading } = useSWR(withProfile('/api/portfolio', profileSlug), fetcher);
   const projectList = Array.isArray(data) ? data : Array.isArray(data?.projects) ? data.projects : [];
   const totalPages = Math.ceil(projectList.length / itemsPerPage);
   const paginatedData = projectList.slice((page - 1) * itemsPerPage, page * itemsPerPage);

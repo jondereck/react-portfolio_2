@@ -12,6 +12,15 @@ const fetcher = (url) =>
     return response.json();
   });
 
+const withProfile = (path, profileSlug) => {
+  if (!profileSlug) {
+    return path;
+  }
+
+  const joiner = path.includes('?') ? '&' : '?';
+  return `${path}${joiner}profile=${encodeURIComponent(profileSlug)}`;
+};
+
 const toIsoDate = (value) => {
   if (!value) return '';
   const date = new Date(value);
@@ -38,9 +47,12 @@ const renderAvatar = (src, alt, shapeClass = 'rounded-full') => (
   </div>
 );
 
-const Experience = () => {
-  const { data: skillsData, error: skillsError, isLoading: skillsLoading } = useSWR('/api/skills', fetcher);
-  const { data: experienceData, error: experienceError, isLoading: experienceLoading } = useSWR('/api/experience', fetcher);
+const Experience = ({ profileSlug = null }) => {
+  const { data: skillsData, error: skillsError, isLoading: skillsLoading } = useSWR(withProfile('/api/skills', profileSlug), fetcher);
+  const { data: experienceData, error: experienceError, isLoading: experienceLoading } = useSWR(
+    withProfile('/api/experience', profileSlug),
+    fetcher,
+  );
   const skills = Array.isArray(skillsData) ? skillsData : [];
   const experienceItems = Array.isArray(experienceData) ? experienceData : [];
   const loading = skillsLoading || experienceLoading;

@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Dialog, DialogContent } from './ui/dialog';
-import AdminLoginDialog from './AdminLoginDialog';
 import useSWR from 'swr';
 import { isSafeHttpUrl } from '@/lib/url-safety';
 
@@ -15,13 +14,21 @@ const fetcher = (url) =>
     return response.json();
   });
 
-const Certificates = () => {
+const withProfile = (path, profileSlug) => {
+  if (!profileSlug) {
+    return path;
+  }
+
+  const joiner = path.includes('?') ? '&' : '?';
+  return `${path}${joiner}profile=${encodeURIComponent(profileSlug)}`;
+};
+
+const Certificates = ({ profileSlug = null }) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [selectedImage, setSelectedImage] = useState('');
-  const [open, setOpen] = useState(false);
   const [page, setPage] = useState(1);
   const itemsPerPage = 6;
-  const { data, error } = useSWR('/api/certificates', fetcher);
+  const { data, error } = useSWR(withProfile('/api/certificates', profileSlug), fetcher);
   const items = Array.isArray(data) ? data : [];
 
   const categories = useMemo(() => {
@@ -124,8 +131,6 @@ const Certificates = () => {
           </PaginationContent>
         </Pagination>
       ) : null}
-
-      <AdminLoginDialog open={open} onOpenChange={setOpen} />
 
       <Dialog open={Boolean(selectedImage)} onOpenChange={(isOpen) => setSelectedImage(isOpen ? selectedImage : '')}>
         <DialogContent className="max-w-4xl bg-white p-3 dark:bg-slate-900">

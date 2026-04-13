@@ -25,6 +25,7 @@ const pageTitles = {
   '/admin/gallery/import': 'Media Import',
   '/admin/gallery/settings': 'Gallery Settings',
   '/admin/settings': 'System Settings',
+  '/admin/users': 'User Management',
 };
 
 export default function AdminTopbar({ onLogout }) {

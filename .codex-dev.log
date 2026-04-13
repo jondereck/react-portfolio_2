@@ -1,0 +1,15 @@
+
+> portfolio@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.15
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.68.91:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 7.1s
+ ○ Compiling /api/auth/[...nextauth] ...
+ ✓ Compiled /api/auth/[...nextauth] in 4.4s (426 modules)
+ GET /api/auth/providers 500 in 7688ms
+ ✓ Compiled in 138ms

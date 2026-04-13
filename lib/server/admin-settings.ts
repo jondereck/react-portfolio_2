@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { writeAuditEvent } from '@/lib/audit/audit';
 import { defaultAdminIntegrations, defaultAdminSecurity, defaultAdminSettings } from '@/lib/adminSettingsDefaults';
 import { integrationsSettingsSchema, securitySettingsSchema } from '@/lib/validators';
 
@@ -17,7 +18,11 @@ type IntegrationStatus = {
 };
 
 type AdminAuditEventPayload = {
+  actorUserId?: string | null;
+  targetProfileId?: number | null;
   type: string;
+  targetType?: string | null;
+  targetId?: string | null;
   details?: Record<string, unknown>;
 };
 
@@ -117,17 +122,15 @@ export async function updateAdminSettings(input: {
   return toSnapshot({ integrations: record.integrations, security: record.security });
 }
 
-export async function logAdminAuditEvent({ type, details }: AdminAuditEventPayload) {
-  try {
-    await prisma.adminAuditEvent.create({
-      data: {
-        type,
-        details: details ? (details as Prisma.InputJsonObject) : undefined,
-      },
-    });
-  } catch (error) {
-    console.error('Failed to write admin audit event', error);
-  }
+export async function logAdminAuditEvent({ actorUserId, targetProfileId, type, targetType, targetId, details }: AdminAuditEventPayload) {
+  await writeAuditEvent({
+    actorUserId,
+    targetProfileId,
+    action: type,
+    targetType,
+    targetId,
+    metadata: details,
+  });
 }
 
 export async function bumpSessionVersion(details?: Record<string, unknown>) {

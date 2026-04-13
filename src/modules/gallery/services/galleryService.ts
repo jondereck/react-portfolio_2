@@ -62,8 +62,8 @@ export class GalleryService {
     );
   }
 
-  listAlbums(canViewDrafts: boolean) {
-    return this.repo.listAlbums(!canViewDrafts);
+  listAlbums(profileId: number, canViewDrafts: boolean) {
+    return this.repo.listAlbums(profileId, !canViewDrafts);
   }
 
   private sortPhotosByManualArrangement(photos: AlbumPhotoRecord[]) {
@@ -84,8 +84,8 @@ export class GalleryService {
     });
   }
 
-  async getAlbumById(id: number, canViewDrafts: boolean) {
-    const album = await this.repo.getAlbumById(id);
+  async getAlbumById(id: number, profileId: number, canViewDrafts: boolean) {
+    const album = await this.repo.getAlbumById(id, profileId);
     if (!album || (!canViewDrafts && !album.isPublished)) {
       return null;
     }
@@ -93,12 +93,13 @@ export class GalleryService {
     return album;
   }
 
-  async getAlbumBySlug(slug: string, canViewDrafts: boolean) {
-    return this.repo.getAlbumBySlug(slug, !canViewDrafts);
+  async getAlbumBySlug(slug: string, profileId: number, canViewDrafts: boolean) {
+    return this.repo.getAlbumBySlug(slug, profileId, !canViewDrafts);
   }
 
-  createAlbum(input: AlbumCreateInput) {
+  createAlbum(profileId: number, input: AlbumCreateInput) {
     return this.repo.createAlbum({
+      profileId,
       name: input.name,
       slug: input.slug,
       description: input.description,
@@ -121,8 +122,8 @@ export class GalleryService {
     return this.repo.deleteAlbum(albumId);
   }
 
-  async listAlbumPhotos(albumId: number, sort: GallerySort, canViewDrafts: boolean) {
-    const album = await this.getAlbumById(albumId, canViewDrafts);
+  async listAlbumPhotos(albumId: number, profileId: number, sort: GallerySort, canViewDrafts: boolean) {
+    const album = await this.getAlbumById(albumId, profileId, canViewDrafts);
     if (!album) {
       return null;
     }
@@ -140,13 +141,13 @@ export class GalleryService {
     return { album, photos };
   }
 
-  async getAlbumDownloadPayload(albumId: number, canViewDrafts: boolean) {
-    const album = await this.getAlbumById(albumId, canViewDrafts);
+  async getAlbumDownloadPayload(albumId: number, profileId: number, canViewDrafts: boolean) {
+    const album = await this.getAlbumById(albumId, profileId, canViewDrafts);
     if (!album) {
       return null;
     }
 
-    const albumWithPhotos = await this.repo.getAlbumWithPhotosForDownload(albumId);
+    const albumWithPhotos = await this.repo.getAlbumWithPhotosForDownload(albumId, profileId);
     if (!albumWithPhotos) {
       return null;
     }
@@ -162,8 +163,8 @@ export class GalleryService {
     };
   }
 
-  async getAlbumPhotoDownloadPayload(albumId: number, photoId: number, canViewDrafts: boolean) {
-    const album = await this.getAlbumById(albumId, canViewDrafts);
+  async getAlbumPhotoDownloadPayload(albumId: number, profileId: number, photoId: number, canViewDrafts: boolean) {
+    const album = await this.getAlbumById(albumId, profileId, canViewDrafts);
     if (!album) {
       return null;
     }

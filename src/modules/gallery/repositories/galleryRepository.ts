@@ -43,21 +43,25 @@ const resolvePhotoOrderBy = (sort: GallerySort): Prisma.AlbumPhotoOrderByWithRel
 };
 
 export class GalleryRepository {
-  async listAlbums(onlyPublished: boolean) {
+  async listAlbums(profileId: number, onlyPublished: boolean) {
     return prisma.album.findMany({
-      where: onlyPublished ? { isPublished: true } : undefined,
+      where: {
+        profileId,
+        ...(onlyPublished ? { isPublished: true } : {}),
+      },
       include: albumInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
   }
 
-  async getAlbumById(id: number) {
-    return prisma.album.findUnique({ where: { id }, include: albumInclude });
+  async getAlbumById(id: number, profileId: number) {
+    return prisma.album.findFirst({ where: { id, profileId }, include: albumInclude });
   }
 
-  async getAlbumBySlug(slug: string, onlyPublished: boolean) {
+  async getAlbumBySlug(slug: string, profileId: number, onlyPublished: boolean) {
     return prisma.album.findFirst({
       where: {
+        profileId,
         slug,
         ...(onlyPublished ? { isPublished: true } : {}),
       },
@@ -65,9 +69,9 @@ export class GalleryRepository {
     });
   }
 
-  async getAlbumWithPhotosForDownload(id: number): Promise<AlbumDownloadRecord | null> {
-    return prisma.album.findUnique({
-      where: { id },
+  async getAlbumWithPhotosForDownload(id: number, profileId: number): Promise<AlbumDownloadRecord | null> {
+    return prisma.album.findFirst({
+      where: { id, profileId },
       include: {
         photos: {
           select: photoSelect,
@@ -78,9 +82,10 @@ export class GalleryRepository {
     });
   }
 
-  async createAlbum(data: { name: string; slug: string; description?: string; isPublished: boolean }) {
+  async createAlbum(data: { profileId: number; name: string; slug: string; description?: string; isPublished: boolean }) {
     return prisma.album.create({
       data: {
+        profileId: data.profileId,
         name: data.name,
         slug: data.slug,
         description: data.description ?? null,

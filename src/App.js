@@ -42,7 +42,16 @@ const fetcher = (url) =>
     return response.json();
   });
 
-function App() {
+const withProfile = (path, profileSlug) => {
+  if (!profileSlug) {
+    return path;
+  }
+
+  const joiner = path.includes('?') ? '&' : '?';
+  return `${path}${joiner}profile=${encodeURIComponent(profileSlug)}`;
+};
+
+function App({ profileSlug = null }) {
   const [darkMode, setDarkMode] = useState(false);
   const [showThemeFade, setShowThemeFade] = useState(false);
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
@@ -51,12 +60,12 @@ function App() {
     data: siteContentData,
     error: siteContentError,
     isLoading: siteContentLoading,
-  } = useSWR('/api/site-content', fetcher);
+  } = useSWR(withProfile('/api/site-content', profileSlug), fetcher);
   const {
     data: siteConfigData,
     error: siteConfigError,
     isLoading: siteConfigLoading,
-  } = useSWR('/api/site-config', fetcher);
+  } = useSWR(withProfile('/api/site-config', profileSlug), fetcher);
 
   const siteContent = useMemo(
     () => ({
@@ -182,9 +191,9 @@ function App() {
       <main className="bg-slate-50 text-black transition duration-500 dark:bg-slate-950 dark:text-white">
         <Hero hero={siteContent?.hero} />
         <About about={siteContent?.about} />
-        <Projects />
-        <Experience />
-        <Certificates />
+        <Projects profileSlug={profileSlug} />
+        <Experience profileSlug={profileSlug} />
+        <Certificates profileSlug={profileSlug} />
         <Contact />
       </main>
       <SocialLinks />

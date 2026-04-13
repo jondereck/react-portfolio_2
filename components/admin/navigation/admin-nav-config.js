@@ -16,6 +16,7 @@ export const adminNavigationSections = [
     title: 'Site Management',
     items: [
       { label: 'Settings', href: '/admin/settings' },
+      { label: 'Users', href: '/admin/users' },
       { label: 'Navigation', href: '/admin/settings#navigation' },
       { label: 'Integrations', href: '/admin/settings#integrations' },
       { label: 'Security', href: '/admin/settings#security' },

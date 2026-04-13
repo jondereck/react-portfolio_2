@@ -8,6 +8,7 @@ import {
 import Link from 'next/link';
 import AdminOverviewCard from '@/components/admin/shared/AdminOverviewCard';
 import AdminMetricCard from '@/components/admin/shared/AdminMetricCard';
+import { getCurrentProfile } from '@/lib/auth/session';
 import { buildGalleryRouteHref } from '@/modules/gallery/admin/workspaceConfig';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
@@ -63,7 +64,8 @@ function formatAlbumHint(totalAlbums) {
 }
 
 export default async function GalleryAdminPage() {
-  const albums = await galleryService.listAlbums(true);
+  const profile = await getCurrentProfile();
+  const albums = await galleryService.listAlbums(profile?.id ?? 1, true);
   const totalAlbums = albums.length;
   const publishedAlbums = albums.filter((album) => album.isPublished).length;
   const totalMedia = albums.reduce((sum, album) => sum + (album._count?.photos ?? 0), 0);

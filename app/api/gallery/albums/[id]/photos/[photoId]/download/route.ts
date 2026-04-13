@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { assertDownloadablePhoto, buildPhotoDownloadFilename, fetchPhotoDownload } from '@/lib/server/gallery-downloads';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
@@ -19,11 +20,8 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Too many download requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const { profile } = await resolveManagedProfileFromRequest(request);
     const { id: idParam, photoId: photoIdParam } = await context.params;
     const albumId = parseId(idParam);
     const photoId = parseId(photoIdParam);
@@ -31,7 +29,7 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
 
-    const payload = await galleryService.getAlbumPhotoDownloadPayload(albumId, photoId, true);
+    const payload = await galleryService.getAlbumPhotoDownloadPayload(albumId, profile.id, photoId, true);
     if (!payload) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -49,6 +47,10 @@ export async function GET(request: Request, context: RouteContext) {
 
     return new Response(response.body, { status: 200, headers });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to download media.');
   }
 }

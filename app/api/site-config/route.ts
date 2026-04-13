@@ -1,23 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { canMutateContent } from '@/lib/auth/roles';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { defaultSiteConfig } from '@/lib/siteContentDefaults';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { siteConfigSchema } from '@/lib/validators';
 import { logAdminAuditEvent } from '@/lib/server/admin-settings';
-
-async function ensureSiteConfig() {
-  await prisma.siteConfig.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      id: 1,
-      logoText: defaultSiteConfig.logoText,
-      logoImage: defaultSiteConfig.logoImage,
-      navigation: defaultSiteConfig.navigation,
-    },
-  });
-}
+import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
+import { ensureSiteConfigForProfile } from '@/lib/profile/site-data';
 
 type ConfigPayload = {
   logoText?: unknown;
@@ -65,9 +55,15 @@ const normalizeSiteConfig = (config: { logoText: string | null; logoImage: strin
   };
 };
 
-export async function GET() {
-  await ensureSiteConfig();
-  const config = await prisma.siteConfig.findUnique({ where: { id: 1 } });
+export async function GET(request: Request) {
+  const access = await resolvePublicProfileFromRequest(request);
+  const profile = access?.profile ?? null;
+  if (!profile) {
+    return NextResponse.json(defaultSiteConfig);
+  }
+
+  await ensureSiteConfigForProfile(profile.id);
+  const config = await prisma.siteConfig.findUnique({ where: { profileId: profile.id } });
   return NextResponse.json(normalizeSiteConfig(config));
 }
 
@@ -76,8 +72,12 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
+  const { actor, profile } = await resolveManagedProfileFromRequest(request).catch(() => ({ actor: null, profile: null }));
+  if (!actor || !profile) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!canMutateContent(actor.user.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
@@ -101,17 +101,17 @@ export async function PUT(request: Request) {
       return NextResponse.json({ message: 'Invalid payload' }, { status: 400 });
     }
 
-    const current = await prisma.siteConfig.findUnique({ where: { id: 1 } });
+    const current = await prisma.siteConfig.findUnique({ where: { profileId: profile.id } });
     const normalizedCurrent = normalizeSiteConfig(current);
     const updated = await prisma.siteConfig.upsert({
-      where: { id: 1 },
+      where: { profileId: profile.id },
       update: {
         logoText: parsed.data.logoText ?? normalizedCurrent.logoText ?? null,
         logoImage: parsed.data.logoImage ?? normalizedCurrent.logoImage ?? null,
         navigation: parsed.data.navigation ?? normalizedCurrent.navigation ?? defaultSiteConfig.navigation,
       },
       create: {
-        id: 1,
+        profileId: profile.id,
         logoText: parsed.data.logoText ?? normalizedCurrent.logoText ?? defaultSiteConfig.logoText,
         logoImage: parsed.data.logoImage ?? normalizedCurrent.logoImage ?? null,
         navigation: parsed.data.navigation ?? normalizedCurrent.navigation ?? defaultSiteConfig.navigation,
@@ -119,6 +119,8 @@ export async function PUT(request: Request) {
     });
 
     await logAdminAuditEvent({
+      actorUserId: actor.user.id,
+      targetProfileId: profile.id,
       type: 'settings_updated',
       details: {
         scope: [
@@ -130,6 +132,10 @@ export async function PUT(request: Request) {
 
     return NextResponse.json(normalizeSiteConfig(updated));
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     console.error('Failed to update site config', error);
     return NextResponse.json({ message: 'Server error' }, { status: 500 });
   }

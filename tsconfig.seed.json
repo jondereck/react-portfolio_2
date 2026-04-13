@@ -4,5 +4,5 @@
     "module": "commonjs",
     "types": ["node"]
   },
-  "include": ["prisma/seed.ts", "lib/**/*.ts"]
+  "include": ["prisma/*.ts", "lib/**/*.ts"]
 }

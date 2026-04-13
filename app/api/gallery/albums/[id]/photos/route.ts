@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { canMutateContent } from '@/lib/auth/roles';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { gallerySortSchema, photoCreateSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
@@ -14,11 +16,8 @@ const parseId = (value: string) => {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const { profile } = await resolveManagedProfileFromRequest(request);
     const { id: idParam } = await context.params;
     const albumId = parseId(idParam);
     if (!albumId) {
@@ -27,13 +26,17 @@ export async function GET(request: Request, context: RouteContext) {
 
     const url = new URL(request.url);
     const sort = gallerySortSchema.parse(url.searchParams.get('sort') ?? 'custom');
-    const result = await galleryService.listAlbumPhotos(albumId, sort, true);
+    const result = await galleryService.listAlbumPhotos(albumId, profile.id, sort, true);
     if (!result) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     return NextResponse.json(result);
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to load album photos.');
   }
 }
@@ -43,18 +46,22 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const { data, imageFile } = await parseMultipartOrJson(request);
+    const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
+    if (!canMutateContent(actor.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const { id: idParam } = await context.params;
     const albumId = parseId(idParam);
     if (!albumId) {
       return NextResponse.json({ error: 'Invalid album id' }, { status: 400 });
     }
-
-    const { data, imageFile } = await parseMultipartOrJson(request);
+    const album = await galleryService.getAlbumById(albumId, profile.id, true);
+    if (!album) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const created = imageFile
       ? await galleryService.addUploadedAlbumPhoto(albumId, {
           file: imageFile,
@@ -75,6 +82,10 @@ export async function POST(request: Request, context: RouteContext) {
 
     return NextResponse.json(created, { status: 201 });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to add photo.');
   }
 }

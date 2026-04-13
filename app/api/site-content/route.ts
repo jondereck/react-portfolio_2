@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { canMutateContent } from '@/lib/auth/roles';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { aboutSchema, heroSchema, contactSchema, seoSchema } from '@/lib/validators';
-import { defaultSiteContent } from '@/lib/siteContentDefaults';
 import { isRateLimited } from '@/lib/server/rate-limit';
+import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
+import { ensureSiteContentForProfile } from '@/lib/profile/site-data';
 
 type UpdateRequestPayload = {
   hero?: Record<string, unknown>;
@@ -13,23 +15,14 @@ type UpdateRequestPayload = {
   seo?: Record<string, unknown>;
 };
 
-async function ensureSiteContent() {
-  await prisma.siteContent.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      id: 1,
-      hero: defaultSiteContent.hero,
-      about: defaultSiteContent.about,
-      contact: defaultSiteContent.contact,
-      seo: defaultSiteContent.seo,
-    },
-  });
-}
+export async function GET(request: Request) {
+  const access = await resolvePublicProfileFromRequest(request);
+  if (!access || (!access.profile.isPublic && !access.canViewDrafts)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
 
-export async function GET() {
-  await ensureSiteContent();
-  const siteContent = await prisma.siteContent.findUnique({ where: { id: 1 } });
+  await ensureSiteContentForProfile(access.profile.id);
+  const siteContent = await prisma.siteContent.findUnique({ where: { profileId: access.profile.id } });
   return NextResponse.json(siteContent);
 }
 
@@ -38,12 +31,16 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
+  const { actor, profile } = await resolveManagedProfileFromRequest(request).catch(() => ({ actor: null, profile: null }));
+  if (!actor || !profile) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!canMutateContent(actor.user.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
-    await ensureSiteContent();
+    await ensureSiteContentForProfile(profile.id);
     const payload = (await request.json()) as UpdateRequestPayload;
     if (!payload.hero && !payload.about && !payload.contact && !payload.seo) {
       return NextResponse.json({ error: 'Provide hero, about, contact, or seo payload.' }, { status: 400 });
@@ -83,9 +80,13 @@ export async function PUT(request: Request) {
       updates.seo = parsedSeo.data as Prisma.InputJsonObject;
     }
 
-    const result = await prisma.siteContent.update({ where: { id: 1 }, data: updates });
+    const result = await prisma.siteContent.update({ where: { profileId: profile.id }, data: updates });
     return NextResponse.json(result);
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     console.error('Failed to update site content', error);
     return NextResponse.json({ error: 'Unable to update site content' }, { status: 500 });
   }

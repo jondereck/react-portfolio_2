@@ -1,5 +1,8 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { LEGACY_PRIMARY_PROFILE_ID, LEGACY_PRIMARY_PROFILE_SLUG, LEGACY_PRIMARY_USER_ID } from '../lib/auth/constants';
 import { defaultAdminSettings } from '../lib/adminSettingsDefaults';
+import { hashPassword } from '../lib/password/password';
 import { defaultSiteConfig, defaultSiteContent } from '../lib/siteContentDefaults';
 
 const prisma = new PrismaClient();
@@ -10,19 +13,68 @@ async function main() {
     prisma.skill.deleteMany(),
     prisma.experience.deleteMany(),
     prisma.portfolio.deleteMany(),
+    prisma.albumPhoto.deleteMany(),
+    prisma.album.deleteMany(),
     prisma.adminAuditEvent.deleteMany(),
     prisma.adminSettings.deleteMany(),
     prisma.siteConfig.deleteMany(),
     prisma.siteContent.deleteMany(),
+    prisma.verificationToken.deleteMany(),
+    prisma.session.deleteMany(),
+    prisma.account.deleteMany(),
+    prisma.profile.deleteMany(),
+    prisma.user.deleteMany(),
   ]);
 
-  await prisma.siteContent.create({ data: defaultSiteContent });
-  await prisma.siteConfig.create({ data: defaultSiteConfig });
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase() || 'admin@example.com';
+  const password = process.env.ADMIN_PASSWORD?.trim() || 'ChangeMe12345';
+  const displayName = process.env.ADMIN_NAME?.trim() || 'Primary Admin';
+
+  const user = await prisma.user.create({
+    data: {
+      id: LEGACY_PRIMARY_USER_ID,
+      email,
+      name: displayName,
+      role: 'super_admin',
+      isActive: true,
+      passwordHash: hashPassword(password),
+    },
+  });
+
+  const profile = await prisma.profile.create({
+    data: {
+      id: LEGACY_PRIMARY_PROFILE_ID,
+      userId: user.id,
+      slug: LEGACY_PRIMARY_PROFILE_SLUG,
+      displayName,
+      isPrimary: true,
+      isPublic: true,
+    },
+  });
+
+  await prisma.siteContent.create({
+    data: {
+      profileId: profile.id,
+      hero: defaultSiteContent.hero,
+      about: defaultSiteContent.about,
+      contact: defaultSiteContent.contact,
+      seo: defaultSiteContent.seo,
+    },
+  });
+  await prisma.siteConfig.create({
+    data: {
+      profileId: profile.id,
+      logoText: defaultSiteConfig.logoText,
+      logoImage: defaultSiteConfig.logoImage,
+      navigation: defaultSiteConfig.navigation,
+    },
+  });
   await prisma.adminSettings.create({ data: defaultAdminSettings });
 
   await prisma.skill.createMany({
     data: [
       {
+        profileId: profile.id,
         name: 'React',
         level: 90,
         category: 'Frontend',
@@ -31,6 +83,7 @@ async function main() {
         sortOrder: 1,
       },
       {
+        profileId: profile.id,
         name: 'Next.js',
         level: 88,
         category: 'Frontend',
@@ -44,6 +97,7 @@ async function main() {
   await prisma.experience.createMany({
     data: [
       {
+        profileId: profile.id,
         title: 'Senior Frontend Engineer',
         company: 'Nimbus Labs',
         description: 'Led UI platform, shipped reusable component library.',
@@ -54,6 +108,7 @@ async function main() {
         sortOrder: 1,
       },
       {
+        profileId: profile.id,
         title: 'Product Engineer',
         company: 'Arc Studio',
         description: 'Partnered with design to deliver 0-1 SaaS experiences.',
@@ -70,6 +125,7 @@ async function main() {
   await prisma.certificate.createMany({
     data: [
       {
+        profileId: profile.id,
         title: 'AWS Certified Cloud Practitioner',
         issuer: 'Amazon Web Services',
         image: 'https://res.cloudinary.com/demo/image/upload/v1710000000/portfolio/aws.png',
@@ -78,6 +134,7 @@ async function main() {
         sortOrder: 1,
       },
       {
+        profileId: profile.id,
         title: 'Google UX Design',
         issuer: 'Google',
         image: 'https://res.cloudinary.com/demo/image/upload/v1710000000/portfolio/google-ux.png',
@@ -91,6 +148,7 @@ async function main() {
   await prisma.portfolio.createMany({
     data: [
       {
+        profileId: profile.id,
         title: 'AI Insights Dashboard',
         slug: 'ai-insights-dashboard',
         description: 'Real-time analytics dashboard with streaming data visualizations.',
@@ -108,6 +166,7 @@ async function main() {
         isFeatured: true,
       },
       {
+        profileId: profile.id,
         title: 'Commerce Platform UI',
         slug: 'commerce-platform-ui',
         description: 'Headless commerce storefront optimized for conversions.',

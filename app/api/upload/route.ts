@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { canMutateContent } from '@/lib/auth/roles';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
+import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { getCloudinaryFolderPath } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { uploadImageFile } from '@/lib/server/uploads';
@@ -15,11 +17,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const { actor } = await resolveManagedProfileFromRequest(request);
+    if (!canMutateContent(actor.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const formData = await request.formData();
     const fileValue = formData.get('file');
 
@@ -29,7 +32,11 @@ export async function POST(request: Request) {
 
     const secureUrl = await uploadImageFile(fileValue, await getCloudinaryFolderPath('uploads'));
     return NextResponse.json({ secure_url: secureUrl });
-  } catch {
+  } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
   }
 }

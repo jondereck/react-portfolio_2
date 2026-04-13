@@ -1,6 +1,8 @@
 import { BriefcaseBusiness, Images, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 import AdminOverviewCard from '@/components/admin/shared/AdminOverviewCard';
+import { ADMIN_ROLES } from '@/lib/auth/roles';
+import { requirePageRole } from '@/lib/auth/session';
 
 const adminOverviewCards = [
   {
@@ -29,7 +31,9 @@ const adminOverviewCards = [
   },
 ];
 
-export default function AdminDashboardPage() {
+export default async function AdminDashboardPage() {
+  await requirePageRole(ADMIN_ROLES);
+
   return (
     <div className="space-y-6">
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">

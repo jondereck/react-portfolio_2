@@ -1,8 +1,9 @@
 import { Readable } from 'node:stream';
 import { NextResponse } from 'next/server';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { buildAlbumZipFilename, createAlbumZipStream } from '@/lib/server/gallery-downloads';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
@@ -20,18 +21,15 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Too many download requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const { profile } = await resolveManagedProfileFromRequest(request);
     const { id: idParam } = await context.params;
     const albumId = parseId(idParam);
     if (!albumId) {
       return NextResponse.json({ error: 'Invalid album id' }, { status: 400 });
     }
 
-    const payload = await galleryService.getAlbumDownloadPayload(albumId, true);
+    const payload = await galleryService.getAlbumDownloadPayload(albumId, profile.id, true);
     if (!payload) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
@@ -49,6 +47,10 @@ export async function GET(request: Request, context: RouteContext) {
     const stream = Readable.toWeb(zip.stream) as ReadableStream<Uint8Array>;
     return new Response(stream, { status: 200, headers });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to download album.');
   }
 }

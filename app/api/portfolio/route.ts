@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { canDeleteContent, canMutateContent } from '@/lib/auth/roles';
 import { portfolioSchema } from '@/lib/validators';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { uploadImageFile } from '@/lib/server/uploads';
 import { toErrorResponse } from '@/lib/server/api-responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
+import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
 
 const normalizeTech = (value: unknown): string[] => {
   if (Array.isArray(value)) {
@@ -73,9 +75,16 @@ const serializePortfolio = (project: Record<string, unknown>) => ({
 });
 
 export async function GET(request: Request) {
-  const canViewDrafts = await isAuthorizedMutation(request);
+  const access = await resolvePublicProfileFromRequest(request);
+  if (!access || (!access.profile.isPublic && !access.canViewDrafts)) {
+    return NextResponse.json([]);
+  }
+
   const projects = await prisma.portfolio.findMany({
-    where: canViewDrafts ? undefined : { isPublished: true },
+    where: {
+      profileId: access.profile.id,
+      ...(access.canViewDrafts ? {} : { isPublished: true }),
+    },
     orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
   });
   return NextResponse.json(projects.map(serializePortfolio));
@@ -86,15 +95,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
+    const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
+    if (!canMutateContent(actor.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const parsed = await buildPortfolioInput(data, imageFile);
 
     const createData: Record<string, unknown> = {
+      profileId: profile.id,
       title: parsed.title,
       slug: parsed.slug,
       description: parsed.summary,
@@ -114,6 +124,10 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(serializePortfolio(created), { status: 201 });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to create portfolio entry.');
   }
 }
@@ -123,15 +137,19 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
+    const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
+    if (!canMutateContent(actor.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const id = Number(data?.id);
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    }
+    const existing = await prisma.portfolio.findFirst({ where: { id, profileId: profile.id } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const parsed = await buildPortfolioInput(data, imageFile);
@@ -157,6 +175,10 @@ export async function PUT(request: Request) {
     });
     return NextResponse.json(serializePortfolio(updated));
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to update portfolio entry.');
   }
 }
@@ -166,20 +188,29 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
     const payload = await request.json();
+    const { actor, profile } = await resolveManagedProfileFromRequest(request, payload);
+    if (!canDeleteContent(actor.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const id = Number(payload?.id);
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
     }
 
+    const existing = await prisma.portfolio.findFirst({ where: { id, profileId: profile.id } });
+    if (!existing) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
     await prisma.portfolio.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to delete portfolio entry.');
   }
 }

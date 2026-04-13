@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
-import { isAuthorizedMutation } from '@/lib/adminAuth';
+import { canMutateContent } from '@/lib/auth/roles';
+import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { getAdminSettings } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { driveImportSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
@@ -18,11 +20,12 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
   }
 
-  if (!(await isAuthorizedMutation(request))) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const body = await request.json();
+    const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
+    if (!canMutateContent(actor.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const settings = await getAdminSettings();
     if (!settings.integrations.googleDriveImportEnabled) {
       return NextResponse.json({ error: 'Google Drive imports are disabled.' }, { status: 403 });
@@ -34,7 +37,10 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Invalid album id' }, { status: 400 });
     }
 
-    const body = await request.json();
+    const album = await galleryService.getAlbumById(albumId, profile.id, true);
+    if (!album) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const parsed = driveImportSchema.parse(body);
     const result = await galleryService.importGoogleDriveFolder(albumId, {
       folderId: String(parsed.folderId),
@@ -52,6 +58,10 @@ export async function POST(request: Request, context: RouteContext) {
       { status: 201 },
     );
   } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
     return toErrorResponse(error, 'Unable to import Google Drive folder.');
   }
 }

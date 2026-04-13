@@ -2,9 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import GlobalLoader from '@/components/GlobalLoader';
 import { downloadFromApi } from "@/lib/download-client";
 import {
   ChevronLeft,
@@ -380,11 +378,9 @@ export default function AlbumDetailPage({ params }) {
     return savedDensity && densityGridMap[savedDensity] ? savedDensity : "medium";
   };
 
-  const router = useRouter();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const [slug, setSlug] = useState("");
-  const [isReady, setIsReady] = useState(false);
   const [album, setAlbum] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [sort, setSort] = useState("custom");
@@ -440,34 +436,6 @@ export default function AlbumDetailPage({ params }) {
   }, [params]);
 
   useEffect(() => {
-    let mounted = true;
-
-    const verifySession = async () => {
-      try {
-        const response = await fetch("/api/admin/verify", {
-          cache: "no-store",
-        });
-        if (!response.ok) {
-          router.replace("/");
-          return;
-        }
-
-        if (mounted) {
-          setIsReady(true);
-        }
-      } catch {
-        router.replace("/");
-      }
-    };
-
-    verifySession();
-
-    return () => {
-      mounted = false;
-    };
-  }, [router]);
-
-  useEffect(() => {
     if (typeof window === "undefined") return;
     window.localStorage.setItem("galleryDensity", density);
   }, [density]);
@@ -478,9 +446,6 @@ export default function AlbumDetailPage({ params }) {
   }, [viewerMode]);
 
   useEffect(() => {
-    if (!isReady) {
-      return;
-    }
     if (!slug) {
       setError("Album slug is missing.");
       setLoading(false);
@@ -524,7 +489,7 @@ export default function AlbumDetailPage({ params }) {
     return () => {
       finalize();
     };
-  }, [isReady, slug, sort, startGlobalLoading, stopGlobalLoading]);
+  }, [slug, sort, startGlobalLoading, stopGlobalLoading]);
 
   const filteredPhotos = photos.filter((item) => {
     if (mediaFilter === "photos") {
@@ -1149,10 +1114,6 @@ export default function AlbumDetailPage({ params }) {
     }
     goToPrev();
   };
-
-  if (!isReady) {
-    return <GlobalLoader forceVisible message="Checking gallery access" hint="Verifying the secure gallery session." />;
-  }
 
   const albumCover =
     album?.coverPhoto?.imageUrl ||

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';
+import Link from 'next/link';
 import { Link as ScrollLink } from 'react-scroll';
-import AdminLoginDialog from './AdminLoginDialog';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
 import { isSafeHttpUrl } from '@/lib/url-safety';
 
@@ -25,7 +25,6 @@ const normalizeLinks = (config) => {
 
 const NavBar = ({ darkMode, onToggleDark, config }) => {
   const [nav, setNav] = useState(false);
-  const [open, setOpen] = useState(false);
   const logoText = typeof config?.logoText === 'string' && config.logoText.trim().length > 0 ? config.logoText : 'Jon';
   const logoImage = isSafeHttpUrl(config?.logoImage) ? config.logoImage : '';
   const links = normalizeLinks(config);
@@ -73,13 +72,12 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
 
         <div className="flex items-center gap-2">
           {showAdminButton ? (
-            <button
-              type="button"
-              onClick={() => setOpen(true)}
+            <Link
+              href="/admin/login"
               className="inline-flex h-9 items-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Admin
-            </button>
+            </Link>
           ) : null}
           <button
             type="button"
@@ -110,8 +108,6 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
           ))}
         </ul>
       ) : null}
-
-      <AdminLoginDialog open={open} onOpenChange={setOpen} />
     </header>
   );
 };
