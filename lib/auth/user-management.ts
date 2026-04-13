@@ -1,20 +1,34 @@
-import { randomBytes } from 'node:crypto';
-import type { UserRole } from '@prisma/client';
-import { Resend } from 'resend';
+import type { Profile, UserRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { writeAuditEvent } from '@/lib/audit/audit';
-import { getAdminSettings } from '@/lib/server/admin-settings';
 import { hashPassword } from '@/lib/password/password';
 import { ensureSiteConfigForProfile, ensureSiteContentForProfile } from '@/lib/profile/site-data';
 import { slugify } from '@/src/modules/gallery/domain/slug';
 
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+export const MANAGEABLE_ROLES: UserRole[] = ['admin', 'editor', 'viewer'];
+export const REGISTRATION_DEFAULT_ROLE: UserRole = 'viewer';
 
-export const INVITABLE_ROLES: UserRole[] = ['admin', 'editor', 'viewer'];
-const INVITE_TTL_MS = 1000 * 60 * 60 * 24;
+export type ManagedUserStatus = 'pending' | 'active' | 'suspended';
 
-function assertInvitableRole(role: string): asserts role is UserRole {
-  if (!INVITABLE_ROLES.includes(role as UserRole)) {
+type ManagedUserRecord = {
+  id: string;
+  name: string | null;
+  email: string;
+  role: UserRole;
+  isActive: boolean;
+  emailVerified: Date | null;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  profile: Pick<Profile, 'id' | 'slug' | 'displayName'> | null;
+};
+
+function deriveManagedStatus(user: Pick<ManagedUserRecord, 'isActive' | 'emailVerified'>): ManagedUserStatus {
+  if (!user.emailVerified) return 'pending';
+  return user.isActive ? 'active' : 'suspended';
+}
+
+function assertManageableRole(role: string): asserts role is UserRole {
+  if (!MANAGEABLE_ROLES.includes(role as UserRole)) {
     throw new Error('INVALID_ROLE');
   }
 }
@@ -56,55 +70,42 @@ async function ensureUserProfile(userId: string, displayName: string, slugSeed: 
   return profile;
 }
 
-async function createInviteToken(email: string) {
-  const token = randomBytes(32).toString('hex');
-  const expires = new Date(Date.now() + INVITE_TTL_MS);
+function mapManagedUser(user: ManagedUserRecord) {
+  const status = deriveManagedStatus(user);
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status,
+    isActive: user.isActive,
+    emailVerified: user.emailVerified,
+    lastLoginAt: user.lastLoginAt,
+    createdAt: user.createdAt,
+    profile: user.profile,
+    canTransferSuperAdmin: status === 'active' && user.role !== 'super_admin',
+  };
+}
 
-  await prisma.verificationToken.deleteMany({
-    where: { identifier: email },
-  });
-
-  await prisma.verificationToken.create({
-    data: {
-      identifier: email,
-      token,
-      expires,
+async function getManagedUserOrThrow(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      profile: {
+        select: {
+          id: true,
+          slug: true,
+          displayName: true,
+        },
+      },
     },
   });
 
-  return { token, expires };
-}
-
-async function sendInviteEmail(options: {
-  email: string;
-  name: string;
-  role: UserRole;
-  activationLink: string;
-}) {
-  if (!resend) {
-    throw new Error('EMAIL_NOT_CONFIGURED');
+  if (!user) {
+    throw new Error('USER_NOT_FOUND');
   }
 
-  const settings = await getAdminSettings();
-  const result = await resend.emails.send({
-    from: `${settings.integrations.contactSenderName} <${settings.integrations.contactSenderEmail}>`,
-    to: options.email,
-    subject: 'Activate your admin account',
-    html: `
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#0f172a">
-        <h2 style="margin-bottom:8px">Admin account invitation</h2>
-        <p>Hello ${options.name},</p>
-        <p>You were invited to the admin workspace as <strong>${options.role}</strong>.</p>
-        <p>Verify your email and set your password using the link below:</p>
-        <p><a href="${options.activationLink}">${options.activationLink}</a></p>
-        <p>This link expires in 24 hours.</p>
-      </div>
-    `,
-  });
-
-  if (result.error) {
-    throw new Error(result.error.message || 'EMAIL_SEND_FAILED');
-  }
+  return user;
 }
 
 export async function listManagedUsers() {
@@ -121,47 +122,30 @@ export async function listManagedUsers() {
     },
   });
 
-  return users.map((user) => ({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    isActive: user.isActive,
-    emailVerified: user.emailVerified,
-    lastLoginAt: user.lastLoginAt,
-    createdAt: user.createdAt,
-    profile: user.profile,
-    needsActivation: !user.emailVerified || !user.passwordHash,
-  }));
+  return users.map(mapManagedUser);
 }
 
-export async function inviteManagedUser(input: {
-  actorUserId: string;
+export async function registerPendingUser(input: {
   name: string;
   email: string;
-  role: string;
-  appOrigin: string;
+  password: string;
 }) {
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
-  const role = input.role.trim();
+  const password = input.password;
 
-  if (!name || !email) {
+  if (!name || !email || !password) {
     throw new Error('INVALID_INPUT');
   }
 
-  assertInvitableRole(role);
-
+  const passwordHash = hashPassword(password);
   const existing = await prisma.user.findUnique({
     where: { email },
     include: { profile: true },
   });
 
-  if (existing?.role === 'super_admin') {
-    throw new Error('SUPER_ADMIN_LOCKED');
-  }
-  if (existing?.emailVerified && existing?.passwordHash) {
-    throw new Error('ACCOUNT_ALREADY_ACTIVE');
+  if (existing?.role === 'super_admin' || existing?.emailVerified || existing?.isActive) {
+    throw new Error('ACCOUNT_EXISTS');
   }
 
   const user = existing
@@ -169,145 +153,342 @@ export async function inviteManagedUser(input: {
         where: { id: existing.id },
         data: {
           name,
-          role,
-          isActive: true,
+          role: REGISTRATION_DEFAULT_ROLE,
+          isActive: false,
           emailVerified: null,
-          passwordHash: null,
+          passwordHash,
         },
       })
     : await prisma.user.create({
         data: {
           name,
           email,
-          role,
-          isActive: true,
+          role: REGISTRATION_DEFAULT_ROLE,
+          isActive: false,
           emailVerified: null,
-          passwordHash: null,
+          passwordHash,
         },
       });
 
   const profile = await ensureUserProfile(user.id, name, name || email.split('@')[0] || email);
-  const { token, expires } = await createInviteToken(email);
-  const activationLink = new URL('/activate-account', input.appOrigin);
-  activationLink.searchParams.set('token', token);
-  activationLink.searchParams.set('email', email);
 
-  await sendInviteEmail({
-    email,
-    name,
-    role,
-    activationLink: activationLink.toString(),
+  await writeAuditEvent({
+    actorUserId: user.id,
+    targetProfileId: profile.id,
+    action: existing ? 'signup_request_updated' : 'signup_requested',
+    targetType: 'user',
+    targetId: user.id,
+    metadata: { email, role: REGISTRATION_DEFAULT_ROLE },
   });
+
+  return mapManagedUser({
+    ...user,
+    profile,
+  });
+}
+
+export async function createManagedUser(input: {
+  actorUserId: string;
+  name: string;
+  email: string;
+  password: string;
+  role: string;
+  activateNow?: boolean;
+}) {
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+  const password = input.password;
+  const activateNow = input.activateNow !== false;
+
+  if (!name || !email || !password) {
+    throw new Error('INVALID_INPUT');
+  }
+
+  assertManageableRole(input.role.trim());
+  const role = input.role.trim() as UserRole;
+
+  const existing = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (existing) {
+    throw new Error('ACCOUNT_EXISTS');
+  }
+
+  const passwordHash = hashPassword(password);
+  const now = activateNow ? new Date() : null;
+
+  const user = await prisma.user.create({
+    data: {
+      name,
+      email,
+      passwordHash,
+      role,
+      isActive: activateNow,
+      emailVerified: now,
+    },
+  });
+
+  const profile = await ensureUserProfile(user.id, name, name || email.split('@')[0] || email);
 
   await writeAuditEvent({
     actorUserId: input.actorUserId,
     targetProfileId: profile.id,
-    action: existing ? 'user_reinvited' : 'user_invited',
+    action: activateNow ? 'user_created' : 'user_created_pending',
     targetType: 'user',
     targetId: user.id,
     metadata: { email, role },
   });
 
-  return {
-    id: user.id,
-    email,
-    role,
-    expires,
-  };
+  return mapManagedUser({
+    ...user,
+    profile,
+  });
 }
 
-export async function activateManagedUser(input: {
-  email: string;
-  token: string;
-  password: string;
+export async function approveManagedUser(input: {
+  actorUserId: string;
+  userId: string;
+  role?: string;
 }) {
-  const email = input.email.trim().toLowerCase();
-  const token = input.token.trim();
+  const user = await getManagedUserOrThrow(input.userId);
+  if (user.role === 'super_admin') {
+    throw new Error('SUPER_ADMIN_LOCKED');
+  }
 
-  const record = await prisma.verificationToken.findUnique({
-    where: {
-      identifier_token: {
-        identifier: email,
-        token,
+  const nextRole = input.role?.trim();
+  if (nextRole) {
+    assertManageableRole(nextRole);
+  }
+
+  const approved = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      role: (nextRole as UserRole | undefined) ?? user.role,
+      isActive: true,
+      emailVerified: user.emailVerified ?? new Date(),
+    },
+    include: {
+      profile: {
+        select: {
+          id: true,
+          slug: true,
+          displayName: true,
+        },
       },
     },
   });
 
-  if (!record) {
-    throw new Error('INVALID_TOKEN');
-  }
-
-  if (record.expires.getTime() < Date.now()) {
-    await prisma.verificationToken.deleteMany({ where: { identifier: email } });
-    throw new Error('TOKEN_EXPIRED');
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { profile: true },
+  await writeAuditEvent({
+    actorUserId: input.actorUserId,
+    targetProfileId: approved.profile?.id ?? null,
+    action: 'user_approved',
+    targetType: 'user',
+    targetId: approved.id,
+    metadata: { role: approved.role },
   });
 
-  if (!user) {
-    throw new Error('USER_NOT_FOUND');
+  return mapManagedUser(approved);
+}
+
+export async function rejectManagedUser(input: {
+  actorUserId: string;
+  userId: string;
+}) {
+  const user = await getManagedUserOrThrow(input.userId);
+  if (user.role === 'super_admin') {
+    throw new Error('SUPER_ADMIN_LOCKED');
+  }
+  if (deriveManagedStatus(user) !== 'pending') {
+    throw new Error('NOT_PENDING');
   }
 
+  await prisma.user.delete({
+    where: { id: user.id },
+  });
+
+  await writeAuditEvent({
+    actorUserId: input.actorUserId,
+    targetProfileId: user.profile?.id ?? null,
+    action: 'user_rejected',
+    targetType: 'user',
+    targetId: user.id,
+    metadata: { email: user.email },
+  });
+}
+
+export async function setManagedUserActive(input: {
+  actorUserId: string;
+  userId: string;
+  isActive: boolean;
+}) {
+  const user = await getManagedUserOrThrow(input.userId);
+  if (user.role === 'super_admin') {
+    throw new Error('SUPER_ADMIN_LOCKED');
+  }
+  if (!user.emailVerified) {
+    throw new Error('NOT_APPROVED');
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      isActive: input.isActive,
+    },
+    include: {
+      profile: {
+        select: {
+          id: true,
+          slug: true,
+          displayName: true,
+        },
+      },
+    },
+  });
+
+  await writeAuditEvent({
+    actorUserId: input.actorUserId,
+    targetProfileId: updated.profile?.id ?? null,
+    action: input.isActive ? 'user_reactivated' : 'user_suspended',
+    targetType: 'user',
+    targetId: updated.id,
+    metadata: { email: updated.email },
+  });
+
+  return mapManagedUser(updated);
+}
+
+export async function changeManagedUserRole(input: {
+  actorUserId: string;
+  userId: string;
+  role: string;
+}) {
+  const user = await getManagedUserOrThrow(input.userId);
+  if (user.role === 'super_admin') {
+    throw new Error('SUPER_ADMIN_LOCKED');
+  }
+
+  assertManageableRole(input.role.trim());
+  const role = input.role.trim() as UserRole;
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { role },
+    include: {
+      profile: {
+        select: {
+          id: true,
+          slug: true,
+          displayName: true,
+        },
+      },
+    },
+  });
+
+  await writeAuditEvent({
+    actorUserId: input.actorUserId,
+    targetProfileId: updated.profile?.id ?? null,
+    action: 'user_role_changed',
+    targetType: 'user',
+    targetId: updated.id,
+    metadata: { role },
+  });
+
+  return mapManagedUser(updated);
+}
+
+export async function resetManagedUserPassword(input: {
+  actorUserId: string;
+  userId: string;
+  password: string;
+}) {
+  const user = await getManagedUserOrThrow(input.userId);
   const passwordHash = hashPassword(input.password);
-  await prisma.user.update({
+
+  const updated = await prisma.user.update({
     where: { id: user.id },
     data: {
       passwordHash,
-      emailVerified: new Date(),
-      isActive: true,
     },
-  });
-
-  await prisma.verificationToken.deleteMany({ where: { identifier: email } });
-
-  await writeAuditEvent({
-    actorUserId: user.id,
-    targetProfileId: user.profile?.id ?? null,
-    action: 'user_activated',
-    targetType: 'user',
-    targetId: user.id,
-    metadata: { email },
-  });
-
-  return {
-    email: user.email,
-    role: user.role,
-  };
-}
-
-export async function validateActivationToken(email: string, token: string) {
-  const record = await prisma.verificationToken.findUnique({
-    where: {
-      identifier_token: {
-        identifier: email.trim().toLowerCase(),
-        token: token.trim(),
+    include: {
+      profile: {
+        select: {
+          id: true,
+          slug: true,
+          displayName: true,
+        },
       },
     },
   });
 
-  if (!record) {
-    return { ok: false, reason: 'invalid' as const };
-  }
-
-  if (record.expires.getTime() < Date.now()) {
-    return { ok: false, reason: 'expired' as const };
-  }
-
-  const user = await prisma.user.findUnique({
-    where: { email: email.trim().toLowerCase() },
-    select: { name: true, email: true, role: true },
+  await prisma.session.deleteMany({
+    where: { userId: user.id },
   });
 
-  if (!user) {
-    return { ok: false, reason: 'missing_user' as const };
+  await writeAuditEvent({
+    actorUserId: input.actorUserId,
+    targetProfileId: updated.profile?.id ?? null,
+    action: 'user_password_reset',
+    targetType: 'user',
+    targetId: updated.id,
+    metadata: { email: updated.email },
+  });
+
+  return mapManagedUser(updated);
+}
+
+export async function transferSuperAdmin(input: {
+  actorUserId: string;
+  targetUserId: string;
+}) {
+  if (input.actorUserId === input.targetUserId) {
+    throw new Error('ALREADY_SUPER_ADMIN');
   }
 
-  return {
-    ok: true as const,
-    user,
-    expires: record.expires,
-  };
+  const target = await getManagedUserOrThrow(input.targetUserId);
+  if (deriveManagedStatus(target) !== 'active') {
+    throw new Error('TARGET_NOT_ACTIVE');
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.user.update({
+      where: { id: input.actorUserId },
+      data: { role: 'admin' },
+    });
+
+    const promoted = await tx.user.update({
+      where: { id: input.targetUserId },
+      data: {
+        role: 'super_admin',
+        isActive: true,
+        emailVerified: target.emailVerified ?? new Date(),
+      },
+      include: {
+        profile: {
+          select: {
+            id: true,
+            slug: true,
+            displayName: true,
+          },
+        },
+      },
+    });
+
+    await tx.session.deleteMany({
+      where: { userId: input.actorUserId },
+    });
+
+    return promoted;
+  });
+
+  await writeAuditEvent({
+    actorUserId: input.actorUserId,
+    targetProfileId: result.profile?.id ?? null,
+    action: 'super_admin_transferred',
+    targetType: 'user',
+    targetId: result.id,
+    metadata: { email: result.email },
+  });
+
+  return mapManagedUser(result);
 }

@@ -72,6 +72,12 @@ export default function AdminLoginPage() {
             return home
           </Link>
         </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Need an account?{' '}
+          <Link href="/register" className="text-cyan-300 hover:text-cyan-200">
+            request access
+          </Link>
+        </p>
       </div>
     </main>
   );
