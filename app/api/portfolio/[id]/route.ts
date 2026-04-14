@@ -5,6 +5,7 @@ import { portfolioSchema } from '@/lib/validators';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { uploadImageFile } from '@/lib/server/uploads';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { createFieldErrorResponse, createFormErrorResponse } from '@/lib/server/form-responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
@@ -71,12 +72,12 @@ export async function GET(request: Request, context: RouteContext) {
   const { id: idParam } = await context.params;
   const id = parseId(idParam);
   if (!id) {
-    return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    return createFieldErrorResponse({ field: 'id', message: 'A valid portfolio entry id is required.', errorCode: 'INVALID_ID' });
   }
 
   const access = await resolvePublicProfileFromRequest(request);
   if (!access || (!access.profile.isPublic && !access.canViewDrafts)) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return createFormErrorResponse({ error: 'Portfolio entry not found.', errorCode: 'NOT_FOUND' }, 404);
   }
 
   const project = await prisma.portfolio.findFirst({
@@ -88,7 +89,7 @@ export async function GET(request: Request, context: RouteContext) {
   });
 
   if (!project) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    return createFormErrorResponse({ error: 'Portfolio entry not found.', errorCode: 'NOT_FOUND' }, 404);
   }
 
   return NextResponse.json(serializePortfolio(project));
@@ -96,24 +97,24 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function PUT(request: Request, context: RouteContext) {
   if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return createFormErrorResponse({ error: 'Too many requests. Try again later.', errorCode: 'RATE_LIMITED' }, 429);
   }
 
   const { id: idParam } = await context.params;
   const id = parseId(idParam);
   if (!id) {
-    return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+    return createFieldErrorResponse({ field: 'id', message: 'A valid portfolio entry id is required.', errorCode: 'INVALID_ID' });
   }
 
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return createFormErrorResponse({ error: 'You are not allowed to update portfolio entries.', errorCode: 'FORBIDDEN' }, 403);
     }
     const existing = await prisma.portfolio.findFirst({ where: { id, profileId: profile.id } });
     if (!existing) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return createFormErrorResponse({ error: 'Portfolio entry not found.', errorCode: 'NOT_FOUND' }, 404);
     }
     const image =
       imageFile ? await uploadImageFile(imageFile, 'portfolio/projects') : typeof data.image === 'string' ? data.image : undefined;

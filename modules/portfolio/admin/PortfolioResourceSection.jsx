@@ -27,6 +27,8 @@ export default function PortfolioResourceSection({ resource }) {
     handleSubmit,
     handleDelete,
     error,
+    fieldErrors,
+    clearFieldError,
   } = useAdminData({
     endpoint: resource.endpoint,
     title,
@@ -35,6 +37,7 @@ export default function PortfolioResourceSection({ resource }) {
 
   const updateField = (fieldName, value) => {
     setFormState((previous) => ({ ...previous, [fieldName]: value }));
+    clearFieldError(fieldName);
   };
 
   return (
@@ -72,6 +75,8 @@ export default function PortfolioResourceSection({ resource }) {
               onChange={updateField}
               onSubmit={handleSubmit}
               onReset={resetForm}
+              error={error}
+              fieldErrors={fieldErrors}
             />
           </>
         )}

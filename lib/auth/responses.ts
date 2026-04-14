@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
+import { createFormErrorResponse } from '@/lib/server/form-responses';
 
 export function toAuthErrorResponse(error: unknown) {
   if (error instanceof Error && error.message === 'UNAUTHENTICATED') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
 
   if (error instanceof Error && error.message === 'FORBIDDEN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 
   return null;

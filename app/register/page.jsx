@@ -2,8 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
+import FieldErrorText from '@/components/forms/FieldErrorText';
+import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { clearFieldErrors, getFieldError, normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 
 export default function RegisterPage() {
@@ -15,12 +19,19 @@ export default function RegisterPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [success, setSuccess] = useState('');
+
+  const updateField = (field, value) => {
+    setForm((current) => ({ ...current, [field]: value }));
+    setFieldErrors((current) => clearFieldErrors(current, field));
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSubmitting(true);
     setError('');
+    setFieldErrors({});
     setSuccess('');
 
     if (form.password !== form.confirmPassword) {
@@ -54,12 +65,13 @@ export default function RegisterPage() {
         }),
       });
 
-      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || 'Unable to submit registration.');
+        throw await parseErrorResponse(response, 'Unable to submit registration.');
       }
+      const payload = await response.json().catch(() => ({}));
 
       setSuccess('Account request submitted. Wait for the super admin to approve it before signing in.');
+      toast.success('Account request submitted.');
       setForm({
         name: '',
         email: '',
@@ -67,7 +79,10 @@ export default function RegisterPage() {
         confirmPassword: '',
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to submit registration.');
+      const nextError = normalizeFormError(requestError, 'Unable to submit registration.');
+      setError(nextError.formError);
+      setFieldErrors(nextError.fieldErrors);
+      toast.error(nextError.formError);
     } finally {
       setSubmitting(false);
     }
@@ -83,38 +98,46 @@ export default function RegisterPage() {
         </p>
 
         <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+          <FormErrorSummary error={error} fieldErrors={fieldErrors} className="border-slate-800/50 bg-slate-950/60 text-rose-200" />
           <Input
             value={form.name}
             placeholder="Full name"
             autoComplete="name"
             disabled={submitting}
-            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            aria-invalid={Boolean(getFieldError(fieldErrors, 'name'))}
+            onChange={(event) => updateField('name', event.target.value)}
           />
+          <FieldErrorText error={getFieldError(fieldErrors, 'name')} />
           <Input
             type="email"
             value={form.email}
             placeholder="Email"
             autoComplete="email"
             disabled={submitting}
-            onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+            aria-invalid={Boolean(getFieldError(fieldErrors, 'email'))}
+            onChange={(event) => updateField('email', event.target.value)}
           />
+          <FieldErrorText error={getFieldError(fieldErrors, 'email')} />
           <Input
             type="password"
             value={form.password}
             placeholder={`Password (${MIN_PASSWORD_LENGTH}+ characters)`}
             autoComplete="new-password"
             disabled={submitting}
-            onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+            aria-invalid={Boolean(getFieldError(fieldErrors, 'password'))}
+            onChange={(event) => updateField('password', event.target.value)}
           />
+          <FieldErrorText error={getFieldError(fieldErrors, 'password')} />
           <Input
             type="password"
             value={form.confirmPassword}
             placeholder="Confirm password"
             autoComplete="new-password"
             disabled={submitting}
-            onChange={(event) => setForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+            aria-invalid={Boolean(getFieldError(fieldErrors, 'confirmPassword'))}
+            onChange={(event) => updateField('confirmPassword', event.target.value)}
           />
-          {error ? <p className="text-sm text-rose-400">{error}</p> : null}
+          <FieldErrorText error={getFieldError(fieldErrors, 'confirmPassword')} />
           {success ? <p className="text-sm text-emerald-400">{success}</p> : null}
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting ? 'Submitting...' : 'Request account'}

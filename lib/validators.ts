@@ -14,6 +14,17 @@ const urlField = (max: number) =>
     .url()
     .max(max)
     .refine((value) => isSafeHttpUrl(value), { message: 'Only http/https URLs are allowed.' });
+const requiredImageUrlField = (label: string, max: number) =>
+  z
+    .string({
+      required_error: `Upload ${label.toLowerCase()}.`,
+      invalid_type_error: `Upload ${label.toLowerCase()}.`,
+    })
+    .trim()
+    .min(1, `Upload ${label.toLowerCase()}.`)
+    .url(`Upload a valid ${label.toLowerCase()} URL.`)
+    .max(max)
+    .refine((value) => isSafeHttpUrl(value), { message: 'Only http/https URLs are allowed.' });
 const optionalUrlField = (max: number) =>
   z.preprocess(
     (value) => (typeof value === 'string' ? value.trim() || undefined : value),
@@ -60,7 +71,7 @@ export const experienceSchema = z.object({
 export const certificateSchema = z.object({
   title: textField(1, 120),
   issuer: textField(1, 120),
-  image: urlField(500),
+  image: requiredImageUrlField('certificate image', 500),
   link: urlField(500),
   category: textField(1, 50),
   issuedAt: z.string().datetime().optional().nullable(),
@@ -82,7 +93,7 @@ export const heroSchema = z.object({
   secondaryCtaHref: textField(1, 200).refine((value) => isAnchorOrSafeHttpUrl(value), {
     message: 'Must be an anchor link or an http/https URL.',
   }),
-  image: urlField(500),
+  image: requiredImageUrlField('hero image', 500),
 });
 
 export const aboutSchema = z.object({
@@ -177,7 +188,7 @@ export const portfolioSchema = z.object({
   summary: textField(10, 600),
   descriptions: z.array(textField(1, 320)).max(12).optional().default([]),
   tech: z.array(textField(1, 40)).min(1).max(10),
-  image: urlField(500),
+  image: requiredImageUrlField('project image', 500),
   badge: textField(1, 60),
   repoUrl: urlField(500).optional(),
   demoUrl: urlField(500).optional(),

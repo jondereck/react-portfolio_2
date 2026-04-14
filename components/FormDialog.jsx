@@ -1,8 +1,15 @@
 'use client';
 
+import FieldErrorText from '@/components/forms/FieldErrorText';
+import FormErrorSummary from '@/components/forms/FormErrorSummary';
 import ImageUpload from '@/components/ImageUpload';
 
-function FieldInput({ resourceKey, field, value, onChange }) {
+function FieldInput({ resourceKey, field, value, onChange, fieldError }) {
+  const hasError = Boolean(fieldError);
+  const inputClassName = `h-10 rounded-md border bg-white px-3 text-sm dark:bg-slate-950 ${
+    hasError ? 'border-rose-400 focus:border-rose-500 dark:border-rose-500' : 'border-slate-300 dark:border-slate-700'
+  }`;
+
   if (field.type === 'string-array') {
     const items = Array.isArray(value) ? value : [];
 
@@ -19,7 +26,11 @@ function FieldInput({ resourceKey, field, value, onChange }) {
     };
 
     return (
-      <div className="md:col-span-2 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/40">
+      <div
+        className={`md:col-span-2 space-y-3 rounded-xl border bg-slate-50 p-4 dark:bg-slate-900/40 ${
+          hasError ? 'border-rose-300 dark:border-rose-500/40' : 'border-slate-200 dark:border-slate-800'
+        }`}
+      >
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{field.label}</span>
           <button
@@ -41,7 +52,10 @@ function FieldInput({ resourceKey, field, value, onChange }) {
                 value={item ?? ''}
                 onChange={(event) => updateItem(index, event.target.value)}
                 placeholder={`Description ${index + 1}`}
-                className="h-10 flex-1 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950"
+                aria-invalid={hasError}
+                className={`h-10 flex-1 rounded-md border bg-white px-3 text-sm dark:bg-slate-950 ${
+                  hasError ? 'border-rose-400 dark:border-rose-500' : 'border-slate-300 dark:border-slate-700'
+                }`}
               />
               <button
                 type="button"
@@ -53,6 +67,7 @@ function FieldInput({ resourceKey, field, value, onChange }) {
             </div>
           ))}
         </div>
+        <FieldErrorText error={fieldError} />
         {field.helperText ? <span className="block text-xs text-slate-500">{field.helperText}</span> : null}
       </div>
     );
@@ -62,23 +77,33 @@ function FieldInput({ resourceKey, field, value, onChange }) {
     return (
       <div className="md:col-span-2 flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
         <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{field.label}</span>
-        <input id={`${resourceKey}-${field.name}`} type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />
+        <input
+          id={`${resourceKey}-${field.name}`}
+          type="checkbox"
+          checked={Boolean(value)}
+          onChange={(event) => onChange(event.target.checked)}
+          aria-invalid={hasError}
+        />
       </div>
     );
   }
 
-  const className = 'h-10 rounded-md border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950';
   const colSpan = field.type === 'textarea' ? 'md:col-span-2' : '';
 
   if (field.type === 'image') {
     return (
-      <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+      <div
+        className={`md:col-span-2 rounded-xl border bg-slate-50 p-4 dark:bg-slate-900/50 ${
+          hasError ? 'border-rose-300 dark:border-rose-500/40' : 'border-slate-200 dark:border-slate-800'
+        }`}
+      >
         <ImageUpload
           id={`${resourceKey}-${field.name}`}
           label={field.label}
           value={typeof value === 'string' ? value : ''}
           onChange={(url) => onChange(url)}
         />
+        <FieldErrorText error={fieldError} />
         {field.helperText ? <span className="mt-2 block text-xs text-slate-500">{field.helperText}</span> : null}
       </div>
     );
@@ -95,7 +120,10 @@ function FieldInput({ resourceKey, field, value, onChange }) {
           placeholder={field.placeholder}
           required={field.required !== false}
           rows={field.rows || 3}
-          className={`rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950`}
+          aria-invalid={hasError}
+          className={`rounded-md border bg-white px-3 py-2 text-sm dark:bg-slate-950 ${
+            hasError ? 'border-rose-400 dark:border-rose-500' : 'border-slate-300 dark:border-slate-700'
+          }`}
         />
       ) : (
         <input
@@ -105,15 +133,31 @@ function FieldInput({ resourceKey, field, value, onChange }) {
           onChange={(event) => onChange(event.target.value)}
           placeholder={field.placeholder}
           required={field.required !== false}
-          className={className}
+          aria-invalid={hasError}
+          className={inputClassName}
         />
       )}
+      <FieldErrorText error={fieldError} />
       {field.helperText ? <span className="text-xs text-slate-500">{field.helperText}</span> : null}
     </label>
   );
 }
 
-export default function FormDialog({ title, resourceKey, fields, formState, editingId, saving, open, onOpenChange, onChange, onSubmit, onReset }) {
+export default function FormDialog({
+  title,
+  resourceKey,
+  fields,
+  formState,
+  editingId,
+  saving,
+  open,
+  onOpenChange,
+  onChange,
+  onSubmit,
+  onReset,
+  error = '',
+  fieldErrors = {},
+}) {
   const isEditing = editingId !== null;
 
   return (
@@ -124,6 +168,7 @@ export default function FormDialog({ title, resourceKey, fields, formState, edit
             <h3 className="text-lg font-semibold">{isEditing ? `Edit ${title}` : `Create ${title}`}</h3>
             <p className="mt-1 text-sm text-slate-500">Update fields and save to publish changes in the admin API.</p>
             <form onSubmit={onSubmit} className="mt-4 flex min-h-0 flex-1 flex-col">
+              <FormErrorSummary error={error} fieldErrors={fieldErrors} />
               <div className="min-h-0 flex-1 overflow-y-auto pr-1">
                 <div className="grid gap-4 md:grid-cols-2">
                   {fields.map((field) => (
@@ -133,6 +178,7 @@ export default function FormDialog({ title, resourceKey, fields, formState, edit
                       field={field}
                       value={formState[field.name]}
                       onChange={(value) => onChange(field.name, value)}
+                      fieldError={fieldErrors[field.name]?.[0]}
                     />
                   ))}
                 </div>

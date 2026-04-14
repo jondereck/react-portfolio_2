@@ -12,6 +12,8 @@ import {
   setManagedUserActive,
   transferSuperAdmin,
 } from '@/lib/auth/user-management';
+import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
+import { createFieldErrorResponse, createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
 const actionSchema = z.discriminatedUnion('action', [
   z.object({
@@ -33,7 +35,7 @@ const actionSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('reset_password'),
-    password: z.string().trim().min(12).max(200),
+    password: z.string().trim().min(MIN_PASSWORD_LENGTH).max(200),
   }),
   z.object({
     action: z.literal('transfer_super_admin'),
@@ -50,7 +52,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const parsed = actionSchema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid action payload.' }, { status: 400 });
+      return createZodFormErrorResponse(parsed.error, { errorCode: 'INVALID_USER_ACTION_PAYLOAD' });
     }
 
     switch (parsed.data.action) {
@@ -109,7 +111,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user, transferred: true });
       }
       default:
-        return NextResponse.json({ error: 'Unsupported action.' }, { status: 400 });
+        return createFormErrorResponse({ error: 'Unsupported action.', errorCode: 'UNSUPPORTED_ACTION' }, 400);
     }
   } catch (error) {
     const authError = toAuthErrorResponse(error);
@@ -136,10 +138,14 @@ export async function PATCH(request: Request, context: RouteContext) {
           ALREADY_SUPER_ADMIN: 'That account already holds super admin.',
           SUPER_ADMIN_LOCKED: 'Use the transfer action to change the super admin account.',
         };
-        return NextResponse.json({ error: messageMap[error.message] }, { status: 400 });
+        if (error.message === 'INVALID_ROLE') {
+          return createFieldErrorResponse({ field: 'role', message: messageMap[error.message], errorCode: 'INVALID_ROLE' });
+        }
+
+        return createFormErrorResponse({ error: messageMap[error.message], errorCode: error.message }, error.message === 'USER_NOT_FOUND' ? 404 : 400);
       }
     }
 
-    return NextResponse.json({ error: 'Unable to update user.' }, { status: 500 });
+    return createFormErrorResponse({ error: 'Unable to update user.', errorCode: 'USER_UPDATE_FAILED' }, 500);
   }
 }

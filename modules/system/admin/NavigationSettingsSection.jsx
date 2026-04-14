@@ -4,9 +4,12 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import AdminSectionHeader from '@/components/admin/shared/AdminSectionHeader';
+import FieldErrorText from '@/components/forms/FieldErrorText';
+import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { clearFieldErrors, getFieldError, normalizeFormError } from '@/lib/form-client';
 import { handleRequest } from '@/lib/handleRequest';
 import { notifyRealtimeUpdate, revalidatePublicData } from '@/lib/realtime';
-import { buttonStyles, cardStyles, fetcher, inputStyles } from '@/modules/system/admin/settingsShared';
+import { buttonStyles, cardStyles, fetcher, inputStyles, withFieldError } from '@/modules/system/admin/settingsShared';
 
 const emptyLink = {
   label: '',
@@ -32,7 +35,8 @@ const normalizeTarget = (link) => {
 export default function NavigationSettingsSection() {
   const [navigation, setNavigation] = useState({ links: [{ ...emptyLink }], showAdminButton: true });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const { data, error: requestError, isLoading, mutate } = useSWR('/api/site-config', fetcher);
 
   useEffect(() => {
@@ -53,7 +57,8 @@ export default function NavigationSettingsSection() {
           : [{ ...emptyLink }],
       showAdminButton: data.navigation.showAdminButton !== false,
     });
-    setError('');
+    setFormError('');
+    setFieldErrors({});
   }, [data]);
 
   useEffect(() => {
@@ -62,7 +67,7 @@ export default function NavigationSettingsSection() {
     }
 
     const message = requestError instanceof Error ? requestError.message : 'Unable to load navigation settings';
-    setError(message);
+    setFormError(message);
     toast.error('Unable to load navigation settings', { description: message });
   }, [requestError]);
 
@@ -71,6 +76,7 @@ export default function NavigationSettingsSection() {
       ...previous,
       links: previous.links.map((link, linkIndex) => (linkIndex === index ? { ...link, [field]: value } : link)),
     }));
+    setFieldErrors((current) => clearFieldErrors(current, `navigation.links[${index}].${field}`));
   };
 
   const addLink = () => {
@@ -107,12 +113,15 @@ export default function NavigationSettingsSection() {
       .filter((link) => link.label && link.target);
 
     if (links.length === 0) {
-      toast.error('Add at least one navigation link.');
+      const message = 'Add at least one navigation link.';
+      setFormError(message);
+      toast.error(message);
       return;
     }
 
     setSaving(true);
-    setError('');
+    setFormError('');
+    setFieldErrors({});
 
     try {
       const updatePromise = handleRequest(() =>
@@ -131,7 +140,7 @@ export default function NavigationSettingsSection() {
       toast.promise(updatePromise, {
         loading: 'Saving navigation settings...',
         success: 'Navigation settings updated.',
-        error: 'Unable to update navigation settings',
+        error: (error) => (error instanceof Error ? error.message : 'Unable to update navigation settings'),
       });
 
       await updatePromise;
@@ -139,7 +148,9 @@ export default function NavigationSettingsSection() {
       await revalidatePublicData();
       notifyRealtimeUpdate();
     } catch (requestFailure) {
-      setError(requestFailure instanceof Error ? requestFailure.message : 'Unable to update navigation settings');
+      const nextError = normalizeFormError(requestFailure, 'Unable to update navigation settings');
+      setFormError(nextError.formError);
+      setFieldErrors(nextError.fieldErrors);
     } finally {
       setSaving(false);
     }
@@ -158,7 +169,7 @@ export default function NavigationSettingsSection() {
       />
       <div className="p-6">
         <form onSubmit={submit} className="space-y-4">
-          {error ? <div className="rounded bg-red-100 p-3 text-red-700">{error}</div> : null}
+          <FormErrorSummary error={formError} fieldErrors={fieldErrors} />
 
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
             <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -166,9 +177,13 @@ export default function NavigationSettingsSection() {
               <input
                 type="checkbox"
                 checked={navigation.showAdminButton}
-                onChange={(event) => setNavigation((previous) => ({ ...previous, showAdminButton: event.target.checked }))}
+                onChange={(event) => {
+                  setNavigation((previous) => ({ ...previous, showAdminButton: event.target.checked }));
+                  setFieldErrors((current) => clearFieldErrors(current, 'navigation.showAdminButton'));
+                }}
               />
             </label>
+            <FieldErrorText error={getFieldError(fieldErrors, 'navigation.showAdminButton')} />
           </div>
 
           <div className="space-y-3">
@@ -177,35 +192,50 @@ export default function NavigationSettingsSection() {
                 key={`nav-link-${index}`}
                 className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1.3fr_1.3fr_120px_120px_auto_auto] dark:border-slate-800 dark:bg-slate-950/40"
               >
-                <input
-                  type="text"
-                  value={link.label}
-                  onChange={(event) => updateLink(index, 'label', event.target.value)}
-                  placeholder="Label"
-                  className={inputStyles}
-                />
-                <input
-                  type="text"
-                  value={link.target}
-                  onChange={(event) => updateLink(index, 'target', event.target.value)}
-                  placeholder={link.type === 'section' ? '#portfolio' : 'https://example.com'}
-                  className={inputStyles}
-                />
-                <select
-                  value={link.type}
-                  onChange={(event) => updateLink(index, 'type', event.target.value)}
-                  className={inputStyles}
-                >
-                  <option value="section">Section</option>
-                  <option value="url">URL</option>
-                </select>
-                <input
-                  type="number"
-                  value={link.sortOrder}
-                  onChange={(event) => updateLink(index, 'sortOrder', Number(event.target.value))}
-                  min={0}
-                  className={inputStyles}
-                />
+                <div>
+                  <input
+                    type="text"
+                    value={link.label}
+                    onChange={(event) => updateLink(index, 'label', event.target.value)}
+                    placeholder="Label"
+                    aria-invalid={Boolean(getFieldError(fieldErrors, `navigation.links[${index}].label`))}
+                    className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, `navigation.links[${index}].label`)))}
+                  />
+                  <FieldErrorText error={getFieldError(fieldErrors, `navigation.links[${index}].label`)} />
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    value={link.target}
+                    onChange={(event) => updateLink(index, 'target', event.target.value)}
+                    placeholder={link.type === 'section' ? '#portfolio' : 'https://example.com'}
+                    aria-invalid={Boolean(getFieldError(fieldErrors, `navigation.links[${index}].target`))}
+                    className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, `navigation.links[${index}].target`)))}
+                  />
+                  <FieldErrorText error={getFieldError(fieldErrors, `navigation.links[${index}].target`)} />
+                </div>
+                <div>
+                  <select
+                    value={link.type}
+                    onChange={(event) => updateLink(index, 'type', event.target.value)}
+                    className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, `navigation.links[${index}].type`)))}
+                  >
+                    <option value="section">Section</option>
+                    <option value="url">URL</option>
+                  </select>
+                  <FieldErrorText error={getFieldError(fieldErrors, `navigation.links[${index}].type`)} />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    value={link.sortOrder}
+                    onChange={(event) => updateLink(index, 'sortOrder', Number(event.target.value))}
+                    min={0}
+                    aria-invalid={Boolean(getFieldError(fieldErrors, `navigation.links[${index}].sortOrder`))}
+                    className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, `navigation.links[${index}].sortOrder`)))}
+                  />
+                  <FieldErrorText error={getFieldError(fieldErrors, `navigation.links[${index}].sortOrder`)} />
+                </div>
                 <label className="flex items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-xs font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">
                   <input
                     type="checkbox"

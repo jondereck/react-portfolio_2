@@ -3,6 +3,8 @@ import SectionContainer from './SectionContainer';
 import Success from './Success';
 import { toast } from 'sonner';
 import { useLoadingStore } from '@/store/loading';
+import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 
 const initialForm = { name: '', email: '', message: '' };
 
@@ -11,6 +13,7 @@ const sanitizeInput = (value) => value.replace(/[<>]/g, '').replace(/\s+/g, ' ')
 const Contact = () => {
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState(initialForm);
+  const [formError, setFormError] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
@@ -35,12 +38,14 @@ const Contact = () => {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((prev) => ({ ...prev, [name]: sanitizeInput(value) }));
+    setErrors((prev) => ({ ...prev, [name]: '' }));
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     const validationErrors = validateForm(formData);
     setErrors(validationErrors);
+    setFormError('');
 
     const hasErrors = Object.values(validationErrors).some(Boolean);
     if (hasErrors) {
@@ -55,10 +60,10 @@ const Contact = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       }).then(async (res) => {
-        const data = await res.json();
         if (!res.ok) {
-          throw new Error('Failed to send message');
+          throw await parseErrorResponse(res, 'Failed to send message');
         }
+        const data = await res.json();
         return data;
       });
 
@@ -68,7 +73,7 @@ const Contact = () => {
           if (data.success) return 'Message sent successfully!';
           throw new Error('Failed');
         },
-        error: 'Failed to send message',
+        error: (error) => (error instanceof Error ? error.message : 'Failed to send message'),
       });
 
       const data = await promise;
@@ -76,8 +81,15 @@ const Contact = () => {
         setIsSubmitted(true);
         setFormData(initialForm);
       }
-    } catch (_error) {
-      // Toast already handles error state.
+    } catch (submitError) {
+      const nextError = normalizeFormError(submitError, 'Failed to send message');
+      setFormError(nextError.formError);
+      setErrors((prev) => ({
+        ...prev,
+        name: nextError.fieldErrors?.name?.[0] || prev.name,
+        email: nextError.fieldErrors?.email?.[0] || prev.email,
+        message: nextError.fieldErrors?.message?.[0] || prev.message,
+      }));
     } finally {
       setLoading(false);
       stopGlobalLoading();
@@ -89,6 +101,7 @@ const Contact = () => {
       <div className="mx-auto max-w-xl">
         {!isSubmitted ? (
           <form className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900" onSubmit={handleSubmit} noValidate>
+            <FormErrorSummary error={formError} fieldErrors={{}} />
             <div>
               <input
                 className="w-full rounded-lg border border-slate-300 bg-transparent px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-400 dark:border-slate-700 dark:text-slate-100"

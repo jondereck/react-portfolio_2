@@ -1,8 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
+import FieldErrorText from '@/components/forms/FieldErrorText';
+import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { clearFieldErrors, getFieldError, normalizeFormError, parseErrorResponse } from '@/lib/form-client';
+import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 
 const roleOptions = [
   { value: 'admin', label: 'Admin' },
@@ -41,6 +46,7 @@ export default function AdminUsersClient() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [feedback, setFeedback] = useState('');
   const [roleDrafts, setRoleDrafts] = useState({});
   const [form, setForm] = useState({
@@ -56,10 +62,10 @@ export default function AdminUsersClient() {
     setError('');
     try {
       const response = await fetch('/api/admin/users', { cache: 'no-store' });
-      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || 'Unable to load users.');
+        throw await parseErrorResponse(response, 'Unable to load users.');
       }
+      const payload = await response.json().catch(() => ({}));
       const nextUsers = Array.isArray(payload?.users) ? payload.users : [];
       setUsers(nextUsers);
       setRoleDrafts(
@@ -69,7 +75,8 @@ export default function AdminUsersClient() {
         }, {}),
       );
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to load users.');
+      const nextError = normalizeFormError(requestError, 'Unable to load users.');
+      setError(nextError.formError);
     } finally {
       setLoading(false);
     }
@@ -81,6 +88,7 @@ export default function AdminUsersClient() {
 
   const runAction = async (userId, body, successMessage) => {
     setError('');
+    setFieldErrors({});
     setFeedback('');
 
     const response = await fetch(`/api/admin/users/${userId}`, {
@@ -91,10 +99,10 @@ export default function AdminUsersClient() {
       body: JSON.stringify(body),
     });
 
-    const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload?.error || 'Unable to update account.');
+      throw await parseErrorResponse(response, 'Unable to update account.');
     }
+    const payload = await response.json().catch(() => ({}));
 
     if (successMessage) {
       setFeedback(successMessage);
@@ -107,6 +115,7 @@ export default function AdminUsersClient() {
     event.preventDefault();
     setSubmitting(true);
     setError('');
+    setFieldErrors({});
     setFeedback('');
 
     try {
@@ -117,12 +126,13 @@ export default function AdminUsersClient() {
         },
         body: JSON.stringify(form),
       });
-      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || 'Unable to create user.');
+        throw await parseErrorResponse(response, 'Unable to create user.');
       }
+      const payload = await response.json().catch(() => ({}));
 
       setFeedback(`Created ${payload?.user?.email}.`);
+      toast.success(`Created ${payload?.user?.email}.`);
       setForm({
         name: '',
         email: '',
@@ -132,7 +142,10 @@ export default function AdminUsersClient() {
       });
       await loadUsers();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Unable to create user.');
+      const nextError = normalizeFormError(requestError, 'Unable to create user.');
+      setError(nextError.formError);
+      setFieldErrors(nextError.fieldErrors);
+      toast.error(nextError.formError);
     } finally {
       setSubmitting(false);
     }
@@ -192,30 +205,54 @@ export default function AdminUsersClient() {
         </div>
 
         <form className="mt-6 grid gap-4 md:grid-cols-2" onSubmit={handleManualCreate}>
-          <Input
-            value={form.name}
-            placeholder="Full name"
-            disabled={submitting}
-            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-          />
-          <Input
-            type="email"
-            value={form.email}
-            placeholder="Email address"
-            disabled={submitting}
-            onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-          />
-          <Input
-            type="password"
-            value={form.password}
-            placeholder="Password"
-            disabled={submitting}
-            onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-          />
+          <div>
+            <Input
+              value={form.name}
+              placeholder="Full name"
+              disabled={submitting}
+              aria-invalid={Boolean(getFieldError(fieldErrors, 'name'))}
+              onChange={(event) => {
+                setForm((current) => ({ ...current, name: event.target.value }));
+                setFieldErrors((current) => clearFieldErrors(current, 'name'));
+              }}
+            />
+            <FieldErrorText error={getFieldError(fieldErrors, 'name')} />
+          </div>
+          <div>
+            <Input
+              type="email"
+              value={form.email}
+              placeholder="Email address"
+              disabled={submitting}
+              aria-invalid={Boolean(getFieldError(fieldErrors, 'email'))}
+              onChange={(event) => {
+                setForm((current) => ({ ...current, email: event.target.value }));
+                setFieldErrors((current) => clearFieldErrors(current, 'email'));
+              }}
+            />
+            <FieldErrorText error={getFieldError(fieldErrors, 'email')} />
+          </div>
+          <div>
+            <Input
+              type="password"
+              value={form.password}
+              placeholder={`Password (${MIN_PASSWORD_LENGTH}+ characters)`}
+              disabled={submitting}
+              aria-invalid={Boolean(getFieldError(fieldErrors, 'password'))}
+              onChange={(event) => {
+                setForm((current) => ({ ...current, password: event.target.value }));
+                setFieldErrors((current) => clearFieldErrors(current, 'password'));
+              }}
+            />
+            <FieldErrorText error={getFieldError(fieldErrors, 'password')} />
+          </div>
           <select
             value={form.role}
             disabled={submitting}
-            onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}
+            onChange={(event) => {
+              setForm((current) => ({ ...current, role: event.target.value }));
+              setFieldErrors((current) => clearFieldErrors(current, 'role'));
+            }}
             className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
           >
             {roleOptions.map((option) => (
@@ -224,6 +261,7 @@ export default function AdminUsersClient() {
               </option>
             ))}
           </select>
+          <FieldErrorText error={getFieldError(fieldErrors, 'role')} />
 
           <label className="md:col-span-2 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
             <input
@@ -235,11 +273,11 @@ export default function AdminUsersClient() {
           </label>
 
           <div className="md:col-span-2 flex items-center gap-3">
+            <FormErrorSummary error={error} fieldErrors={fieldErrors} />
             <Button type="submit" disabled={submitting}>
               {submitting ? 'Creating...' : 'Create account'}
             </Button>
             {feedback ? <p className="text-sm text-emerald-600 dark:text-emerald-400">{feedback}</p> : null}
-            {error ? <p className="text-sm text-rose-500">{error}</p> : null}
           </div>
         </form>
       </section>

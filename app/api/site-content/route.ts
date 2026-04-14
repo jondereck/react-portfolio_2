@@ -7,6 +7,7 @@ import { aboutSchema, heroSchema, contactSchema, seoSchema } from '@/lib/validat
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { ensureSiteContentForProfile } from '@/lib/profile/site-data';
+import { createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
 type UpdateRequestPayload = {
   hero?: Record<string, unknown>;
@@ -28,22 +29,28 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return createFormErrorResponse({ error: 'Too many requests. Try again later.', errorCode: 'RATE_LIMITED' }, 429);
   }
 
   const { actor, profile } = await resolveManagedProfileFromRequest(request).catch(() => ({ actor: null, profile: null }));
   if (!actor || !profile) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
   if (!canMutateContent(actor.user.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 
   try {
     await ensureSiteContentForProfile(profile.id);
     const payload = (await request.json()) as UpdateRequestPayload;
     if (!payload.hero && !payload.about && !payload.contact && !payload.seo) {
-      return NextResponse.json({ error: 'Provide hero, about, contact, or seo payload.' }, { status: 400 });
+      return createFormErrorResponse(
+        {
+          error: 'Provide hero, about, contact, or seo content to update.',
+          errorCode: 'EMPTY_SITE_CONTENT_UPDATE',
+        },
+        400,
+      );
     }
 
     const updates: Prisma.SiteContentUpdateInput = {};
@@ -51,7 +58,7 @@ export async function PUT(request: Request) {
     if (payload.hero) {
       const parsedHero = heroSchema.partial().safeParse(payload.hero);
       if (!parsedHero.success) {
-        return NextResponse.json({ error: 'Invalid hero payload' }, { status: 400 });
+        return createZodFormErrorResponse(parsedHero.error, { prefix: 'hero', errorCode: 'INVALID_SITE_CONTENT_PAYLOAD' });
       }
       updates.hero = parsedHero.data as Prisma.InputJsonObject;
     }
@@ -59,7 +66,7 @@ export async function PUT(request: Request) {
     if (payload.about) {
       const parsedAbout = aboutSchema.partial({ highlights: true }).safeParse(payload.about);
       if (!parsedAbout.success) {
-        return NextResponse.json({ error: 'Invalid about payload' }, { status: 400 });
+        return createZodFormErrorResponse(parsedAbout.error, { prefix: 'about', errorCode: 'INVALID_SITE_CONTENT_PAYLOAD' });
       }
       updates.about = parsedAbout.data as Prisma.InputJsonObject;
     }
@@ -67,7 +74,7 @@ export async function PUT(request: Request) {
     if (payload.contact) {
       const parsedContact = contactSchema.partial({ socialLinks: true }).safeParse(payload.contact);
       if (!parsedContact.success) {
-        return NextResponse.json({ error: 'Invalid contact payload' }, { status: 400 });
+        return createZodFormErrorResponse(parsedContact.error, { prefix: 'contact', errorCode: 'INVALID_SITE_CONTENT_PAYLOAD' });
       }
       updates.contact = parsedContact.data as Prisma.InputJsonObject;
     }
@@ -75,7 +82,7 @@ export async function PUT(request: Request) {
     if (payload.seo) {
       const parsedSeo = seoSchema.partial({ keywords: true }).safeParse(payload.seo);
       if (!parsedSeo.success) {
-        return NextResponse.json({ error: 'Invalid SEO payload' }, { status: 400 });
+        return createZodFormErrorResponse(parsedSeo.error, { prefix: 'seo', errorCode: 'INVALID_SITE_CONTENT_PAYLOAD' });
       }
       updates.seo = parsedSeo.data as Prisma.InputJsonObject;
     }
@@ -88,6 +95,9 @@ export async function PUT(request: Request) {
       return authError;
     }
     console.error('Failed to update site content', error);
-    return NextResponse.json({ error: 'Unable to update site content' }, { status: 500 });
+    if (error instanceof SyntaxError) {
+      return createFormErrorResponse({ error: 'Malformed JSON request body.', errorCode: 'MALFORMED_JSON' }, 400);
+    }
+    return createFormErrorResponse({ error: 'Unable to update site content.', errorCode: 'SITE_CONTENT_UPDATE_FAILED' }, 500);
   }
 }

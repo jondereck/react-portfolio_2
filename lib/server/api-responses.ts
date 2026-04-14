@@ -1,30 +1,35 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { formatZodError } from '@/lib/server/request-parsing';
+import { formatZodFieldErrors } from '@/lib/server/request-parsing';
 import { RequestValidationError } from '@/lib/server/uploads';
+import { createFormErrorResponse } from '@/lib/server/form-responses';
 
 export function toErrorResponse(error: unknown, fallbackMessage: string) {
   if (error instanceof RequestValidationError) {
-    return NextResponse.json(
+    return createFormErrorResponse(
       {
         error: error.message,
         errorCode: error.errorCode,
-        details: error.details,
-        ...(error.meta ?? {}),
+        fieldErrors: error.details,
+        details: {
+          ...(error.details ? { validation: error.details } : {}),
+          ...(error.meta ?? {}),
+        },
       },
-      { status: error.status },
+      error.status,
     );
   }
 
   if (error instanceof z.ZodError) {
-    return NextResponse.json(
+    const fieldErrors = formatZodFieldErrors(error);
+    return createFormErrorResponse(
       {
-        error: 'Invalid payload.',
+        error: Object.values(fieldErrors)[0]?.[0] || 'Validation failed.',
         errorCode: 'INVALID_PAYLOAD',
-        details: formatZodError(error),
+        fieldErrors,
       },
-      { status: 400 },
+      400,
     );
   }
 
@@ -48,6 +53,36 @@ export function toErrorResponse(error: unknown, fallbackMessage: string) {
             errorCode: 'DUPLICATE_SOURCE_MEDIA',
           },
           { status: 409 },
+        );
+      }
+
+      if (target.includes('email')) {
+        return createFormErrorResponse(
+          {
+            error: 'That email is already in use.',
+            errorCode: 'UNIQUE_CONSTRAINT_VIOLATION',
+            fieldErrors: {
+              email: ['That email is already in use.'],
+            },
+            details: { target },
+          },
+          409,
+        );
+      }
+
+      if (target.length === 1) {
+        const field = target[0];
+        const message = `A record with this ${field} already exists.`;
+        return createFormErrorResponse(
+          {
+            error: message,
+            errorCode: 'UNIQUE_CONSTRAINT_VIOLATION',
+            fieldErrors: {
+              [field]: [message],
+            },
+            details: { target },
+          },
+          409,
         );
       }
 

@@ -8,6 +8,7 @@ import { siteConfigSchema } from '@/lib/validators';
 import { logAdminAuditEvent } from '@/lib/server/admin-settings';
 import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { ensureSiteConfigForProfile } from '@/lib/profile/site-data';
+import { createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
 type ConfigPayload = {
   logoText?: unknown;
@@ -69,22 +70,28 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return createFormErrorResponse({ error: 'Too many requests. Try again later.', errorCode: 'RATE_LIMITED' }, 429);
   }
 
   const { actor, profile } = await resolveManagedProfileFromRequest(request).catch(() => ({ actor: null, profile: null }));
   if (!actor || !profile) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
   if (!canMutateContent(actor.user.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 
   try {
     const body = await request.json();
     const payload = extractConfigPayload(body);
     if (!payload) {
-      return NextResponse.json({ message: 'Invalid payload' }, { status: 400 });
+      return createFormErrorResponse(
+        {
+          error: 'Provide at least one site configuration field.',
+          errorCode: 'EMPTY_SITE_CONFIG_UPDATE',
+        },
+        400,
+      );
     }
 
     const parsed = siteConfigSchema.partial().safeParse({
@@ -94,11 +101,17 @@ export async function PUT(request: Request) {
     });
 
     if (!parsed.success) {
-      return NextResponse.json({ message: 'Invalid payload' }, { status: 400 });
+      return createZodFormErrorResponse(parsed.error, { errorCode: 'INVALID_SITE_CONFIG_PAYLOAD' });
     }
 
     if (!parsed.data.logoText && !parsed.data.logoImage && !parsed.data.navigation) {
-      return NextResponse.json({ message: 'Invalid payload' }, { status: 400 });
+      return createFormErrorResponse(
+        {
+          error: 'Provide at least one site configuration field.',
+          errorCode: 'EMPTY_SITE_CONFIG_UPDATE',
+        },
+        400,
+      );
     }
 
     const current = await prisma.siteConfig.findUnique({ where: { profileId: profile.id } });
@@ -137,6 +150,9 @@ export async function PUT(request: Request) {
       return authError;
     }
     console.error('Failed to update site config', error);
-    return NextResponse.json({ message: 'Server error' }, { status: 500 });
+    if (error instanceof SyntaxError) {
+      return createFormErrorResponse({ error: 'Malformed JSON request body.', errorCode: 'MALFORMED_JSON' }, 400);
+    }
+    return createFormErrorResponse({ error: 'Unable to update site configuration.', errorCode: 'SITE_CONFIG_UPDATE_FAILED' }, 500);
   }
 }

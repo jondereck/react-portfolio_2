@@ -5,6 +5,7 @@ import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { experienceSchema } from '@/lib/validators';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
+import { toErrorResponse } from '@/lib/server/api-responses';
 
 export async function GET(request: Request) {
   const access = await resolvePublicProfileFromRequest(request);
@@ -34,7 +35,7 @@ export async function POST(request: Request) {
     }
     const parsed = experienceSchema.safeParse(payload);
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+      return toErrorResponse(parsed.error, 'Invalid experience payload.');
     }
 
     const created = await prisma.experience.create({
@@ -86,7 +87,7 @@ export async function PUT(request: Request) {
 
     const parsed = experienceSchema.safeParse(payload);
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+      return toErrorResponse(parsed.error, 'Invalid experience payload.');
     }
 
     const updated = await prisma.experience.update({

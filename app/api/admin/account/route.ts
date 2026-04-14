@@ -3,12 +3,22 @@ import { z } from 'zod';
 import { requireAuthActor } from '@/lib/auth/session';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { getSelfAccount, updateSelfAccount } from '@/lib/auth/account-management';
+import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
+import { createFieldErrorResponse, createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
 const updateAccountSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().max(120),
   currentPassword: z.string().optional().default(''),
-  newPassword: z.string().trim().max(200).optional().default(''),
+  newPassword: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((value) => !value || value.length >= MIN_PASSWORD_LENGTH, {
+      message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+    })
+    .optional()
+    .default(''),
 });
 
 export async function GET(request: Request) {
@@ -28,7 +38,7 @@ export async function PATCH(request: Request) {
     const actor = await requireAuthActor(request);
     const parsed = updateAccountSchema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid account payload.' }, { status: 400 });
+      return createZodFormErrorResponse(parsed.error, { errorCode: 'INVALID_ACCOUNT_PAYLOAD' });
     }
 
     const account = await updateSelfAccount({
@@ -46,22 +56,27 @@ export async function PATCH(request: Request) {
 
     if (error instanceof Error) {
       if (error.message === 'INVALID_INPUT') {
-        return NextResponse.json({ error: 'Name and email are required.' }, { status: 400 });
+        return createFormErrorResponse({ error: 'Name and email are required.', errorCode: 'INVALID_ACCOUNT_PAYLOAD' }, 400);
       }
       if (error.message === 'INVALID_CURRENT_PASSWORD') {
-        return NextResponse.json(
-          { error: 'Current password is required to change your email or password.' },
-          { status: 400 },
-        );
+        return createFieldErrorResponse({
+          field: 'currentPassword',
+          message: 'Current password is required to change your email or password.',
+          errorCode: 'INVALID_CURRENT_PASSWORD',
+        });
       }
       if (error.message === 'EMAIL_IN_USE') {
-        return NextResponse.json({ error: 'That email is already in use.' }, { status: 400 });
+        return createFieldErrorResponse({
+          field: 'email',
+          message: 'That email is already in use.',
+          errorCode: 'EMAIL_IN_USE',
+        });
       }
       if (error.message === 'USER_NOT_FOUND') {
-        return NextResponse.json({ error: 'Account not found.' }, { status: 404 });
+        return createFormErrorResponse({ error: 'Account not found.', errorCode: 'USER_NOT_FOUND' }, 404);
       }
     }
 
-    return NextResponse.json({ error: 'Unable to update account.' }, { status: 500 });
+    return createFormErrorResponse({ error: 'Unable to update account.', errorCode: 'ACCOUNT_UPDATE_FAILED' }, 500);
   }
 }

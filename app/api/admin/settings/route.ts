@@ -4,6 +4,8 @@ import { resolveRequestActor } from '@/lib/auth/session';
 import { bumpSessionVersion, getAdminSettingsDashboardData, logAdminAuditEvent, updateAdminSettings } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { integrationsSettingsSchema, securitySettingsSchema } from '@/lib/validators';
+import { createFormErrorResponse, createZodFormErrorResponse, mergeFieldErrors } from '@/lib/server/form-responses';
+import { formatZodFieldErrors } from '@/lib/server/request-parsing';
 
 type SettingsPayload = {
   integrations?: unknown;
@@ -14,10 +16,10 @@ type SettingsPayload = {
 export async function GET(request: Request) {
   const actor = await resolveRequestActor(request);
   if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
   if (!canManageGlobalSettings(actor.user.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 
   const data = await getAdminSettingsDashboardData();
@@ -26,15 +28,15 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return createFormErrorResponse({ error: 'Too many requests. Try again later.', errorCode: 'RATE_LIMITED' }, 429);
   }
 
   const actor = await resolveRequestActor(request);
   if (!actor) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
   if (!canManageGlobalSettings(actor.user.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 
   try {
@@ -46,11 +48,29 @@ export async function PUT(request: Request) {
     const forceSignOut = body.forceSignOutAllSessions === true;
 
     if ((nextIntegrations && !nextIntegrations.success) || (nextSecurity && !nextSecurity.success)) {
-      return NextResponse.json({ error: 'Invalid settings payload.' }, { status: 400 });
+      const fieldErrors = mergeFieldErrors(
+        nextIntegrations?.success ? undefined : formatZodFieldErrors(nextIntegrations.error, 'integrations'),
+        nextSecurity?.success ? undefined : formatZodFieldErrors(nextSecurity.error, 'security'),
+      );
+
+      return createFormErrorResponse(
+        {
+          error: Object.values(fieldErrors)[0]?.[0] || 'Validation failed.',
+          errorCode: 'INVALID_SETTINGS_PAYLOAD',
+          fieldErrors,
+        },
+        400,
+      );
     }
 
     if (!nextIntegrations && !nextSecurity && !forceSignOut) {
-      return NextResponse.json({ error: 'No settings update provided.' }, { status: 400 });
+      return createFormErrorResponse(
+        {
+          error: 'Choose at least one settings section to update.',
+          errorCode: 'EMPTY_SETTINGS_UPDATE',
+        },
+        400,
+      );
     }
 
     if (nextIntegrations?.data || nextSecurity?.data) {
@@ -79,6 +99,14 @@ export async function PUT(request: Request) {
     return NextResponse.json(data);
   } catch (error) {
     console.error('Failed to update admin settings', error);
-    return NextResponse.json({ error: 'Unable to update admin settings.' }, { status: 500 });
+    if (error instanceof SyntaxError) {
+      return createFormErrorResponse({ error: 'Malformed JSON request body.', errorCode: 'MALFORMED_JSON' }, 400);
+    }
+
+    if (error instanceof Error && 'issues' in error) {
+      return createZodFormErrorResponse(error as never, { errorCode: 'INVALID_SETTINGS_PAYLOAD' });
+    }
+
+    return createFormErrorResponse({ error: 'Unable to update admin settings.', errorCode: 'SETTINGS_UPDATE_FAILED' }, 500);
   }
 }

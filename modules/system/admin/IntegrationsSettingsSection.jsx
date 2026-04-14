@@ -5,8 +5,11 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 import AdminSectionHeader from '@/components/admin/shared/AdminSectionHeader';
 import AdminStatusBadge from '@/components/admin/shared/AdminStatusBadge';
+import FieldErrorText from '@/components/forms/FieldErrorText';
+import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { clearFieldErrors, getFieldError, normalizeFormError } from '@/lib/form-client';
 import { handleRequest } from '@/lib/handleRequest';
-import { buttonStyles, cardStyles, fetcher, inputStyles } from '@/modules/system/admin/settingsShared';
+import { buttonStyles, cardStyles, fetcher, inputStyles, withFieldError } from '@/modules/system/admin/settingsShared';
 
 const emptyState = {
   contactRecipientEmail: '',
@@ -20,7 +23,8 @@ const emptyState = {
 export default function IntegrationsSettingsSection() {
   const [integrations, setIntegrations] = useState(emptyState);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const { data, error: requestError, isLoading, mutate } = useSWR('/api/admin/settings', fetcher);
 
   useEffect(() => {
@@ -36,7 +40,8 @@ export default function IntegrationsSettingsSection() {
       googleDriveImportEnabled: data.settings.integrations.googleDriveImportEnabled !== false,
       defaultGalleryView: data.settings.integrations.defaultGalleryView === 'compact' ? 'compact' : 'cinematic',
     });
-    setError('');
+    setFormError('');
+    setFieldErrors({});
   }, [data]);
 
   useEffect(() => {
@@ -45,14 +50,19 @@ export default function IntegrationsSettingsSection() {
     }
 
     const message = requestError instanceof Error ? requestError.message : 'Unable to load integration settings';
-    setError(message);
+    setFormError(message);
     toast.error('Unable to load integration settings', { description: message });
   }, [requestError]);
+
+  const clearField = (field) => {
+    setFieldErrors((current) => clearFieldErrors(current, `integrations.${field}`));
+  };
 
   const submit = async (event) => {
     event.preventDefault();
     setSaving(true);
-    setError('');
+    setFormError('');
+    setFieldErrors({});
 
     try {
       const updatePromise = handleRequest(() =>
@@ -75,13 +85,15 @@ export default function IntegrationsSettingsSection() {
       toast.promise(updatePromise, {
         loading: 'Saving integration settings...',
         success: 'Integration settings updated.',
-        error: 'Unable to update integration settings',
+        error: (error) => (error instanceof Error ? error.message : 'Unable to update integration settings'),
       });
 
       await updatePromise;
       await mutate();
     } catch (requestFailure) {
-      setError(requestFailure instanceof Error ? requestFailure.message : 'Unable to update integration settings');
+      const nextError = normalizeFormError(requestFailure, 'Unable to update integration settings');
+      setFormError(nextError.formError);
+      setFieldErrors(nextError.fieldErrors);
     } finally {
       setSaving(false);
     }
@@ -97,56 +109,83 @@ export default function IntegrationsSettingsSection() {
       />
       <div className="grid gap-6 p-6 lg:grid-cols-[1.4fr_1fr]">
         <form onSubmit={submit} className="space-y-4">
-          {error ? <div className="rounded bg-red-100 p-3 text-red-700">{error}</div> : null}
+          <FormErrorSummary error={formError} fieldErrors={fieldErrors} />
+
           <div className="grid gap-4 md:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               Contact recipient email
               <input
                 type="email"
                 value={integrations.contactRecipientEmail}
-                onChange={(event) => setIntegrations((previous) => ({ ...previous, contactRecipientEmail: event.target.value }))}
-                className={inputStyles}
+                onChange={(event) => {
+                  setIntegrations((previous) => ({ ...previous, contactRecipientEmail: event.target.value }));
+                  clearField('contactRecipientEmail');
+                }}
+                aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.contactRecipientEmail'))}
+                className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'integrations.contactRecipientEmail')))}
               />
+              <FieldErrorText error={getFieldError(fieldErrors, 'integrations.contactRecipientEmail')} />
             </label>
+
             <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
               Contact sender email
               <input
                 type="email"
                 value={integrations.contactSenderEmail}
-                onChange={(event) => setIntegrations((previous) => ({ ...previous, contactSenderEmail: event.target.value }))}
-                className={inputStyles}
+                onChange={(event) => {
+                  setIntegrations((previous) => ({ ...previous, contactSenderEmail: event.target.value }));
+                  clearField('contactSenderEmail');
+                }}
+                aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.contactSenderEmail'))}
+                className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'integrations.contactSenderEmail')))}
               />
+              <FieldErrorText error={getFieldError(fieldErrors, 'integrations.contactSenderEmail')} />
             </label>
+
             <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 md:col-span-2">
               Contact sender name
               <input
                 type="text"
                 value={integrations.contactSenderName}
-                onChange={(event) => setIntegrations((previous) => ({ ...previous, contactSenderName: event.target.value }))}
-                className={inputStyles}
+                onChange={(event) => {
+                  setIntegrations((previous) => ({ ...previous, contactSenderName: event.target.value }));
+                  clearField('contactSenderName');
+                }}
+                aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.contactSenderName'))}
+                className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'integrations.contactSenderName')))}
               />
+              <FieldErrorText error={getFieldError(fieldErrors, 'integrations.contactSenderName')} />
             </label>
+
             <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 md:col-span-2">
               Cloudinary base folder
               <input
                 type="text"
                 value={integrations.cloudinaryFolder}
-                onChange={(event) => setIntegrations((previous) => ({ ...previous, cloudinaryFolder: event.target.value }))}
-                className={inputStyles}
+                onChange={(event) => {
+                  setIntegrations((previous) => ({ ...previous, cloudinaryFolder: event.target.value }));
+                  clearField('cloudinaryFolder');
+                }}
+                aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.cloudinaryFolder'))}
+                className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'integrations.cloudinaryFolder')))}
               />
+              <FieldErrorText error={getFieldError(fieldErrors, 'integrations.cloudinaryFolder')} />
             </label>
+
             <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
               <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
                 <span>Enable Google Drive imports</span>
                 <input
                   type="checkbox"
                   checked={integrations.googleDriveImportEnabled}
-                  onChange={(event) =>
-                    setIntegrations((previous) => ({ ...previous, googleDriveImportEnabled: event.target.checked }))
-                  }
+                  onChange={(event) => {
+                    setIntegrations((previous) => ({ ...previous, googleDriveImportEnabled: event.target.checked }));
+                    clearField('googleDriveImportEnabled');
+                  }}
                 />
               </label>
             </div>
+
             <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40">
               <div className="space-y-3">
                 <div>
@@ -173,9 +212,10 @@ export default function IntegrationsSettingsSection() {
                         name="defaultGalleryView"
                         value={option.value}
                         checked={integrations.defaultGalleryView === option.value}
-                        onChange={(event) =>
-                          setIntegrations((previous) => ({ ...previous, defaultGalleryView: event.target.value }))
-                        }
+                        onChange={(event) => {
+                          setIntegrations((previous) => ({ ...previous, defaultGalleryView: event.target.value }));
+                          clearField('defaultGalleryView');
+                        }}
                         className="sr-only"
                       />
                       <span className="block font-semibold">{option.label}</span>
@@ -183,6 +223,7 @@ export default function IntegrationsSettingsSection() {
                     </label>
                   ))}
                 </div>
+                <FieldErrorText error={getFieldError(fieldErrors, 'integrations.defaultGalleryView')} />
               </div>
             </div>
           </div>

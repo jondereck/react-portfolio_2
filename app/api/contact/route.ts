@@ -2,6 +2,7 @@ import { Resend } from 'resend';
 import { z } from 'zod';
 import { getAdminSettings } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
+import { createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const contactSchema = z.object({
@@ -21,7 +22,7 @@ const escapeHtml = (value: string) =>
 
 export async function POST(req: Request) {
   if (await isRateLimited(req, 'contact-submit', 8, 60_000)) {
-    return Response.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+    return createFormErrorResponse({ error: 'Too many requests. Please try again later.', errorCode: 'RATE_LIMITED' }, 429);
   }
 
   try {
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
     const payload = await req.json();
     const parsed = contactSchema.safeParse(payload);
     if (!parsed.success) {
-      return Response.json({ error: 'Invalid contact payload' }, { status: 400 });
+      return createZodFormErrorResponse(parsed.error, { errorCode: 'INVALID_CONTACT_PAYLOAD' });
     }
 
     const name = escapeHtml(parsed.data.name);
@@ -51,6 +52,10 @@ export async function POST(req: Request) {
 
     return Response.json({ success: true });
   } catch (err) {
-    return Response.json({ error: 'Failed to send' }, { status: 500 });
+    if (err instanceof SyntaxError) {
+      return createFormErrorResponse({ error: 'Malformed JSON request body.', errorCode: 'MALFORMED_JSON' }, 400);
+    }
+
+    return createFormErrorResponse({ error: 'Failed to send message.', errorCode: 'CONTACT_SEND_FAILED' }, 500);
   }
 }

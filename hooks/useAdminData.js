@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
+import { clearFieldErrors, normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { handleRequest } from '@/lib/handleRequest';
 import { notifyRealtimeUpdate, revalidatePublicData } from '@/lib/realtime';
 
@@ -99,9 +100,9 @@ const formatForForm = (fields, item) =>
 const fetcher = (url) =>
   fetch(url, {
     cache: 'no-store',
-  }).then((response) => {
+  }).then(async (response) => {
     if (!response.ok) {
-      throw new Error(`Unable to load ${url}`);
+      throw await parseErrorResponse(response, `Unable to load ${url}`);
     }
 
     return response.json();
@@ -115,6 +116,7 @@ export function useAdminData({ endpoint, title, fields }) {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const { data, error: swrError, isLoading, mutate: refreshItems } = useSWR(endpoint, fetcher);
   const items = Array.isArray(data) ? data : [];
@@ -139,6 +141,7 @@ export function useAdminData({ endpoint, title, fields }) {
     setFormState(defaultFormState(fields));
     setDialogOpen(false);
     setError('');
+    setFieldErrors({});
   }, [fields]);
 
   const openCreate = useCallback(() => {
@@ -147,11 +150,13 @@ export function useAdminData({ endpoint, title, fields }) {
     setFormState(defaultFormState(fields));
     setDialogOpen(true);
     setError('');
+    setFieldErrors({});
   }, [fields]);
 
   const openEdit = useCallback(
     async (id) => {
       setError('');
+      setFieldErrors({});
       try {
         const item = await handleRequest(() =>
           fetch(`${endpoint}/${id}`, {
@@ -176,6 +181,7 @@ export function useAdminData({ endpoint, title, fields }) {
     async (event) => {
       event.preventDefault();
       setError('');
+      setFieldErrors({});
       setSaving(true);
 
       const isUpdating = editingId !== null;
@@ -183,28 +189,24 @@ export function useAdminData({ endpoint, title, fields }) {
       const requestConfig = buildRequestConfig(fields, formState);
 
       try {
-        const requestPromise = handleRequest(() =>
+        const result = await handleRequest(() =>
           fetch(requestEndpoint, {
             method: isUpdating ? 'PUT' : 'POST',
             headers: requestConfig.headers,
             body: requestConfig.body,
           }),
         );
-
-        toast.promise(requestPromise, {
-          loading: `Saving ${title.toLowerCase()}...`,
-          success: `${title} ${isUpdating ? 'updated' : 'created'}.`,
-          error: `Unable to save ${title}`,
-        });
-
-        await requestPromise;
         await refreshItems();
         await revalidatePublicData();
         notifyRealtimeUpdate();
+        toast.success(`${title} ${isUpdating ? 'updated' : 'created'}.`);
         resetForm();
+        return result;
       } catch (requestError) {
-        const message = requestError instanceof Error ? requestError.message : `Unable to save ${title}`;
-        setError(message);
+        const normalized = normalizeFormError(requestError, `Unable to save ${title}`);
+        setError(normalized.formError);
+        setFieldErrors(normalized.fieldErrors);
+        toast.error(`Unable to save ${title}`, { description: normalized.formError });
       } finally {
         setSaving(false);
       }
@@ -215,10 +217,11 @@ export function useAdminData({ endpoint, title, fields }) {
   const handleDelete = useCallback(
     async (id) => {
       setError('');
+      setFieldErrors({});
       setDeletingId(id);
 
       try {
-        const requestPromise = handleRequest(() =>
+        await handleRequest(() =>
           fetch(endpoint, {
             method: 'DELETE',
             headers: {
@@ -227,24 +230,19 @@ export function useAdminData({ endpoint, title, fields }) {
             body: JSON.stringify({ id }),
           }),
         );
-
-        toast.promise(requestPromise, {
-          loading: `Deleting ${title.toLowerCase()}...`,
-          success: `${title} entry deleted.`,
-          error: `Unable to delete ${title}`,
-        });
-
-        await requestPromise;
         await refreshItems();
         await revalidatePublicData();
         notifyRealtimeUpdate();
+        toast.success(`${title} entry deleted.`);
 
         if (editingId === id) {
           resetForm();
         }
       } catch (requestError) {
-        const message = requestError instanceof Error ? requestError.message : `Unable to delete ${title}`;
-        setError(message);
+        const normalized = normalizeFormError(requestError, `Unable to delete ${title}`);
+        setError(normalized.formError);
+        setFieldErrors(normalized.fieldErrors);
+        toast.error(`Unable to delete ${title}`, { description: normalized.formError });
       } finally {
         setDeletingId(null);
       }
@@ -262,6 +260,7 @@ export function useAdminData({ endpoint, title, fields }) {
     dialogOpen,
     formState,
     error,
+    fieldErrors,
     setFormState,
     loadItems,
     setDialogOpen,
@@ -270,5 +269,14 @@ export function useAdminData({ endpoint, title, fields }) {
     resetForm,
     handleSubmit,
     handleDelete,
+    clearFieldError: (key) => {
+      setFieldErrors((previous) => clearFieldErrors(previous, key));
+      setError((previous) => {
+        if (!key) {
+          return previous;
+        }
+        return previous;
+      });
+    },
   };
 }

@@ -5,6 +5,7 @@ import { portfolioSchema } from '@/lib/validators';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { uploadImageFile } from '@/lib/server/uploads';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { createFieldErrorResponse, createFormErrorResponse } from '@/lib/server/form-responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
@@ -92,14 +93,14 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return createFormErrorResponse({ error: 'Too many requests. Try again later.', errorCode: 'RATE_LIMITED' }, 429);
   }
 
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return createFormErrorResponse({ error: 'You are not allowed to create portfolio entries.', errorCode: 'FORBIDDEN' }, 403);
     }
     const parsed = await buildPortfolioInput(data, imageFile);
 
@@ -134,22 +135,22 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return createFormErrorResponse({ error: 'Too many requests. Try again later.', errorCode: 'RATE_LIMITED' }, 429);
   }
 
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return createFormErrorResponse({ error: 'You are not allowed to update portfolio entries.', errorCode: 'FORBIDDEN' }, 403);
     }
     const id = Number(data?.id);
     if (!Number.isInteger(id) || id <= 0) {
-      return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+      return createFieldErrorResponse({ field: 'id', message: 'A valid portfolio entry id is required.', errorCode: 'INVALID_ID' });
     }
     const existing = await prisma.portfolio.findFirst({ where: { id, profileId: profile.id } });
     if (!existing) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return createFormErrorResponse({ error: 'Portfolio entry not found.', errorCode: 'NOT_FOUND' }, 404);
     }
 
     const parsed = await buildPortfolioInput(data, imageFile);
@@ -185,23 +186,23 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return createFormErrorResponse({ error: 'Too many requests. Try again later.', errorCode: 'RATE_LIMITED' }, 429);
   }
 
   try {
     const payload = await request.json();
     const { actor, profile } = await resolveManagedProfileFromRequest(request, payload);
     if (!canDeleteContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return createFormErrorResponse({ error: 'You are not allowed to delete portfolio entries.', errorCode: 'FORBIDDEN' }, 403);
     }
     const id = Number(payload?.id);
     if (!Number.isInteger(id) || id <= 0) {
-      return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
+      return createFieldErrorResponse({ field: 'id', message: 'A valid portfolio entry id is required.', errorCode: 'INVALID_ID' });
     }
 
     const existing = await prisma.portfolio.findFirst({ where: { id, profileId: profile.id } });
     if (!existing) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return createFormErrorResponse({ error: 'Portfolio entry not found.', errorCode: 'NOT_FOUND' }, 404);
     }
 
     await prisma.portfolio.delete({ where: { id } });

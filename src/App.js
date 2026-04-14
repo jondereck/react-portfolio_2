@@ -8,6 +8,7 @@ import Contact from './components/Contact';
 import Experience from './components/Experience';
 import Hero from './components/Hero';
 import NavBar from './components/NavBar';
+import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import Projects from './components/Projects';
 import SocialLinks from './components/SocialLinks';
 import GlobalLoader from '@/components/GlobalLoader';
@@ -197,6 +198,7 @@ function App({ profileSlug = null }) {
         <Contact />
       </main>
       <SocialLinks />
+      <PwaInstallPrompt />
     </div>
   );
 }

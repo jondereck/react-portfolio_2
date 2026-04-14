@@ -73,6 +73,55 @@ export async function parseMultipartOrJson(request: Request): Promise<ParsedRequ
   );
 }
 
+export function toFieldErrorKey(path: (string | number)[]) {
+  if (path.length === 0) {
+    return '';
+  }
+
+  return path.reduce((key, segment) => {
+    if (typeof segment === 'number') {
+      return `${key}[${segment}]`;
+    }
+
+    if (!key) {
+      return segment;
+    }
+
+    return `${key}.${segment}`;
+  }, '');
+}
+
+export function prefixFieldErrors(fieldErrors: Record<string, string[]>, prefix?: string) {
+  if (!prefix) {
+    return fieldErrors;
+  }
+
+  return Object.entries(fieldErrors).reduce<Record<string, string[]>>((accumulator, [key, messages]) => {
+    const nextKey = key ? `${prefix}.${key}` : prefix;
+    accumulator[nextKey] = messages;
+    return accumulator;
+  }, {});
+}
+
+export function formatZodFieldErrors(error: z.ZodError, prefix?: string) {
+  const fieldErrors = error.issues.reduce<Record<string, string[]>>((accumulator, issue) => {
+    const key = toFieldErrorKey(issue.path);
+    const nextKey = prefix ? (key ? `${prefix}.${key}` : prefix) : key || '_form';
+
+    if (!accumulator[nextKey]) {
+      accumulator[nextKey] = [];
+    }
+
+    if (!accumulator[nextKey].includes(issue.message)) {
+      accumulator[nextKey].push(issue.message);
+    }
+
+    return accumulator;
+  }, {});
+
+  return fieldErrors;
+}
+
 export function formatZodError(error: z.ZodError) {
-  return error.flatten().fieldErrors;
+  return formatZodFieldErrors(error);
 }

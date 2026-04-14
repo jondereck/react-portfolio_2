@@ -4,11 +4,13 @@ import { USER_MANAGEMENT_ROLES } from '@/lib/auth/roles';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { requireRole } from '@/lib/auth/session';
 import { createManagedUser, listManagedUsers, MANAGEABLE_ROLES } from '@/lib/auth/user-management';
+import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
+import { createFieldErrorResponse, createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
 const createUserSchema = z.object({
   name: z.string().trim().min(2).max(80),
   email: z.string().trim().email().max(120),
-  password: z.string().trim().min(12).max(200),
+  password: z.string().trim().min(MIN_PASSWORD_LENGTH).max(200),
   role: z.enum(MANAGEABLE_ROLES as [string, ...string[]]),
   activateNow: z.boolean().optional(),
 });
@@ -30,7 +32,7 @@ export async function POST(request: Request) {
     const actor = await requireRole(USER_MANAGEMENT_ROLES, request);
     const parsed = createUserSchema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Invalid user payload.' }, { status: 400 });
+      return createZodFormErrorResponse(parsed.error, { errorCode: 'INVALID_USER_PAYLOAD' });
     }
 
     const user = await createManagedUser({
@@ -49,13 +51,17 @@ export async function POST(request: Request) {
 
     if (error instanceof Error) {
       if (error.message === 'ACCOUNT_EXISTS') {
-        return NextResponse.json({ error: 'That email is already in use.' }, { status: 400 });
+        return createFieldErrorResponse({
+          field: 'email',
+          message: 'That email is already in use.',
+          errorCode: 'EMAIL_IN_USE',
+        });
       }
       if (error.message === 'INVALID_ROLE' || error.message === 'INVALID_INPUT') {
-        return NextResponse.json({ error: 'Invalid user payload.' }, { status: 400 });
+        return createFormErrorResponse({ error: 'Please review the account details and try again.', errorCode: 'INVALID_USER_PAYLOAD' }, 400);
       }
     }
 
-    return NextResponse.json({ error: 'Unable to create user.' }, { status: 500 });
+    return createFormErrorResponse({ error: 'Unable to create user.', errorCode: 'USER_CREATE_FAILED' }, 500);
   }
 }
