@@ -1,6 +1,215 @@
 'use client';
 
-import { uploadFormDataWithProgress } from './galleryAdminShared';
+import { fetchJson, toRequestError, uploadFormDataWithProgress } from './galleryAdminShared';
+
+const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE = 120 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
+const ALLOWED_VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/x-matroska',
+]);
+const ALLOWED_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'mkv']);
+
+const DIRECT_UPLOAD_NOT_AVAILABLE = 'DIRECT_UPLOAD_NOT_AVAILABLE';
+
+function getFileExtension(file) {
+  return (file?.name?.split('.').pop() || '').toLowerCase();
+}
+
+function validateMediaFile(file) {
+  const normalizedType = (file?.type || '').toLowerCase();
+  const extension = getFileExtension(file);
+  const isImage = ALLOWED_IMAGE_MIME_TYPES.has(normalizedType);
+  const isVideo = ALLOWED_VIDEO_MIME_TYPES.has(normalizedType) || (!normalizedType && ALLOWED_VIDEO_EXTENSIONS.has(extension));
+
+  if (isImage) {
+    if ((file?.size || 0) > MAX_IMAGE_FILE_SIZE) {
+      throw toRequestError(
+        {
+          error: 'Image files must be 5MB or smaller.',
+          errorCode: 'IMAGE_TOO_LARGE',
+        },
+        'Image file is too large.',
+        413,
+      );
+    }
+    return;
+  }
+
+  if (isVideo) {
+    if (!ALLOWED_VIDEO_EXTENSIONS.has(extension)) {
+      throw toRequestError(
+        {
+          error: 'Video uploads must use MP4, MOV, WEBM, or MKV files.',
+          errorCode: 'UNSUPPORTED_MEDIA_TYPE',
+        },
+        'Unsupported video format.',
+        400,
+      );
+    }
+
+    if ((file?.size || 0) > MAX_VIDEO_FILE_SIZE) {
+      throw toRequestError(
+        {
+          error: 'Video files must be 120MB or smaller.',
+          errorCode: 'VIDEO_TOO_LARGE',
+        },
+        'Video file is too large.',
+        413,
+      );
+    }
+    return;
+  }
+
+  throw toRequestError(
+    {
+      error: 'Only PNG, JPG, WEBP, GIF, MP4, MOV, WEBM, or MKV files are supported.',
+      errorCode: 'UNSUPPORTED_MEDIA_TYPE',
+    },
+    'Unsupported media type.',
+    400,
+  );
+}
+
+async function sha256Hex(file) {
+  if (typeof window === 'undefined' || !window.crypto?.subtle) {
+    return undefined;
+  }
+
+  const buffer = await file.arrayBuffer();
+  const digest = await window.crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function buildCloudinaryPlaybackUrl({ cloudName, publicId, resourceType, secureUrl }) {
+  if (resourceType !== 'video' || !cloudName || !publicId) {
+    return secureUrl;
+  }
+
+  return `https://res.cloudinary.com/${cloudName}/video/upload/f_mp4,q_auto,vc_h264,ac_aac/${publicId}.mp4`;
+}
+
+function uploadDirectToCloudinary(file, { folder, onProgress } = {}) {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+  if (!cloudName || !uploadPreset) {
+    throw toRequestError(
+      {
+        error: 'Direct media upload is not configured.',
+        errorCode: DIRECT_UPLOAD_NOT_AVAILABLE,
+      },
+      'Direct media upload is not configured.',
+      500,
+    );
+  }
+
+  return new Promise((resolve, reject) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+    formData.append('resource_type', 'auto');
+    if (folder) {
+      formData.append('folder', folder);
+    }
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`);
+    xhr.responseType = 'json';
+
+    xhr.upload.onprogress = (event) => {
+      if (!event.lengthComputable || typeof onProgress !== 'function') {
+        return;
+      }
+
+      onProgress({
+        loaded: event.loaded,
+        total: event.total,
+        percent: event.total > 0 ? Math.round((event.loaded / event.total) * 100) : 0,
+      });
+    };
+
+    xhr.onload = () => {
+      const payload = xhr.response ?? {};
+      if (xhr.status >= 200 && xhr.status < 300 && payload.secure_url) {
+        resolve(payload);
+        return;
+      }
+
+      reject(
+        toRequestError(
+          {
+            error:
+              payload?.error?.message ||
+              payload?.message ||
+              'Direct media upload failed.',
+            errorCode: payload?.error?.http_code ? `CLOUDINARY_${payload.error.http_code}` : 'DIRECT_UPLOAD_FAILED',
+            details: payload,
+          },
+          'Direct media upload failed.',
+          xhr.status || 500,
+        ),
+      );
+    };
+
+    xhr.onerror = () => {
+      reject(toRequestError({}, 'Network request failed during direct upload.'));
+    };
+
+    xhr.send(formData);
+  });
+}
+
+async function saveUploadedAlbumPhoto({ albumId, file, uploaded }) {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const contentHash = await sha256Hex(file);
+
+  return fetchJson(`/api/gallery/albums/${albumId}/photos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      imageUrl: buildCloudinaryPlaybackUrl({
+        cloudName,
+        publicId: uploaded.public_id,
+        resourceType: uploaded.resource_type,
+        secureUrl: uploaded.secure_url,
+      }),
+      caption: file.name,
+      cloudinaryPublicId: typeof uploaded.public_id === 'string' ? uploaded.public_id : undefined,
+      contentHash,
+      originalFilename: file.name,
+      mimeType: file.type || undefined,
+      fileSizeBytes: file.size || undefined,
+      sourceType: 'upload',
+    }),
+  });
+}
+
+async function uploadAlbumFileDirect({ albumId, file, onProgress }) {
+  validateMediaFile(file);
+  const uploaded = await uploadDirectToCloudinary(file, {
+    folder: `portfolio/gallery/${albumId}`,
+    onProgress,
+  });
+
+  await saveUploadedAlbumPhoto({ albumId, file, uploaded });
+}
+
+async function uploadAlbumFileViaServer({ albumId, file, onProgress }) {
+  validateMediaFile(file);
+  const formData = new FormData();
+  formData.append('imageFile', file);
+  formData.append('caption', file.name);
+
+  await uploadFormDataWithProgress(`/api/gallery/albums/${albumId}/photos`, formData, {
+    onProgress,
+  });
+}
 
 export function createEmptyUploadSummary() {
   return {
@@ -81,28 +290,41 @@ export async function uploadAlbumFiles({
 
   for (let index = 0; index < nextFiles.length; index += 1) {
     const file = nextFiles[index];
-    const formData = new FormData();
-    formData.append('imageFile', file);
-    formData.append('caption', file.name);
 
     emitProgress(file, index);
 
     try {
-      await uploadFormDataWithProgress(`/api/gallery/albums/${albumId}/photos`, formData, {
-        onProgress: ({ loaded }) => {
-          const progressBytes = completedBytes + Math.min(loaded, file.size || loaded);
-          onProgressChange?.({
-            percent: Math.min(100, Math.round((progressBytes / totalBytes) * 100)),
-            currentFileName: file.name,
-            currentFileIndex: index + 1,
-            totalFiles: nextFiles.length,
-            uploadedCount,
-            skippedCount,
-            failedCount,
-            lastResult: results[results.length - 1] ?? null,
+      const emitFileProgress = ({ loaded }) => {
+        const progressBytes = completedBytes + Math.min(loaded, file.size || loaded);
+        onProgressChange?.({
+          percent: Math.min(100, Math.round((progressBytes / totalBytes) * 100)),
+          currentFileName: file.name,
+          currentFileIndex: index + 1,
+          totalFiles: nextFiles.length,
+          uploadedCount,
+          skippedCount,
+          failedCount,
+          lastResult: results[results.length - 1] ?? null,
+        });
+      };
+
+      try {
+        await uploadAlbumFileDirect({
+          albumId,
+          file,
+          onProgress: emitFileProgress,
+        });
+      } catch (error) {
+        if (error?.errorCode === DIRECT_UPLOAD_NOT_AVAILABLE) {
+          await uploadAlbumFileViaServer({
+            albumId,
+            file,
+            onProgress: emitFileProgress,
           });
-        },
-      });
+        } else {
+          throw error;
+        }
+      }
 
       uploadedCount += 1;
       results.push({
