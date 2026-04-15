@@ -36,7 +36,7 @@ const persistSelectedAlbumId = (albumId) => {
 
 export function useGalleryAdminController() {
   const [albums, setAlbums] = useState([]);
-  const [selectedAlbumId, setSelectedAlbumId] = useState(null);
+  const [selectedAlbumId, setSelectedAlbumId] = useState(() => readStoredAlbumId());
   const [photos, setPhotos] = useState([]);
 
   const [loadingAlbums, setLoadingAlbums] = useState(true);

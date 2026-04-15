@@ -200,6 +200,7 @@ const truncateText = (text, max = 44) => {
               </div>
               <p className="mt-2 text-base font-semibold sm:text-lg">{uploadSummary.failedCount}</p>
             </div>
+            
           </div>
 
           <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">

@@ -163,7 +163,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
   const workspaceMainRef = useRef(null);
   const workspaceSectionRef = useRef(null);
   const [albums, setAlbums] = useState([]);
-  const [selectedAlbumId, setSelectedAlbumId] = useState(null);
+  const [selectedAlbumId, setSelectedAlbumId] = useState(() => readStoredAlbumId());
   const [photos, setPhotos] = useState([]);
 
   const [loadingAlbums, setLoadingAlbums] = useState(true);
