@@ -35,6 +35,11 @@ export const reorderPhotosSchema = z.object({
   photoIds: z.array(z.number().int().positive()).min(1),
 });
 
+export const movePhotosSchema = z.object({
+  targetAlbumId: z.number().int().positive(),
+  photoIds: z.array(z.number().int().positive()).min(1),
+});
+
 export const driveImportSchema = z.object({
   folderId: z.string().trim().min(1),
   accessToken: z.string().trim().min(1),
@@ -46,4 +51,5 @@ export type AlbumCreateInput = z.infer<typeof albumCreateSchema>;
 export type AlbumUpdateInput = z.infer<typeof albumUpdateSchema>;
 export type PhotoCreateInput = z.infer<typeof photoCreateSchema>;
 export type ReorderPhotosInput = z.infer<typeof reorderPhotosSchema>;
+export type MovePhotosInput = z.infer<typeof movePhotosSchema>;
 export type DriveImportInput = z.infer<typeof driveImportSchema>;

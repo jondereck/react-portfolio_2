@@ -1,4 +1,5 @@
 import { PhotoSourceType, Prisma } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 import {
   prepareMediaUpload,
   RequestValidationError,
@@ -12,9 +13,23 @@ import type {
 } from '@/src/modules/gallery/contracts';
 import {
   GalleryRepository,
+  photoSelect as albumPhotoSelect,
   type AlbumPhotoRecord,
 } from '@/src/modules/gallery/repositories/galleryRepository';
 import { GoogleDriveAdapter } from '@/src/modules/gallery/adapters/googleDriveAdapter';
+
+type MoveAlbumPhotoResultEntry = {
+  photoId: number;
+  fileName: string;
+  status: 'moved' | 'duplicate-skipped' | 'error';
+  reason: string;
+  errorCode?: string;
+  duplicate?: {
+    id: number;
+    caption: string | null;
+    imageUrl: string | null;
+  } | null;
+};
 
 export class GalleryService {
   constructor(
@@ -250,6 +265,147 @@ export class GalleryService {
       },
       { skipContentHashDuplicateCheck: true },
     );
+  }
+
+  async moveAlbumPhotos(sourceAlbumId: number, targetAlbumId: number, photoIds: number[]) {
+    if (sourceAlbumId === targetAlbumId) {
+      throw new RequestValidationError(
+        'Source and destination albums must be different.',
+        400,
+        undefined,
+        'INVALID_MOVE_TARGET',
+      );
+    }
+
+    if (photoIds.length === 0) {
+      throw new RequestValidationError('Select at least one media item first.', 400, undefined, 'EMPTY_MOVE_SELECTION');
+    }
+
+    const sourcePhotos = await this.repo.getAlbumPhotosByIds(sourceAlbumId, photoIds);
+    if (sourcePhotos.length !== photoIds.length) {
+      throw new RequestValidationError(
+        'Some photos are missing or belong to another album.',
+        400,
+        undefined,
+        'PHOTO_NOT_FOUND',
+      );
+    }
+
+    const sourcePhotoById = new Map(sourcePhotos.map((photo) => [photo.id, photo]));
+    const orderedSourcePhotos = photoIds
+      .map((photoId) => sourcePhotoById.get(photoId))
+      .filter((photo): photo is AlbumPhotoRecord => Boolean(photo));
+
+    const results: MoveAlbumPhotoResultEntry[] = [];
+    let movedCount = 0;
+    let skippedCount = 0;
+    let failedCount = 0;
+
+    for (const photo of orderedSourcePhotos) {
+      try {
+        const result = await prisma.$transaction(async (tx) => {
+          const duplicate =
+            photo.sourceType === PhotoSourceType.gdrive && photo.sourceId
+              ? await tx.albumPhoto.findFirst({
+                  where: {
+                    albumId: targetAlbumId,
+                    sourceType: PhotoSourceType.gdrive,
+                    sourceId: photo.sourceId,
+                  },
+                  select: albumPhotoSelect,
+                })
+              : photo.contentHash
+                ? await tx.albumPhoto.findFirst({
+                    where: { albumId: targetAlbumId, contentHash: photo.contentHash },
+                    select: albumPhotoSelect,
+                  })
+                : null;
+
+          if (duplicate) {
+            return {
+              status: 'duplicate-skipped' as const,
+              duplicate: {
+                id: duplicate.id,
+                caption: duplicate.caption,
+                imageUrl: duplicate.imageUrl,
+              },
+            };
+          }
+
+          const last = await tx.albumPhoto.findFirst({
+            where: { albumId: targetAlbumId },
+            orderBy: [{ sortOrder: 'desc' }, { id: 'desc' }],
+            select: { sortOrder: true },
+          });
+
+          const created = await tx.albumPhoto.create({
+            data: {
+              albumId: targetAlbumId,
+              imageUrl: photo.imageUrl,
+              cloudinaryPublicId: photo.cloudinaryPublicId,
+              contentHash: photo.contentHash,
+              originalFilename: photo.originalFilename,
+              mimeType: photo.mimeType,
+              fileSizeBytes: photo.fileSizeBytes,
+              caption: photo.caption,
+              dateTaken: photo.dateTaken,
+              sourceType: photo.sourceType,
+              sourceId: photo.sourceId,
+              sortOrder: (last?.sortOrder ?? -1) + 1,
+            },
+            select: albumPhotoSelect,
+          });
+
+          await tx.albumPhoto.delete({
+            where: { id: photo.id },
+          });
+
+          return {
+            status: 'moved' as const,
+            created,
+          };
+        });
+
+        if (result.status === 'moved') {
+          movedCount += 1;
+          results.push({
+            photoId: photo.id,
+            fileName: photo.originalFilename || photo.caption || `Media ${photo.id}`,
+            status: 'moved',
+            reason: 'Moved successfully.',
+          });
+          continue;
+        }
+
+        skippedCount += 1;
+        results.push({
+          photoId: photo.id,
+          fileName: photo.originalFilename || photo.caption || `Media ${photo.id}`,
+          status: 'duplicate-skipped',
+          reason: 'Duplicate already exists in the target album.',
+          duplicate: result.duplicate,
+        });
+      } catch (error) {
+        failedCount += 1;
+        results.push({
+          photoId: photo.id,
+          fileName: photo.originalFilename || photo.caption || `Media ${photo.id}`,
+          status: 'error',
+          reason: error instanceof Error && error.message ? error.message : 'Move failed.',
+          errorCode: error instanceof RequestValidationError ? error.errorCode : undefined,
+        });
+      }
+    }
+
+    return {
+      sourceAlbumId,
+      targetAlbumId,
+      totalFiles: orderedSourcePhotos.length,
+      movedCount,
+      skippedCount,
+      failedCount,
+      results,
+    };
   }
 
   async removeAlbumPhoto(albumId: number, photoId: number) {

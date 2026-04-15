@@ -2,7 +2,7 @@ import { PhotoSourceType, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { GallerySort } from '@/src/modules/gallery/contracts';
 
-const photoSelect = {
+export const photoSelect = {
   id: true,
   albumId: true,
   imageUrl: true,

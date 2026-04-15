@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { ArrowRightLeft, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ConfirmModal from '@/components/ConfirmModal';
 import SortableMediaGrid from '@/app/admin/gallery/components/SortableMediaGrid';
@@ -32,6 +32,10 @@ export default function GalleryArrangePanel({ controller }) {
     selectedPhotoIds,
     deleteSelectedPhotos,
     clearPhotoSelection,
+    moveSelectedPhotos,
+    moveTargetAlbumId,
+    setMoveTargetAlbumId,
+    movingPhotos,
     setSelectedAlbumId,
     setCoverPhoto,
     reorderChange,
@@ -167,6 +171,67 @@ export default function GalleryArrangePanel({ controller }) {
             </div>
             ) : null}
 
+            {showSelectionBar ? (
+              <div className="rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedCount} media item{selectedCount === 1 ? '' : 's'} selected
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Move selected media into another album without duplicating items already there.
+                    </p>
+                  </div>
+
+                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto">
+                    <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+                      <select
+                        className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800 sm:min-w-[15rem] sm:w-auto"
+                        value={moveTargetAlbumId ?? ''}
+                        onChange={(event) => setMoveTargetAlbumId(Number(event.target.value) || null)}
+                        disabled={movingPhotos || albums.filter((album) => album.id !== selectedAlbumId).length === 0}
+                      >
+                        <option value="">Move to album</option>
+                        {albums
+                          .filter((album) => album.id !== selectedAlbumId)
+                          .map((album) => (
+                            <option key={album.id} value={album.id}>
+                              {album.name}
+                            </option>
+                          ))}
+                      </select>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-10 flex-1 sm:flex-none"
+                        onClick={() => moveSelectedPhotos()}
+                        disabled={
+                          movingPhotos ||
+                          !moveTargetAlbumId ||
+                          moveTargetAlbumId === selectedAlbumId ||
+                          albums.filter((album) => album.id !== selectedAlbumId).length === 0
+                        }
+                      >
+                        <ArrowRightLeft className="size-4" />
+                        {movingPhotos ? 'Moving...' : 'Move selected'}
+                      </Button>
+                    </div>
+
+                    <button
+                      type="button"
+                      className={ghostButtonStyles}
+                      onClick={clearPhotoSelection}
+                      disabled={movingPhotos}
+                    >
+                      <X className="size-4" />
+                      Clear selection
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {loadingPhotos ? (
               <p className="text-sm text-slate-500 dark:text-slate-400">Loading media...</p>
             ) : arrangePhotos.length === 0 ? (
@@ -195,22 +260,56 @@ export default function GalleryArrangePanel({ controller }) {
 
           {showSelectionBar ? (
             <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-10px_30px_-18px_rgba(15,23,42,0.4)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
-              <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mx-auto flex max-w-5xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                     {selectedCount} media item{selectedCount === 1 ? '' : 's'} selected
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Use delete to remove all checked items at once.
+                    Use delete or move to apply a bulk action to the selected items.
                   </p>
                 </div>
-                <div className="flex w-full gap-2 sm:w-auto sm:flex-wrap">
+                <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap lg:w-auto">
+                  <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+                    <select
+                      className="h-12 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800 sm:min-w-[15rem] sm:w-auto"
+                      value={moveTargetAlbumId ?? ''}
+                      onChange={(event) => setMoveTargetAlbumId(Number(event.target.value) || null)}
+                      disabled={movingPhotos || albums.filter((album) => album.id !== selectedAlbumId).length === 0}
+                    >
+                      <option value="">Move to album</option>
+                      {albums
+                        .filter((album) => album.id !== selectedAlbumId)
+                        .map((album) => (
+                          <option key={album.id} value={album.id}>
+                            {album.name}
+                          </option>
+                        ))}
+                    </select>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-12 flex-1 sm:h-10 sm:flex-none"
+                      onClick={() => moveSelectedPhotos()}
+                      disabled={
+                        movingPhotos ||
+                        !moveTargetAlbumId ||
+                        moveTargetAlbumId === selectedAlbumId ||
+                        albums.filter((album) => album.id !== selectedAlbumId).length === 0
+                      }
+                    >
+                      <ArrowRightLeft className="size-4" />
+                      {movingPhotos ? 'Moving...' : 'Move selected'}
+                    </Button>
+                  </div>
+
                   <Button
                     type="button"
                     variant="destructive"
                     className="h-12 flex-1 sm:h-10 sm:flex-none"
                     onClick={() => setConfirmDeleteOpen(true)}
-                    disabled={confirmingDelete}
+                    disabled={confirmingDelete || movingPhotos}
                   >
                     <Trash2 className="size-4" />
                     Delete selected
@@ -220,6 +319,7 @@ export default function GalleryArrangePanel({ controller }) {
                     variant="outline"
                     className="h-12 flex-1 sm:h-10 sm:flex-none"
                     onClick={clearPhotoSelection}
+                    disabled={movingPhotos}
                   >
                     <X className="size-4" />
                     Clear selection

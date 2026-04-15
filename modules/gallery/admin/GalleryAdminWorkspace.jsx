@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
+import { ArrowRightLeft, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import AdminStatusBadge from '@/components/admin/shared/AdminStatusBadge';
 import SortableMediaGrid from '@/app/admin/gallery/components/SortableMediaGrid';
 import GalleryUploadDropzone from '@/modules/gallery/admin/GalleryUploadDropzone';
@@ -86,10 +88,11 @@ const getSaveState = ({
   importingDrive,
   savingDetails,
   orderSaving,
+  movingPhotos,
   detailsDirty,
   orderDirty,
 }) => {
-  if (savingAlbum || uploadingFiles || importingDrive || savingDetails || orderSaving) {
+  if (savingAlbum || uploadingFiles || importingDrive || savingDetails || orderSaving || movingPhotos) {
     return {
       label: 'Saving...',
       tone: 'text-amber-700 bg-amber-100 dark:bg-amber-950/30 dark:text-amber-300',
@@ -184,9 +187,11 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
   const [selectionAnchorId, setSelectionAnchorId] = useState(null);
   const [orderDirty, setOrderDirty] = useState(false);
   const [orderSaving, setOrderSaving] = useState(false);
+  const [movingPhotos, setMovingPhotos] = useState(false);
   const [orderHistory, setOrderHistory] = useState([]);
   const [dragSnapshotTaken, setDragSnapshotTaken] = useState(false);
   const [arrangeDragState, setArrangeDragState] = useState({ isDragging: false, draggingCount: 0 });
+  const [moveTargetAlbumId, setMoveTargetAlbumId] = useState(null);
 
   const [driveForm, setDriveForm] = useState({ folderId: '', accessToken: '', limit: 50 });
   const [importingDrive, setImportingDrive] = useState(false);
@@ -204,6 +209,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
         importingDrive,
         savingDetails,
         orderSaving,
+        movingPhotos,
         detailsDirty,
         orderDirty,
       }),
@@ -214,6 +220,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       orderSaving,
       savingAlbum,
       savingDetails,
+      movingPhotos,
       uploadingFiles,
     ],
   );
@@ -298,6 +305,17 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
     setUploadProgress(null);
     setUploadSummary(null);
   }, [selectedAlbumId]);
+
+  useEffect(() => {
+    const availableTargets = albums.filter((album) => album.id !== selectedAlbumId);
+    setMoveTargetAlbumId((currentTargetId) => {
+      if (currentTargetId && availableTargets.some((album) => album.id === currentTargetId)) {
+        return currentTargetId;
+      }
+
+      return availableTargets[0]?.id ?? null;
+    });
+  }, [albums, selectedAlbumId]);
 
   useEffect(() => {
     if (!selectedAlbum) {
@@ -551,6 +569,76 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
     }
   };
 
+  const clearPhotoSelection = () => {
+    setSelectedPhotoIds([]);
+    setSelectionAnchorId(null);
+  };
+
+  const moveSelectedPhotos = async (targetAlbumId = moveTargetAlbumId) => {
+    if (!selectedAlbumId || !targetAlbumId || selectedPhotoIds.length === 0) {
+      return;
+    }
+
+    if (targetAlbumId === selectedAlbumId) {
+      toast.error('Choose a different target album.');
+      return;
+    }
+
+    const orderedSelectedPhotos = arrangePhotos.filter((photo) => selectedPhotoIds.includes(photo.id));
+    if (orderedSelectedPhotos.length === 0) {
+      toast.error('Select at least one media item first.');
+      return;
+    }
+
+    setMovingPhotos(true);
+
+    try {
+      const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetAlbumId,
+          photoIds: orderedSelectedPhotos.map((photo) => photo.id),
+        }),
+      });
+
+      const targetAlbumName = albums.find((album) => album.id === targetAlbumId)?.name ?? 'the target album';
+      const movedCount = Number(result?.movedCount) || 0;
+      const skippedCount = Number(result?.skippedCount) || 0;
+      const failedCount = Number(result?.failedCount) || 0;
+      const summaryParts = [];
+
+      if (movedCount > 0) {
+        summaryParts.push(`${movedCount} moved to ${targetAlbumName}`);
+      }
+
+      if (skippedCount > 0) {
+        summaryParts.push(`${skippedCount} duplicate${skippedCount === 1 ? '' : 's'} skipped`);
+      }
+
+      if (failedCount > 0) {
+        summaryParts.push(`${failedCount} failed`);
+      }
+
+      const summaryMessage = summaryParts.length > 0 ? summaryParts.join(' · ') : `No media were moved to ${targetAlbumName}.`;
+
+      clearPhotoSelection();
+      if (failedCount > 0 && movedCount === 0) {
+        toast.error(summaryMessage);
+      } else if (failedCount > 0 || skippedCount > 0) {
+        toast.message(summaryMessage);
+      } else {
+        toast.success(summaryMessage);
+      }
+
+      await Promise.all([loadPhotos(selectedAlbumId, sortMode), loadAlbums()]);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setMovingPhotos(false);
+    }
+  };
+
   const handleReorderChange = (nextItems) => {
     setArrangePhotos(nextItems);
     markOrderDirtyFromItems(nextItems);
@@ -659,6 +747,8 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
   };
 
   const isArrangeDragActive = activeTab === 'arrange' && arrangeDragState.isDragging;
+  const selectedCount = selectedPhotoIds.length;
+  const showSelectionActions = selectedCount > 0;
   const showAlbumWorkspace = activeTab === 'albums';
   const canRenderWorkspace = Boolean(selectedAlbum) || showAlbumWorkspace;
 
@@ -1020,6 +1110,65 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                         </div>
                       </div>
                     )}
+
+                    {showSelectionActions ? (
+                      <div className="rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                              {selectedCount} media item{selectedCount === 1 ? '' : 's'} selected
+                            </p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              Move selected media into another album without duplicating items already there.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                            <select
+                              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800 sm:min-w-[15rem] sm:w-auto"
+                              value={moveTargetAlbumId ?? ''}
+                              onChange={(event) => setMoveTargetAlbumId(Number(event.target.value) || null)}
+                              disabled={movingPhotos || albums.filter((album) => album.id !== selectedAlbumId).length === 0}
+                            >
+                              <option value="">Move to album</option>
+                              {albums
+                                .filter((album) => album.id !== selectedAlbumId)
+                                .map((album) => (
+                                  <option key={album.id} value={album.id}>
+                                    {album.name}
+                                  </option>
+                                ))}
+                            </select>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="h-10"
+                              onClick={() => moveSelectedPhotos()}
+                              disabled={
+                                movingPhotos ||
+                                !moveTargetAlbumId ||
+                                moveTargetAlbumId === selectedAlbumId ||
+                                albums.filter((album) => album.id !== selectedAlbumId).length === 0
+                              }
+                            >
+                              <ArrowRightLeft className="size-4" />
+                              {movingPhotos ? 'Moving...' : 'Move selected'}
+                            </Button>
+
+                            <button
+                              type="button"
+                              className={ghostButtonStyles}
+                              onClick={clearPhotoSelection}
+                              disabled={movingPhotos}
+                            >
+                              <X className="size-4" />
+                              Clear selection
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
 
                     {arrangePhotos.length === 0 ? (
                       <EmptyState

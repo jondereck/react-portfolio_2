@@ -60,9 +60,11 @@ export function useGalleryAdminController() {
   const [selectionAnchorId, setSelectionAnchorId] = useState(null);
   const [orderDirty, setOrderDirty] = useState(false);
   const [orderSaving, setOrderSaving] = useState(false);
+  const [movingPhotos, setMovingPhotos] = useState(false);
   const [orderHistory, setOrderHistory] = useState([]);
   const [dragSnapshotTaken, setDragSnapshotTaken] = useState(false);
   const [arrangeDragState, setArrangeDragState] = useState({ isDragging: false, draggingCount: 0 });
+  const [moveTargetAlbumId, setMoveTargetAlbumId] = useState(null);
 
   const [driveForm, setDriveForm] = useState({ folderId: '', accessToken: '', limit: 50 });
   const [importingDrive, setImportingDrive] = useState(false);
@@ -74,7 +76,7 @@ export function useGalleryAdminController() {
   );
 
   const saveState = useMemo(() => {
-    if (savingAlbum || uploadingFiles || importingDrive || savingDetails || orderSaving) {
+    if (savingAlbum || uploadingFiles || importingDrive || savingDetails || orderSaving || movingPhotos) {
       return {
         label: 'Saving...',
         tone: 'text-amber-700 bg-amber-100 dark:bg-amber-950/30 dark:text-amber-300',
@@ -92,7 +94,7 @@ export function useGalleryAdminController() {
       label: 'All changes saved',
       tone: 'text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300',
     };
-  }, [detailsDirty, importingDrive, orderDirty, orderSaving, savingAlbum, savingDetails, uploadingFiles]);
+  }, [detailsDirty, importingDrive, movingPhotos, orderDirty, orderSaving, savingAlbum, savingDetails, uploadingFiles]);
 
   const loadAlbums = async () => {
     setLoadingAlbums(true);
@@ -155,6 +157,17 @@ export function useGalleryAdminController() {
     setUploadProgress(null);
     setUploadSummary(null);
   }, [selectedAlbumId]);
+
+  useEffect(() => {
+    const availableTargets = albums.filter((album) => album.id !== selectedAlbumId);
+    setMoveTargetAlbumId((currentTargetId) => {
+      if (currentTargetId && availableTargets.some((album) => album.id === currentTargetId)) {
+        return currentTargetId;
+      }
+
+      return availableTargets[0]?.id ?? null;
+    });
+  }, [albums, selectedAlbumId]);
 
   useEffect(() => {
     if (!selectedAlbum) {
@@ -341,6 +354,73 @@ export function useGalleryAdminController() {
       await loadAlbums();
     } catch (error) {
       toast.error(error.message);
+    }
+  };
+
+  const moveSelectedPhotos = async (targetAlbumId = moveTargetAlbumId) => {
+    if (!selectedAlbumId || !targetAlbumId || selectedPhotoIds.length === 0) {
+      return;
+    }
+
+    if (targetAlbumId === selectedAlbumId) {
+      toast.error('Choose a different target album.');
+      return;
+    }
+
+    const orderedSelectedPhotos = arrangePhotos.filter((photo) => selectedPhotoIds.includes(photo.id));
+    if (orderedSelectedPhotos.length === 0) {
+      toast.error('Select at least one media item first.');
+      return;
+    }
+
+    setMovingPhotos(true);
+
+    try {
+      const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetAlbumId,
+          photoIds: orderedSelectedPhotos.map((photo) => photo.id),
+        }),
+      });
+
+      const targetAlbumName = albums.find((album) => album.id === targetAlbumId)?.name ?? 'the target album';
+      const summaryMessage = (() => {
+        const movedCount = Number(result?.movedCount) || 0;
+        const skippedCount = Number(result?.skippedCount) || 0;
+        const failedCount = Number(result?.failedCount) || 0;
+        const parts = [];
+
+        if (movedCount > 0) {
+          parts.push(`${movedCount} moved to ${targetAlbumName}`);
+        }
+
+        if (skippedCount > 0) {
+          parts.push(`${skippedCount} duplicate${skippedCount === 1 ? '' : 's'} skipped`);
+        }
+
+        if (failedCount > 0) {
+          parts.push(`${failedCount} failed`);
+        }
+
+        return parts.length > 0 ? parts.join(' · ') : `No media were moved to ${targetAlbumName}.`;
+      })();
+
+      clearPhotoSelection();
+      if ((Number(result?.failedCount) || 0) > 0 && (Number(result?.movedCount) || 0) === 0) {
+        toast.error(summaryMessage);
+      } else if ((Number(result?.failedCount) || 0) > 0 || (Number(result?.skippedCount) || 0) > 0) {
+        toast.message(summaryMessage);
+      } else {
+        toast.success(summaryMessage);
+      }
+
+      await Promise.all([loadPhotos(selectedAlbumId, sortMode), loadAlbums()]);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setMovingPhotos(false);
     }
   };
 
@@ -554,7 +634,10 @@ export function useGalleryAdminController() {
     setSelectedPhotoIds,
     orderDirty,
     orderSaving,
+    movingPhotos,
     arrangeDragState,
+    moveTargetAlbumId,
+    setMoveTargetAlbumId,
     driveForm,
     setDriveForm,
     importingDrive,
@@ -572,6 +655,7 @@ export function useGalleryAdminController() {
     bulkUpload,
     deletePhoto,
     deleteSelectedPhotos,
+    moveSelectedPhotos,
     setCoverPhoto,
     handleDriveImport,
     reorderChange,
