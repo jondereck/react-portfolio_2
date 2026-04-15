@@ -51,7 +51,13 @@ export function useGalleryAdminController() {
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadSummary, setUploadSummary] = useState(null);
 
-  const [detailsForm, setDetailsForm] = useState({ name: '', slug: '', description: '', isPublished: true });
+  const [detailsForm, setDetailsForm] = useState({
+    name: '',
+    slug: '',
+    description: '',
+    isPublished: true,
+    shareLinkEnabled: false,
+  });
   const [detailsDirty, setDetailsDirty] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
 
@@ -171,7 +177,7 @@ export function useGalleryAdminController() {
 
   useEffect(() => {
     if (!selectedAlbum) {
-      setDetailsForm({ name: '', slug: '', description: '', isPublished: true });
+      setDetailsForm({ name: '', slug: '', description: '', isPublished: true, shareLinkEnabled: false });
       setDetailsDirty(false);
       return;
     }
@@ -181,6 +187,7 @@ export function useGalleryAdminController() {
       slug: selectedAlbum.slug ?? '',
       description: selectedAlbum.description ?? '',
       isPublished: Boolean(selectedAlbum.isPublished),
+      shareLinkEnabled: Boolean(selectedAlbum.shareLinkEnabled),
     });
     setDetailsDirty(false);
   }, [selectedAlbum]);

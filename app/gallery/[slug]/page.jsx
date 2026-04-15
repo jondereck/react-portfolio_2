@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { downloadFromApi } from "@/lib/download-client";
 import {
@@ -380,6 +381,7 @@ export default function AlbumDetailPage({ params }) {
 
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
+  const searchParams = useSearchParams();
   const [slug, setSlug] = useState("");
   const [album, setAlbum] = useState(null);
   const [photos, setPhotos] = useState([]);
@@ -416,6 +418,7 @@ export default function AlbumDetailPage({ params }) {
   const splitLeftVideoRef = useRef(null);
   const splitRightVideoRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0, active: false });
+  const shareToken = searchParams?.get("share") || "";
 
   useEffect(() => {
     let mounted = true;
@@ -469,7 +472,9 @@ export default function AlbumDetailPage({ params }) {
     const run = async () => {
       try {
         const albumData = await fetchJson(
-          `/api/gallery/albums/by-slug/${slug}`,
+          shareToken
+            ? `/api/gallery/albums/by-share-token/${shareToken}`
+            : `/api/gallery/albums/by-slug/${slug}`,
         );
         setAlbum(albumData);
 
@@ -489,7 +494,7 @@ export default function AlbumDetailPage({ params }) {
     return () => {
       finalize();
     };
-  }, [slug, sort, startGlobalLoading, stopGlobalLoading]);
+  }, [shareToken, slug, sort, startGlobalLoading, stopGlobalLoading]);
 
   const filteredPhotos = photos.filter((item) => {
     if (mediaFilter === "photos") {

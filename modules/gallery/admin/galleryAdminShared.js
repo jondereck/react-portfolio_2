@@ -46,7 +46,7 @@ export const galleryPageMeta = {
   settings: {
     eyebrow: 'Gallery Settings',
     title: 'Settings',
-    description: 'Edit album metadata, publish state, and cover-photo assignment without other gallery tooling.',
+    description: 'Edit album metadata, publish state, share-link access, and cover-photo assignment without other gallery tooling.',
   },
   workspace: {
     eyebrow: 'Advanced Workspace',

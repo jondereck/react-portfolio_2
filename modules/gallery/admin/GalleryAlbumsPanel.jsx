@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import AdminStatusBadge from '@/components/admin/shared/AdminStatusBadge';
 import ConfirmModal from '@/components/ConfirmModal';
 import {
@@ -155,6 +156,17 @@ export default function GalleryAlbumsPanel({ controller }) {
                     />
                     Published
                   </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={detailsForm.shareLinkEnabled}
+                      onChange={(event) => {
+                        setDetailsForm((previous) => ({ ...previous, shareLinkEnabled: event.target.checked }));
+                        setDetailsDirty(true);
+                      }}
+                    />
+                    Enable share link
+                  </label>
 
                   <div className="flex flex-wrap items-center gap-2">
                     <button className={buttonStyles} disabled={!detailsDirty || savingDetails}>
@@ -191,6 +203,40 @@ export default function GalleryAlbumsPanel({ controller }) {
                     <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-100">
                       {selectedAlbum.coverPhotoId ? 'Cover photo assigned' : 'No cover photo selected'}
                     </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Share link</p>
+                    {selectedAlbum.shareLinkEnabled && selectedAlbum.shareToken ? (
+                      <div className="mt-2 space-y-3">
+                        <input
+                          className={inputStyles}
+                          readOnly
+                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`}
+                          onFocus={(event) => event.currentTarget.select()}
+                        />
+                        <button
+                          type="button"
+                          className={ghostButtonStyles}
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(
+                                `${window.location.origin}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`,
+                              );
+                              toast.success('Share link copied');
+                            } catch {
+                              toast.error('Unable to copy share link');
+                            }
+                          }}
+                        >
+                          Copy share link
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                        Sharing is disabled. Turn it on to generate a private share link.
+                      </p>
+                    )}
                   </div>
                 </div>
               </form>

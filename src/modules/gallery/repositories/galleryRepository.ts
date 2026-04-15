@@ -82,7 +82,15 @@ export class GalleryRepository {
     });
   }
 
-  async createAlbum(data: { profileId: number; name: string; slug: string; description?: string; isPublished: boolean }) {
+  async createAlbum(data: {
+    profileId: number;
+    name: string;
+    slug: string;
+    description?: string;
+    isPublished: boolean;
+    shareLinkEnabled?: boolean;
+    shareToken?: string | null;
+  }) {
     return prisma.album.create({
       data: {
         profileId: data.profileId,
@@ -90,12 +98,25 @@ export class GalleryRepository {
         slug: data.slug,
         description: data.description ?? null,
         isPublished: data.isPublished,
+        shareLinkEnabled: data.shareLinkEnabled ?? false,
+        shareToken: data.shareToken ?? null,
       },
       include: albumInclude,
     });
   }
 
-  async updateAlbum(id: number, data: { name?: string; slug?: string; description?: string; isPublished?: boolean; coverPhotoId?: number | null }) {
+  async updateAlbum(
+    id: number,
+    data: {
+      name?: string;
+      slug?: string;
+      description?: string;
+      isPublished?: boolean;
+      coverPhotoId?: number | null;
+      shareLinkEnabled?: boolean;
+      shareToken?: string | null;
+    },
+  ) {
     return prisma.album.update({
       where: { id },
       data: {
@@ -104,6 +125,18 @@ export class GalleryRepository {
         ...(data.description !== undefined ? { description: data.description || null } : {}),
         ...(data.isPublished !== undefined ? { isPublished: data.isPublished } : {}),
         ...(data.coverPhotoId !== undefined ? { coverPhotoId: data.coverPhotoId } : {}),
+        ...(data.shareLinkEnabled !== undefined ? { shareLinkEnabled: data.shareLinkEnabled } : {}),
+        ...(data.shareToken !== undefined ? { shareToken: data.shareToken } : {}),
+      },
+      include: albumInclude,
+    });
+  }
+
+  async getAlbumByShareToken(shareToken: string) {
+    return prisma.album.findFirst({
+      where: {
+        shareToken,
+        shareLinkEnabled: true,
       },
       include: albumInclude,
     });

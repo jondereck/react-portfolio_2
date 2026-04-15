@@ -12,6 +12,7 @@ export const albumCreateSchema = z.object({
     .regex(/^[a-z0-9-]+$/),
   description: z.string().trim().max(1000).optional(),
   isPublished: z.boolean().optional().default(true),
+  shareLinkEnabled: z.boolean().optional(),
 });
 
 export const albumUpdateSchema = albumCreateSchema.partial().extend({

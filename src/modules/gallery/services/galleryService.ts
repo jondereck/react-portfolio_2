@@ -1,4 +1,5 @@
 import { PhotoSourceType, Prisma } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
 import {
   prepareMediaUpload,
@@ -113,16 +114,24 @@ export class GalleryService {
   }
 
   createAlbum(profileId: number, input: AlbumCreateInput) {
+    const shareLinkEnabled = input.shareLinkEnabled ?? false;
     return this.repo.createAlbum({
       profileId,
       name: input.name,
       slug: input.slug,
       description: input.description,
       isPublished: input.isPublished ?? true,
+      shareLinkEnabled,
+      shareToken: shareLinkEnabled ? randomUUID().replace(/-/g, '') : null,
     });
   }
 
   async updateAlbum(albumId: number, input: AlbumUpdateInput) {
+    const currentAlbum = await prisma.album.findUnique({
+      where: { id: albumId },
+      select: { shareToken: true },
+    });
+
     if (input.coverPhotoId !== undefined && input.coverPhotoId !== null) {
       const photos = await this.repo.getAlbumPhotosByIds(albumId, [input.coverPhotoId]);
       if (photos.length !== 1) {
@@ -130,7 +139,23 @@ export class GalleryService {
       }
     }
 
-    return this.repo.updateAlbum(albumId, input);
+    let shareToken: string | null | undefined;
+    if (input.shareLinkEnabled !== undefined) {
+      if (input.shareLinkEnabled) {
+        shareToken = currentAlbum?.shareToken ?? randomUUID().replace(/-/g, '');
+      } else {
+        shareToken = null;
+      }
+    }
+
+    return this.repo.updateAlbum(albumId, {
+      ...input,
+      ...(shareToken !== undefined ? { shareToken } : {}),
+    });
+  }
+
+  async getAlbumByShareToken(shareToken: string) {
+    return this.repo.getAlbumByShareToken(shareToken);
   }
 
   deleteAlbum(albumId: number) {

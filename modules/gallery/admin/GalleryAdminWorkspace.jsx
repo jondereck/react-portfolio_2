@@ -178,7 +178,13 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadSummary, setUploadSummary] = useState(null);
 
-  const [detailsForm, setDetailsForm] = useState({ name: '', slug: '', description: '', isPublished: true });
+  const [detailsForm, setDetailsForm] = useState({
+    name: '',
+    slug: '',
+    description: '',
+    isPublished: true,
+    shareLinkEnabled: false,
+  });
   const [detailsDirty, setDetailsDirty] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
 
@@ -319,7 +325,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
 
   useEffect(() => {
     if (!selectedAlbum) {
-      setDetailsForm({ name: '', slug: '', description: '', isPublished: true });
+      setDetailsForm({ name: '', slug: '', description: '', isPublished: true, shareLinkEnabled: false });
       setDetailsDirty(false);
       return;
     }
@@ -329,6 +335,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       slug: selectedAlbum.slug ?? '',
       description: selectedAlbum.description ?? '',
       isPublished: Boolean(selectedAlbum.isPublished),
+      shareLinkEnabled: Boolean(selectedAlbum.shareLinkEnabled),
     });
     setDetailsDirty(false);
   }, [selectedAlbum]);
@@ -1225,26 +1232,72 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
                           }}
                           placeholder="Album description"
                         />
-                        <label className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={detailsForm.isPublished}
-                            onChange={(event) => {
-                              setDetailsForm((previous) => ({ ...previous, isPublished: event.target.checked }));
-                              setDetailsDirty(true);
-                            }}
-                          />
-                          Published
-                        </label>
-                        <button className={buttonStyles} disabled={!detailsDirty || savingDetails}>
-                          {savingDetails ? 'Saving...' : 'Save settings'}
-                        </button>
-                      </div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={detailsForm.isPublished}
+                              onChange={(event) => {
+                                setDetailsForm((previous) => ({ ...previous, isPublished: event.target.checked }));
+                                setDetailsDirty(true);
+                              }}
+                            />
+                            Published
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={detailsForm.shareLinkEnabled}
+                              onChange={(event) => {
+                                setDetailsForm((previous) => ({ ...previous, shareLinkEnabled: event.target.checked }));
+                                setDetailsDirty(true);
+                              }}
+                            />
+                            Enable share link
+                          </label>
+                          <button className={buttonStyles} disabled={!detailsDirty || savingDetails}>
+                            {savingDetails ? 'Saving...' : 'Save settings'}
+                          </button>
+                        </div>
 
-                      <div className="space-y-3">
-                        <h3 className="text-base font-semibold">Per-photo details</h3>
-                        {photos.length === 0 ? (
-                          <p className="text-sm text-slate-500">No media metadata available yet.</p>
+                        <div className="space-y-3">
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Share link</p>
+                            {selectedAlbum?.shareLinkEnabled && selectedAlbum?.shareToken ? (
+                              <div className="mt-2 space-y-3">
+                                <input
+                                  className={inputStyles}
+                                  readOnly
+                                  value={`${typeof window !== 'undefined' ? window.location.origin : ''}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`}
+                                  onFocus={(event) => event.currentTarget.select()}
+                                />
+                                <button
+                                  type="button"
+                                  className={ghostButtonStyles}
+                                  onClick={async () => {
+                                    try {
+                                      await navigator.clipboard.writeText(
+                                        `${window.location.origin}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`,
+                                      );
+                                      toast.success('Share link copied');
+                                    } catch {
+                                      toast.error('Unable to copy share link');
+                                    }
+                                  }}
+                                >
+                                  Copy share link
+                                </button>
+                                <p className="text-xs text-slate-500">
+                                  Share links stay active until you disable them here.
+                                </p>
+                              </div>
+                            ) : (
+                              <p className="mt-2 text-sm text-slate-500">Sharing is disabled.</p>
+                            )}
+                          </div>
+
+                          <h3 className="text-base font-semibold">Per-photo details</h3>
+                          {photos.length === 0 ? (
+                            <p className="text-sm text-slate-500">No media metadata available yet.</p>
                         ) : (
                           <div className="max-h-80 overflow-auto rounded-md border border-slate-200 dark:border-slate-700">
                             {photos.map((photo) => (

@@ -1,6 +1,7 @@
 'use client';
 
 import AdminStatusBadge from '@/components/admin/shared/AdminStatusBadge';
+import { toast } from 'sonner';
 import { formatLocalDate } from '@/app/admin/gallery/utils';
 import {
   GalleryAlbumPicker,
@@ -29,12 +30,26 @@ export default function GallerySettingsPanel({ controller }) {
     setSelectedAlbumId,
   } = controller;
 
+  const shareLink = selectedAlbum?.shareLinkEnabled && selectedAlbum?.shareToken
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`
+    : '';
+
+  const handleCopyShareLink = async () => {
+    if (!shareLink) return;
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      toast.success('Share link copied');
+    } catch {
+      toast.error('Unable to copy share link');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <GalleryPageHeader
         eyebrow="Gallery Settings"
         title="Settings"
-        description="Edit album metadata, publish state, and cover-photo assignment in a settings-only view."
+        description="Edit album metadata, publish state, share-link access, and cover-photo assignment in a settings-only view."
       />
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -93,6 +108,17 @@ export default function GallerySettingsPanel({ controller }) {
                     />
                     Published
                   </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={detailsForm.shareLinkEnabled}
+                      onChange={(event) => {
+                        setDetailsForm((previous) => ({ ...previous, shareLinkEnabled: event.target.checked }));
+                        setDetailsDirty(true);
+                      }}
+                    />
+                    Enable share link
+                  </label>
                   <button className={buttonStyles} disabled={!detailsDirty || savingDetails}>
                     {savingDetails ? 'Saving...' : 'Save settings'}
                   </button>
@@ -112,6 +138,40 @@ export default function GallerySettingsPanel({ controller }) {
                     <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
                       {selectedAlbum.coverPhotoId ? 'A cover photo is already assigned.' : 'No cover photo has been assigned yet.'}
                     </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Share link</p>
+                    {selectedAlbum.shareLinkEnabled && selectedAlbum.shareToken ? (
+                      <div className="mt-2 space-y-3">
+                        <input
+                          className={inputStyles}
+                          readOnly
+                          value={shareLink}
+                          onFocus={(event) => event.currentTarget.select()}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" className={buttonStyles} onClick={handleCopyShareLink}>
+                            Copy link
+                          </button>
+                          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300">
+                            Enabled
+                          </span>
+                        </div>
+                        <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                          Share links work even when the album is unpublished. Disable sharing to revoke this URL.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          Sharing is disabled. Turn it on to generate a private share link.
+                        </p>
+                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
+                          Disabled
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </form>

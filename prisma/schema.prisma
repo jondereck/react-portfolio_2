@@ -241,6 +241,8 @@ model Album {
   description  String?
   coverPhotoId Int?        @unique
   isPublished  Boolean     @default(true)
+  shareLinkEnabled Boolean @default(false)
+  shareToken   String?     @unique
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   profile      Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
