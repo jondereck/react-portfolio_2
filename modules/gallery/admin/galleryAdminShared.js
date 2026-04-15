@@ -145,6 +145,7 @@ export function GalleryAlbumPicker({
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState('newest');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [mobileFiltersCollapsed, setMobileFiltersCollapsed] = useState(false);
   const resolveAlbumCoverUrl = (album) => album?.coverPhoto?.imageUrl ?? '';
 
   const selectedAlbum = useMemo(
@@ -156,6 +157,10 @@ export function GalleryAlbumPicker({
     const normalizedQuery = query.trim().toLowerCase();
 
     const visibleAlbums = albums.filter((album) => {
+      if (album.id === selectedAlbumId) {
+        return false;
+      }
+
       if (statusFilter === 'published' && !album.isPublished) {
         return false;
       }
@@ -205,6 +210,7 @@ export function GalleryAlbumPicker({
   }, [albums, query, sortMode, statusFilter]);
 
   const selectedMediaCount = selectedAlbum?._count?.photos ?? 0;
+  const selectedAlbumCoverUrl = resolveAlbumCoverUrl(selectedAlbum);
 
   return (
     <>
@@ -226,22 +232,37 @@ export function GalleryAlbumPicker({
         ) : selectedAlbum ? (
           <div className="space-y-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{selectedAlbum.name}</p>
+              <div className="flex items-start gap-3">
+                <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+                  {selectedAlbumCoverUrl ? (
+                    <img src={selectedAlbumCoverUrl} alt={selectedAlbum.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:from-slate-800 dark:via-slate-700 dark:to-slate-900 dark:text-slate-400">
+                      No cover
+                    </div>
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-base font-semibold text-slate-900 dark:text-slate-100 sm:text-sm">{selectedAlbum.name}</p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     {selectedMediaCount} media item{selectedMediaCount === 1 ? '' : 's'}
                   </p>
+                  <span
+                    className={`mt-2 inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                      selectedAlbum.isPublished
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                    }`}
+                    aria-label={selectedAlbum.isPublished ? 'Published' : 'Draft'}
+                    title={selectedAlbum.isPublished ? 'Published' : 'Draft'}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${selectedAlbum.isPublished ? 'bg-emerald-600' : 'bg-slate-400'}`} />
+                    <span className="sr-only">{selectedAlbum.isPublished ? 'Published' : 'Draft'}</span>
+                  </span>
                 </div>
-                <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                  {selectedAlbum.isPublished ? 'Published' : 'Draft'}
-                </span>
               </div>
               <div className="mt-3 grid gap-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                <p className="truncate">
-                  <span className="font-medium text-slate-700 dark:text-slate-200">Slug:</span>{' '}
-                  {selectedAlbum.slug ? selectedAlbum.slug : 'No slug'}
-                </p>
                 {selectedAlbum.description ? (
                   <p className="line-clamp-2">
                     <span className="font-medium text-slate-700 dark:text-slate-200">Description:</span> {selectedAlbum.description}
@@ -254,7 +275,10 @@ export function GalleryAlbumPicker({
               <button
                 type="button"
                 className={`${buttonStyles} w-full sm:w-auto`}
-                onClick={() => setIsOpen(true)}
+                onClick={() => {
+                  setMobileFiltersCollapsed(false);
+                  setIsOpen(true);
+                }}
               >
                 Change album
               </button>
@@ -265,6 +289,7 @@ export function GalleryAlbumPicker({
                   setQuery('');
                   setStatusFilter('all');
                   setSortMode('newest');
+                  setMobileFiltersCollapsed(false);
                   setIsOpen(true);
                 }}
               >
@@ -277,7 +302,14 @@ export function GalleryAlbumPicker({
             title={emptyTitle}
             description={emptyDescription}
             action={
-              <button type="button" className={buttonStyles} onClick={() => setIsOpen(true)}>
+              <button
+                type="button"
+                className={buttonStyles}
+                onClick={() => {
+                  setMobileFiltersCollapsed(false);
+                  setIsOpen(true);
+                }}
+              >
                 Choose album
               </button>
             }
@@ -313,7 +345,7 @@ export function GalleryAlbumPicker({
                 <Dialog.Panel className="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[min(42rem,calc(100dvh-3rem))] sm:max-w-4xl sm:rounded-2xl">
                   <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5">
                     <div className="flex items-start justify-between gap-4">
-                      <div>
+                      <div className='m-2'>
                         <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Album picker</p>
                         <Dialog.Title className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
                           Search and switch albums
@@ -346,58 +378,70 @@ export function GalleryAlbumPicker({
                         />
                       </label>
 
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="block">
-                          <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                            <SlidersHorizontal className="size-3.5" />
-                            Status
-                          </span>
-                          <select
-                            className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
-                            value={statusFilter}
-                            onChange={(event) => setStatusFilter(event.target.value)}
-                          >
-                            <option value="all">All statuses</option>
-                            <option value="published">Published</option>
-                            <option value="draft">Draft</option>
-                          </select>
-                        </label>
+                      <div
+                        className={`space-y-3 transition-all duration-200 ${
+                          mobileFiltersCollapsed ? 'max-h-0 overflow-hidden opacity-0 sm:max-h-none sm:overflow-visible sm:opacity-100' : 'max-h-[18rem] opacity-100'
+                        }`}
+                      >
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="block">
+                            <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                              <SlidersHorizontal className="size-3.5" />
+                              Status
+                            </span>
+                            <select
+                              className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+                              value={statusFilter}
+                              onChange={(event) => setStatusFilter(event.target.value)}
+                            >
+                              <option value="all">All statuses</option>
+                              <option value="published">Published</option>
+                              <option value="draft">Draft</option>
+                            </select>
+                          </label>
 
-                        <label className="block">
-                          <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">Sort</span>
-                          <select
-                            className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
-                            value={sortMode}
-                            onChange={(event) => setSortMode(event.target.value)}
-                          >
-                            <option value="newest">Sort by newest</option>
-                            <option value="oldest">Sort by oldest</option>
-                            <option value="az">Sort A-Z</option>
-                            <option value="media">Sort by most media</option>
-                          </select>
-                        </label>
-                      </div>
+                          <label className="block">
+                            <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">Sort</span>
+                            <select
+                              className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+                              value={sortMode}
+                              onChange={(event) => setSortMode(event.target.value)}
+                            >
+                              <option value="newest">Sort by newest</option>
+                              <option value="oldest">Sort by oldest</option>
+                              <option value="az">Sort A-Z</option>
+                              <option value="media">Sort by most media</option>
+                            </select>
+                          </label>
+                        </div>
 
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
-                          {filteredAlbums.length} result{filteredAlbums.length === 1 ? '' : 's'}
-                        </p>
-                        <button
-                          type="button"
-                          className="inline-flex w-full items-center justify-center rounded-md border border-slate-300 px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 sm:w-auto"
-                          onClick={() => {
-                            setQuery('');
-                            setStatusFilter('all');
-                            setSortMode('newest');
-                          }}
-                        >
-                          Reset filters
-                        </button>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            {filteredAlbums.length} result{filteredAlbums.length === 1 ? '' : 's'}
+                          </p>
+                          <button
+                            type="button"
+                            className="inline-flex w-full items-center justify-center rounded-md border border-slate-300 px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 sm:w-auto"
+                            onClick={() => {
+                              setQuery('');
+                              setStatusFilter('all');
+                              setSortMode('newest');
+                              setMobileFiltersCollapsed(false);
+                            }}
+                          >
+                            Reset filters
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex-1 overflow-auto px-3 py-3 sm:px-5 sm:py-4">
+                  <div
+                    className="flex-1 overflow-auto px-3 py-3 sm:px-5 sm:py-4"
+                    onScroll={(event) => {
+                      setMobileFiltersCollapsed(event.currentTarget.scrollTop > 12);
+                    }}
+                  >
                     {!loadingAlbums && albums.length === 0 ? (
                       <GalleryEmptyState title={emptyTitle} description={emptyDescription} />
                     ) : filteredAlbums.length === 0 ? (
@@ -436,9 +480,9 @@ export function GalleryAlbumPicker({
                                 )}
                               </div>
 
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{album.name}</p>
+                                  <p className="truncate text-base font-semibold text-slate-900 dark:text-slate-100 sm:text-sm">{album.name}</p>
                                   {isActive ? (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white dark:bg-slate-100 dark:text-slate-950">
                                       <Check className="size-3" />
@@ -446,7 +490,7 @@ export function GalleryAlbumPicker({
                                     </span>
                                   ) : null}
                                 </div>
-                                <p className="mt-1 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">
+                                <p className="mt-1 hidden line-clamp-1 text-xs text-slate-500 dark:text-slate-400 sm:block">
                                   {album.slug ? `Slug: ${album.slug}` : 'No slug'}
                                   {album.description ? ` · ${album.description}` : ''}
                                 </p>
@@ -456,8 +500,20 @@ export function GalleryAlbumPicker({
                                 <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
                                   {mediaCount} media
                                 </span>
-                                <span className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                                <span className="hidden rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:text-slate-400 sm:inline-flex">
                                   {album.isPublished ? 'Published' : 'Draft'}
+                                </span>
+                                <span
+                                  className={`inline-flex items-center justify-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] sm:hidden ${
+                                    album.isPublished
+                                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                      : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                                  }`}
+                                  aria-label={album.isPublished ? 'Published' : 'Draft'}
+                                  title={album.isPublished ? 'Published' : 'Draft'}
+                                >
+                                  <span className={`h-2 w-2 rounded-full ${album.isPublished ? 'bg-emerald-600' : 'bg-slate-400'}`} />
+                                  <span className="sr-only">{album.isPublished ? 'Published' : 'Draft'}</span>
                                 </span>
                               </div>
                             </button>
@@ -470,8 +526,20 @@ export function GalleryAlbumPicker({
                   <div className="border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95 sm:px-5">
                     <div className="space-y-3">
                       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
+                        <div className="flex items-start gap-3">
+                          {selectedAlbum ? (
+                            <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+                              {selectedAlbumCoverUrl ? (
+                                <img src={selectedAlbumCoverUrl} alt={selectedAlbum.name} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:from-slate-800 dark:via-slate-700 dark:to-slate-900 dark:text-slate-400">
+                                  No cover
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+
+                          <div className="min-w-0 flex-1">
                             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                               Selected album
                             </p>
