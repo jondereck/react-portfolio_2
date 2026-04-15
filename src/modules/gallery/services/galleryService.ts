@@ -177,8 +177,12 @@ export class GalleryService {
     return { album, photo };
   }
 
-  async addAlbumPhoto(albumId: number, input: PhotoCreateInput) {
-    if (input.contentHash) {
+  async addAlbumPhoto(
+    albumId: number,
+    input: PhotoCreateInput,
+    options: { skipContentHashDuplicateCheck?: boolean } = {},
+  ) {
+    if (input.contentHash && !options.skipContentHashDuplicateCheck) {
       const existing = await this.repo.findAlbumPhotoByContentHash(albumId, input.contentHash);
       if (existing) {
         throw this.createDuplicateMediaError(existing);
@@ -232,16 +236,20 @@ export class GalleryService {
 
     const uploadedMedia = await uploadPreparedMediaFile(prepared, `portfolio/gallery/${albumId}`);
 
-    return this.addAlbumPhoto(albumId, {
-      ...args.input,
-      imageUrl: uploadedMedia.playbackUrl,
-      cloudinaryPublicId: uploadedMedia.publicId ?? args.input.cloudinaryPublicId,
-      contentHash: prepared.contentHash,
-      originalFilename: prepared.originalFilename,
-      mimeType: prepared.mimeType,
-      fileSizeBytes: prepared.fileSizeBytes,
-      sourceType: args.input.sourceType ?? 'upload',
-    });
+    return this.addAlbumPhoto(
+      albumId,
+      {
+        ...args.input,
+        imageUrl: uploadedMedia.playbackUrl,
+        cloudinaryPublicId: uploadedMedia.publicId ?? args.input.cloudinaryPublicId,
+        contentHash: prepared.contentHash,
+        originalFilename: prepared.originalFilename,
+        mimeType: prepared.mimeType,
+        fileSizeBytes: prepared.fileSizeBytes,
+        sourceType: args.input.sourceType ?? 'upload',
+      },
+      { skipContentHashDuplicateCheck: true },
+    );
   }
 
   async removeAlbumPhoto(albumId: number, photoId: number) {

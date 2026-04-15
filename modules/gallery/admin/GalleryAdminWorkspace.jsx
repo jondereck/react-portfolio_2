@@ -462,15 +462,16 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
         toast.success(summaryMessage);
       }
 
-      if (summary.uploadedCount > 0) {
-        await loadPhotos(selectedAlbumId, sortMode);
+        if (summary.uploadedCount > 0) {
+          await Promise.all([loadPhotos(selectedAlbumId, sortMode), loadAlbums()]);
+        } else {
+          await loadAlbums();
+        }
+      } catch (error) {
+        toast.error(error.message);
+      } finally {
+        setUploadingFiles(false);
       }
-      await loadAlbums();
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setUploadingFiles(false);
-    }
   };
 
   const handleDeletePhoto = async (photoId) => {

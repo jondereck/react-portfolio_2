@@ -14,6 +14,7 @@ const ALLOWED_VIDEO_MIME_TYPES = new Set([
 const ALLOWED_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'mkv']);
 
 const DIRECT_UPLOAD_NOT_AVAILABLE = 'DIRECT_UPLOAD_NOT_AVAILABLE';
+const DEFAULT_UPLOAD_CONCURRENCY = 3;
 
 function getFileExtension(file) {
   return (file?.name?.split('.').pop() || '').toLowerCase();
@@ -258,6 +259,7 @@ export async function uploadAlbumFiles({
   albumId,
   files,
   onProgressChange,
+  concurrency = DEFAULT_UPLOAD_CONCURRENCY,
 }) {
   const nextFiles = Array.from(files || []);
   if (!albumId || nextFiles.length === 0) {
@@ -267,45 +269,51 @@ export async function uploadAlbumFiles({
   }
 
   const totalBytes = Math.max(nextFiles.reduce((sum, file) => sum + (file.size || 0), 0), 1);
-  let completedBytes = 0;
   let uploadedCount = 0;
   let skippedCount = 0;
   let failedCount = 0;
-  const results = [];
+  const results = new Array(nextFiles.length);
+  const perFileLoadedBytes = new Array(nextFiles.length).fill(0);
+  let lastResultIndex = -1;
 
-  const emitProgress = (file, index) => {
+  const getLoadedBytes = () =>
+    nextFiles.reduce((sum, file, index) => {
+      const fileSize = file?.size || 0;
+      return sum + Math.min(perFileLoadedBytes[index] || 0, fileSize || perFileLoadedBytes[index] || 0);
+    }, 0);
+
+  const emitProgress = (index) => {
+    const currentFile = nextFiles[index] ?? nextFiles[0] ?? null;
     onProgressChange?.({
-      percent: Math.min(100, Math.round((completedBytes / totalBytes) * 100)),
-      currentFileName: file?.name ?? '',
+      percent: Math.min(100, Math.round((getLoadedBytes() / totalBytes) * 100)),
+      currentFileName: currentFile?.name ?? '',
       currentFileIndex: index + 1,
       totalFiles: nextFiles.length,
       uploadedCount,
       skippedCount,
       failedCount,
-      lastResult: results[results.length - 1] ?? null,
+      lastResult: lastResultIndex >= 0 ? results[lastResultIndex] ?? null : null,
     });
   };
 
-  emitProgress(nextFiles[0], 0);
+  const markFileProgress = (index, loaded) => {
+    perFileLoadedBytes[index] = Math.max(perFileLoadedBytes[index] || 0, loaded || 0);
+    emitProgress(index);
+  };
 
-  for (let index = 0; index < nextFiles.length; index += 1) {
+  const finalizeFileProgress = (index) => {
     const file = nextFiles[index];
+    perFileLoadedBytes[index] = file?.size || perFileLoadedBytes[index] || 0;
+    emitProgress(index);
+  };
 
-    emitProgress(file, index);
+  const processFile = async (index) => {
+    const file = nextFiles[index];
+    emitProgress(index);
 
     try {
       const emitFileProgress = ({ loaded }) => {
-        const progressBytes = completedBytes + Math.min(loaded, file.size || loaded);
-        onProgressChange?.({
-          percent: Math.min(100, Math.round((progressBytes / totalBytes) * 100)),
-          currentFileName: file.name,
-          currentFileIndex: index + 1,
-          totalFiles: nextFiles.length,
-          uploadedCount,
-          skippedCount,
-          failedCount,
-          lastResult: results[results.length - 1] ?? null,
-        });
+        markFileProgress(index, loaded);
       };
 
       try {
@@ -327,11 +335,11 @@ export async function uploadAlbumFiles({
       }
 
       uploadedCount += 1;
-      results.push({
+      results[index] = {
         fileName: file.name,
         status: 'success',
         reason: 'Uploaded successfully.',
-      });
+      };
     } catch (error) {
       const duplicate = isDuplicateUploadError(error);
       if (duplicate) {
@@ -340,18 +348,31 @@ export async function uploadAlbumFiles({
         failedCount += 1;
       }
 
-      results.push({
+      results[index] = {
         fileName: file.name,
         status: duplicate ? 'duplicate-skipped' : 'error',
         reason: getUploadResultReason(error),
         errorCode: error?.errorCode,
         duplicate: error?.duplicate ?? null,
-      });
+      };
+    } finally {
+      lastResultIndex = index;
+      finalizeFileProgress(index);
     }
+  };
 
-    completedBytes += file.size || 0;
-    emitProgress(file, index);
-  }
+  const workerCount = Math.max(1, Math.min(Number(concurrency) || DEFAULT_UPLOAD_CONCURRENCY, nextFiles.length));
+  let nextIndex = 0;
+
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (nextIndex < nextFiles.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      await processFile(index);
+    }
+  });
+
+  await Promise.all(workers);
 
   return {
     totalFiles: nextFiles.length,
