@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuthActor } from '@/lib/auth/session';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { getSelfAccount, updateSelfAccount } from '@/lib/auth/account-management';
+import { getAdminSettings } from '@/lib/server/admin-settings';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 import { createFieldErrorResponse, createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
@@ -24,8 +25,16 @@ const updateAccountSchema = z.object({
 export async function GET(request: Request) {
   try {
     const actor = await requireAuthActor(request);
-    const account = await getSelfAccount(actor.user.id);
-    return NextResponse.json({ account });
+    const [account, settings] = await Promise.all([
+      getSelfAccount(actor.user.id),
+      getAdminSettings(),
+    ]);
+    return NextResponse.json({
+      account,
+      sessionPolicy: {
+        sessionTtlHours: settings.security.sessionTtlHours,
+      },
+    });
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) return authError;

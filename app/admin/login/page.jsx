@@ -1,30 +1,90 @@
 'use client';
 
-import { useState } from 'react';
-import { signIn } from 'next-auth/react';
+import { useEffect, useMemo, useState } from 'react';
+import { getSession, signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 
+const adminLastVisitedPathStorageKey = 'admin:lastVisitedPath';
+
+const normalizeAdminPath = (value) => {
+  if (!value || typeof value !== 'string') return null;
+
+  try {
+    const resolved = new URL(value, window.location.origin);
+    if (resolved.origin !== window.location.origin) {
+      return null;
+    }
+    const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
+    if (!path.startsWith('/admin')) {
+      return null;
+    }
+    if (resolved.pathname === '/admin/login') {
+      return null;
+    }
+    return path;
+  } catch {
+    return null;
+  }
+};
+
 export default function AdminLoginPage() {
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/admin';
+  const callbackUrl = useMemo(
+    () => searchParams.get('callbackUrl') || '/admin',
+    [searchParams],
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const checkSession = async () => {
+      try {
+        const session = await getSession();
+        if (!active || !session?.user) return;
+        if (typeof window === 'undefined') return;
+
+        const safeCallback = normalizeAdminPath(callbackUrl);
+        const safeLastVisited = normalizeAdminPath(
+          window.localStorage.getItem(adminLastVisitedPathStorageKey) || '',
+        );
+        const target = safeCallback || safeLastVisited || '/admin';
+
+        setRedirecting(true);
+        window.location.assign(target);
+      } finally {
+        if (active) {
+          setCheckingSession(false);
+        }
+      }
+    };
+
+    checkSession();
+    return () => {
+      active = false;
+    };
+  }, [callbackUrl]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setSubmitting(true);
     setError('');
 
+    const safeCallback = normalizeAdminPath(callbackUrl) || '/admin';
+
     const result = await signIn('credentials', {
       email,
       password,
       redirect: false,
-      callbackUrl,
+      callbackUrl: safeCallback,
     });
 
     setSubmitting(false);
@@ -33,8 +93,10 @@ export default function AdminLoginPage() {
       return;
     }
 
-    window.location.assign(result.url || callbackUrl);
+    window.location.assign(normalizeAdminPath(result.url || '') || safeCallback);
   };
+
+  const disableInputs = submitting || redirecting || checkingSession;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12 text-slate-100">
@@ -49,7 +111,7 @@ export default function AdminLoginPage() {
             value={email}
             placeholder="Email"
             autoComplete="email"
-            disabled={submitting}
+            disabled={disableInputs}
             onChange={(event) => setEmail(event.target.value)}
           />
           <Input
@@ -57,12 +119,12 @@ export default function AdminLoginPage() {
             value={password}
             placeholder="Password"
             autoComplete="current-password"
-            disabled={submitting}
+            disabled={disableInputs}
             onChange={(event) => setPassword(event.target.value)}
           />
           {error ? <p className="text-sm text-rose-400">{error}</p> : null}
-          <Button type="submit" className="w-full" disabled={submitting}>
-            {submitting ? 'Signing in...' : 'Sign in'}
+          <Button type="submit" className="w-full" disabled={disableInputs}>
+            {redirecting ? 'Redirecting...' : submitting ? 'Signing in...' : checkingSession ? 'Checking session...' : 'Sign in'}
           </Button>
         </form>
 

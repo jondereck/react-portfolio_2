@@ -29,7 +29,7 @@ const pageTitles = {
   '/admin/users': 'User Management',
 };
 
-export default function AdminTopbar({ onLogout }) {
+export default function AdminTopbar({ onLogout, isLoggingOut = false }) {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -70,9 +70,10 @@ export default function AdminTopbar({ onLogout }) {
               <button
                 type="button"
                 onClick={onLogout}
-                className="h-9 rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                disabled={isLoggingOut}
+                className="h-9 rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100"
               >
-                Logout
+                {isLoggingOut ? 'Logging out...' : 'Logout'}
               </button>
             </div>
           </div>
@@ -95,9 +96,10 @@ export default function AdminTopbar({ onLogout }) {
             <button
               type="button"
               onClick={onLogout}
-              className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium transition hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+              disabled={isLoggingOut}
+              className="h-10 rounded-md border border-slate-300 px-4 text-sm font-medium transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
             >
-              Logout
+              {isLoggingOut ? 'Logging out...' : 'Logout'}
             </button>
           </div>
         </div>

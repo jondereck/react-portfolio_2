@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
@@ -15,6 +16,7 @@ export default function AdminAccountClient() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [feedback, setFeedback] = useState('');
   const [account, setAccount] = useState(null);
+  const [sessionPolicy, setSessionPolicy] = useState({ sessionTtlHours: null });
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -35,6 +37,12 @@ export default function AdminAccountClient() {
         const payload = await response.json().catch(() => ({}));
 
         setAccount(payload.account);
+        setSessionPolicy({
+          sessionTtlHours:
+            Number.isFinite(Number(payload.sessionPolicy?.sessionTtlHours))
+              ? Number(payload.sessionPolicy.sessionTtlHours)
+              : null,
+        });
         setForm((current) => ({
           ...current,
           name: payload.account?.name || '',
@@ -54,6 +62,18 @@ export default function AdminAccountClient() {
   const updateField = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
     setFieldErrors((current) => clearFieldErrors(current, field));
+  };
+  const formatTtl = (hours) => {
+    if (!Number.isFinite(hours) || hours <= 0) return 'Not configured';
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+    if (days > 0 && remainingHours > 0) {
+      return `${days} day${days === 1 ? '' : 's'} ${remainingHours} hour${remainingHours === 1 ? '' : 's'}`;
+    }
+    if (days > 0) {
+      return `${days} day${days === 1 ? '' : 's'}`;
+    }
+    return `${hours} hour${hours === 1 ? '' : 's'}`;
   };
 
   const handleSubmit = async (event) => {
@@ -132,6 +152,21 @@ export default function AdminAccountClient() {
                   {account.profile?.slug || 'No profile'}
                 </p>
               </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+              <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Session security</p>
+              <p className="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">
+                Session duration: {formatTtl(sessionPolicy.sessionTtlHours)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                This is managed globally in security settings.
+              </p>
+              <Link
+                href="/admin/settings#security"
+                className="mt-3 inline-flex h-9 items-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Open Security Settings
+              </Link>
             </div>
 
             <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
