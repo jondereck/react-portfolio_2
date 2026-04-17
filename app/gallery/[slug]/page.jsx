@@ -6,8 +6,10 @@ import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { downloadFromApi } from "@/lib/download-client";
 import {
+  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   Pause,
   Play,
   Repeat2,
@@ -173,6 +175,7 @@ const findPrevIndexByType = (startIndex, photos, matcher, options = {}) => {
 };
 
 const viewerModeStorageKey = "galleryViewerMode";
+const splitMobileSwapStorageKey = "gallerySplitMobileSwapped";
 const splitPanelTransitionMs = 260;
 
 const SplitPanelMediaSurface = ({
@@ -189,6 +192,8 @@ const SplitPanelMediaSurface = ({
   onMediaSuccess,
   onMediaError,
   hasError,
+  onForegroundVideoReady,
+  className = "",
 }) => {
   const [layers, setLayers] = useState(() =>
     item && media?.key
@@ -263,7 +268,7 @@ const SplitPanelMediaSurface = ({
 
   return (
     <div
-      className={`relative min-h-0 h-full overflow-hidden ${
+      className={`relative min-h-0 h-full overflow-hidden ${className} ${
         hideUI
           ? "rounded-none border border-transparent bg-black"
           : "rounded-lg border border-white/10 bg-black/70"
@@ -313,11 +318,25 @@ const SplitPanelMediaSurface = ({
                   onLoadedMetadata={() => {
                     onMediaSuccess(layerItem);
                   }}
-                  onLoadedData={() => {
+                  onLoadedData={(event) => {
                     onMediaSuccess(layerItem);
+                    if (isForeground) {
+                      onForegroundVideoReady?.(
+                        event.currentTarget,
+                        "onLoadedData",
+                        layerItem,
+                      );
+                    }
                   }}
-                  onCanPlay={() => {
+                  onCanPlay={(event) => {
                     onMediaSuccess(layerItem);
+                    if (isForeground) {
+                      onForegroundVideoReady?.(
+                        event.currentTarget,
+                        "onCanPlay",
+                        layerItem,
+                      );
+                    }
                   }}
                   onEnded={isForeground ? onEnded : undefined}
                   onError={(event) => {
@@ -403,6 +422,17 @@ export default function AlbumDetailPage({ params }) {
     return ["focus", "slideshow", "split"].includes(savedMode) ? savedMode : "focus";
   };
   const [viewerMode, setViewerMode] = useState(getInitialViewerMode);
+  const getInitialSplitMobileSwapped = () => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return (
+      window.localStorage.getItem(splitMobileSwapStorageKey) === "true"
+    );
+  };
+  const [isSplitMobileSwapped, setIsSplitMobileSwapped] = useState(
+    getInitialSplitMobileSwapped,
+  );
   const [splitPanels, setSplitPanels] = useState({
     left: { ...splitPanelSettingsDefaults },
     right: { ...splitPanelRightDefaults },
@@ -447,6 +477,14 @@ export default function AlbumDetailPage({ params }) {
     if (typeof window === "undefined") return;
     window.localStorage.setItem(viewerModeStorageKey, viewerMode);
   }, [viewerMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(
+      splitMobileSwapStorageKey,
+      String(isSplitMobileSwapped),
+    );
+  }, [isSplitMobileSwapped]);
 
   useEffect(() => {
     if (!slug) {
@@ -1015,9 +1053,9 @@ export default function AlbumDetailPage({ params }) {
 
   useEffect(() => {
     if (!viewerOpen || viewerMode !== "split") return undefined;
-    const leftPlayer = splitLeftVideoRef.current;
-    const rightPlayer = splitRightVideoRef.current;
     return () => {
+      const leftPlayer = splitLeftVideoRef.current;
+      const rightPlayer = splitRightVideoRef.current;
       if (leftPlayer) {
         leftPlayer.pause();
       }
@@ -1025,7 +1063,7 @@ export default function AlbumDetailPage({ params }) {
         rightPlayer.pause();
       }
     };
-  }, [viewerOpen, viewerMode, leftSplitItem?.id, rightSplitItem?.id]);
+  }, [viewerOpen, viewerMode]);
 
   useEffect(() => {
     if (
@@ -1367,7 +1405,7 @@ export default function AlbumDetailPage({ params }) {
             onClick={(event) => event.stopPropagation()}
           >
             <div
-              className={`mb-3 flex items-center justify-between gap-3 text-sm text-slate-200 transition-all duration-300 ${
+              className={`mb-3 hidden items-center justify-between gap-3 text-sm text-slate-200 transition-all duration-300 sm:flex ${
                 hideUI
                   ? "pointer-events-none mb-0 h-0 overflow-hidden opacity-0"
                   : "opacity-100"
@@ -1429,6 +1467,11 @@ export default function AlbumDetailPage({ params }) {
                     panelId="left"
                     hideUI={hideUI}
                     label="Left Panel"
+                    className={
+                      isSplitMobileSwapped
+                        ? "order-2 lg:order-1"
+                        : "order-1"
+                    }
                     item={leftSplitItem}
                     media={leftSplitMedia}
                     assignVideoRef={splitLeftVideoRef}
@@ -1460,11 +1503,20 @@ export default function AlbumDetailPage({ params }) {
                     panelId="right"
                     hideUI={hideUI}
                     label="Right Panel"
+                    className={
+                      isSplitMobileSwapped
+                        ? "order-1 lg:order-2"
+                        : "order-2"
+                    }
                     item={rightSplitItem}
                     media={rightSplitMedia}
                     assignVideoRef={splitRightVideoRef}
                     muted={Boolean(rightSplitPanel?.isMuted)}
                     autoPlay={Boolean(rightSplitPanel?.isPlaying)}
+                    onForegroundVideoReady={(player) => {
+                      if (!rightSplitPanel?.isPlaying) return;
+                      player?.play().catch(() => {});
+                    }}
                     onEnded={(event) => {
                       if (!rightSplitPanel?.isPlaying) {
                         return;
@@ -1580,6 +1632,21 @@ export default function AlbumDetailPage({ params }) {
                       className="rounded-full border border-white/25 p-2 text-white transition hover:bg-white/15"
                     >
                       <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setIsSplitMobileSwapped((current) => !current)
+                      }
+                      aria-label="Swap split layout"
+                      aria-pressed={isSplitMobileSwapped}
+                      className={`rounded-full border p-2 transition md:hidden ${
+                        isSplitMobileSwapped
+                          ? "border-emerald-300/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
+                          : "border-white/25 text-white hover:bg-white/15"
+                      }`}
+                    >
+                      <ArrowUpDown className="h-3.5 w-3.5" />
                     </button>
                     <button
                       type="button"
@@ -2090,6 +2157,49 @@ export default function AlbumDetailPage({ params }) {
                   </div>
                 </div>
               )
+            ) : null}
+            {!hideUI ? (
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-white/15 bg-black/35 p-2 text-sm text-slate-200 sm:hidden">
+                <p className="min-w-0 truncate">
+                  {activeItemIsVideo
+                    ? activeItem.caption || "Untitled media"
+                    : `${activeIndex + 1} / ${filteredPhotos.length} · ${activeItem.caption || "Untitled media"}`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleDownloadMedia(activeItem);
+                    }}
+                    disabled={downloadingPhotoId === activeItem.id}
+                    aria-label="Download media"
+                    title="Download media"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/25 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleHideUI();
+                    }}
+                    aria-label="Hide viewer interface"
+                    title="Hide UI / Fullscreen"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/25 text-sm text-white transition hover:bg-white/10"
+                  >
+                    ⛶
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeViewer}
+                    aria-label="Close viewer"
+                    title="Close"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/25 text-base text-white transition hover:bg-white/10"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
             ) : null}
           </div>
         </div>
