@@ -56,6 +56,7 @@ export default function GalleryMediaViewer({ open, photo, onClose }) {
                     {photo ? (
                       <MediaPreview
                         url={photo.imageUrl}
+                        mimeType={photo.mimeType}
                         sourceType={photo.sourceType}
                         sourceId={photo.sourceId}
                         alt={title}

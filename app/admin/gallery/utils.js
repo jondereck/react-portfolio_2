@@ -1,27 +1,9 @@
-export const isVideoUrl = (value) => {
-  if (!value || typeof value !== 'string') return false;
-  const normalized = value.toLowerCase();
-  return (
-    normalized.includes('/video/upload/') ||
-    normalized.endsWith('.mp4') ||
-    normalized.endsWith('.mov') ||
-    normalized.endsWith('.webm') ||
-    normalized.endsWith('.mkv')
-  );
-};
-
-export const getPlayableMediaUrl = (value) => {
-  if (!value || typeof value !== 'string') return value;
-  if (!isVideoUrl(value)) return value;
-  if (!value.includes('res.cloudinary.com') || !value.includes('/video/upload/')) return value;
-
-  const [withoutQuery, query] = value.split('?');
-  const transformed = withoutQuery
-    .replace('/video/upload/', '/video/upload/f_mp4,vc_h264,ac_aac,q_auto/')
-    .replace(/\.(mov|mkv|webm)$/i, '.mp4');
-
-  return query ? `${transformed}?${query}` : transformed;
-};
+export {
+  getPlayableMediaUrl,
+  getVideoPosterUrl,
+  isPhotoVideo,
+  isVideoUrl,
+} from '@/lib/gallery-media';
 
 export const getAdminMediaUrl = (photoOrUrl, sourceTypeArg, sourceIdArg) => {
   if (photoOrUrl && typeof photoOrUrl === 'object') {

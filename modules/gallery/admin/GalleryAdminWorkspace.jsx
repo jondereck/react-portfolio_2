@@ -4,7 +4,6 @@ import { useEffect, useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import GalleryAlbumsPanel from '@/modules/gallery/admin/GalleryAlbumsPanel';
 import GalleryArrangePanel from '@/modules/gallery/admin/GalleryArrangePanel';
-import GalleryImportPanel from '@/modules/gallery/admin/GalleryImportPanel';
 import GalleryMediaPanel from '@/modules/gallery/admin/GalleryMediaPanel';
 import GalleryMobileWorkspaceNav from '@/modules/gallery/admin/GalleryMobileWorkspaceNav';
 import GallerySettingsPanel from '@/modules/gallery/admin/GallerySettingsPanel';
@@ -22,7 +21,7 @@ const workspaceTabCards = [
   {
     id: 'media',
     label: 'Media',
-    description: 'Upload files into the selected album with drag-and-drop support.',
+    description: 'Upload files and import Google Drive media into the selected album.',
     accent: 'sky',
   },
   {
@@ -30,12 +29,6 @@ const workspaceTabCards = [
     label: 'Arrange',
     description: 'Reorder items, batch move selections, and save manual sequencing.',
     accent: 'amber',
-  },
-  {
-    id: 'import',
-    label: 'Import',
-    description: 'Pull media from Google Drive with duplicate-aware import handling.',
-    accent: 'rose',
   },
   {
     id: 'settings',
@@ -119,8 +112,6 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       <GalleryMediaPanel {...sharedProps} />
     ) : activeTab === 'arrange' ? (
       <GalleryArrangePanel {...sharedProps} />
-    ) : activeTab === 'import' ? (
-      <GalleryImportPanel {...sharedProps} />
     ) : activeTab === 'settings' ? (
       <GallerySettingsPanel {...sharedProps} />
     ) : (
@@ -132,7 +123,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       <GalleryPageHeader
         eyebrow="Advanced Workspace"
         title="Gallery Workspace"
-        description={`Work across albums, media, arrange, import, and settings from one route. Current section: ${activeTabLabel}.`}
+        description={`Work across albums, media, arrange, and settings from one route. Current section: ${activeTabLabel}.`}
       />
 
       <GalleryMobileWorkspaceNav

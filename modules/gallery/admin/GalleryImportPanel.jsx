@@ -425,10 +425,7 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
             </GalleryPanelCard>
 
             <GalleryPanelCard title="Duplicate handling" description="Google Drive imports skip duplicates automatically before new records are created.">
-              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-                Duplicates are matched by Google Drive source ID inside the selected album. Preview: importing up to{' '}
-                {Number(driveForm.limit) || 50} items from folder {folderPreview}.
-              </p>
+   
             </GalleryPanelCard>
           </div>
         ) : (

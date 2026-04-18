@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
+import { getVideoPosterUrl, isPhotoVideo } from '@/lib/gallery-media';
 import { useLoadingStore } from '@/store/loading';
 
 const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
@@ -24,31 +25,6 @@ const joinClassNames = (...values) => values.filter(Boolean).join(' ');
 
 const normalizeGalleryView = (value) => (value === 'compact' ? 'compact' : 'cinematic');
 
-const isVideoUrl = (value) => {
-  if (!value || typeof value !== 'string') return false;
-  const normalized = value.toLowerCase();
-  return (
-    normalized.includes('/video/upload/') ||
-    normalized.endsWith('.mp4') ||
-    normalized.endsWith('.mov') ||
-    normalized.endsWith('.webm') ||
-    normalized.endsWith('.mkv')
-  );
-};
-
-const getVideoPosterUrl = (value) => {
-  if (!isVideoUrl(value) || !value.includes('res.cloudinary.com') || !value.includes('/video/upload/')) {
-    return '';
-  }
-
-  const [withoutQuery, query] = value.split('?');
-  const posterBase = withoutQuery
-    .replace('/video/upload/', '/video/upload/so_0,f_jpg,q_auto/')
-    .replace(/\.(mp4|mov|webm|mkv)$/i, '.jpg');
-
-  return query ? `${posterBase}?${query}` : posterBase;
-};
-
 const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
   const posterSrc = getVideoPosterUrl(src);
   if (!posterSrc) {
@@ -63,7 +39,7 @@ const AlbumCover = ({ src, alt, className, fallbackClassName }) => {
     return <div className={fallbackClassName} />;
   }
 
-  if (isVideoUrl(src)) {
+  if (isPhotoVideo({ imageUrl: src })) {
     return <VideoPoster src={src} alt={alt} className={className} fallbackClassName={fallbackClassName} />;
   }
 
@@ -133,7 +109,7 @@ const attachAlbumMediaCounts = async (albums) => {
       try {
         const payload = await fetchJson(`/api/gallery/albums/${album.id}/photos?sort=custom`);
         const mediaItems = normalizeAlbumPhotosPayload(payload);
-        const videos = mediaItems.reduce((total, item) => (isVideoUrl(item?.imageUrl) ? total + 1 : total), 0);
+        const videos = mediaItems.reduce((total, item) => (isPhotoVideo(item) ? total + 1 : total), 0);
 
         return {
           ...album,
@@ -170,7 +146,7 @@ const getAlbumMediaCounts = (album) => {
     };
   }
 
-  const videos = mediaItems.reduce((total, item) => (isVideoUrl(item?.imageUrl) ? total + 1 : total), 0);
+  const videos = mediaItems.reduce((total, item) => (isPhotoVideo(item) ? total + 1 : total), 0);
   return {
     photos: Math.max(mediaItems.length - videos, 0),
     videos,

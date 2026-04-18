@@ -76,7 +76,7 @@ export function useGalleryAdminController() {
     folderId: '',
     folderName: '',
     breadcrumbs: [],
-    imageCount: null,
+    mediaCount: null,
     limit: 50,
   });
   const [importingDrive, setImportingDrive] = useState(false);
@@ -479,13 +479,16 @@ export function useGalleryAdminController() {
     }
 
     setImportingDrive(true);
-    const expectedTotal = Math.max(1, Number(driveForm.limit) || 50);
+    const limitValue = Math.max(1, Number(driveForm.limit) || 50);
+    const expectedTotal = typeof driveForm.mediaCount === 'number'
+      ? Math.min(Math.max(0, driveForm.mediaCount), limitValue)
+      : limitValue;
     const importTargetName =
       driveForm.folderName?.trim() || driveForm.folderId?.trim() || 'Google Drive folder';
     setImportProgress({
       percent: 3,
       currentFileName: importTargetName,
-      currentFileIndex: 1,
+      currentFileIndex: expectedTotal > 0 ? 1 : 0,
       totalFiles: expectedTotal,
       uploadedCount: 0,
       skippedCount: 0,
@@ -520,9 +523,9 @@ export function useGalleryAdminController() {
       const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/import/google-drive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+          body: JSON.stringify({
           folderId: driveForm.folderId,
-          limit: Number(driveForm.limit) || 50,
+          limit: limitValue,
         }),
       });
 
@@ -549,7 +552,7 @@ export function useGalleryAdminController() {
       });
 
       setImportSummary({
-        totalFiles: importedCount + skippedCount,
+        totalFiles: totalItems,
         uploadedCount: importedCount,
         skippedCount,
         failedCount: 0,

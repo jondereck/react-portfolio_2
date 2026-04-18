@@ -2,7 +2,6 @@ export const galleryWorkspaceTabs = [
   { id: 'albums', label: 'Albums' },
   { id: 'media', label: 'Media' },
   { id: 'arrange', label: 'Arrange' },
-  { id: 'import', label: 'Import' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -10,6 +9,7 @@ const galleryWorkspaceLegacyTabs = {
   photos: 'media',
   details: 'settings',
   manage: 'albums',
+  import: 'media',
 };
 
 export function normalizeGalleryWorkspaceTab(value) {

@@ -1,6 +1,5 @@
 import {
   ArrowUpDown,
-  CloudDownload,
   FolderOpen,
   Images,
   Settings2,
@@ -23,7 +22,7 @@ const galleryOverviewCards = [
   },
   {
     title: 'Manage Media',
-    description: 'Open the media intake page to upload files and add remote media URLs.',
+    description: 'Open the media intake page to upload files and import Google Drive media into the selected album.',
     href: buildGalleryRouteHref('media'),
     icon: Images,
     badge: 'Intake',
@@ -36,14 +35,6 @@ const galleryOverviewCards = [
     icon: ArrowUpDown,
     badge: 'Order',
     accent: 'amber',
-  },
-  {
-    title: 'Import Media',
-    description: 'Open the import-only page for Google Drive folder imports and duplicate handling.',
-    href: buildGalleryRouteHref('import'),
-    icon: CloudDownload,
-    badge: 'Import',
-    accent: 'rose',
   },
   {
     title: 'Gallery Settings',

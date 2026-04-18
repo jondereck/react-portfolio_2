@@ -24,6 +24,32 @@ export default function GalleryDriveFolderPicker({
 }) {
   const [browseState, setBrowseState] = useState(emptyBrowseState);
 
+  const selectFolder = async (folder) => {
+    try {
+      const params = new URLSearchParams({
+        parentId: folder.id,
+        previewPageSize: '8',
+      });
+      const payload = await fetchJson(`/api/admin/integrations/google-drive/folders?${params.toString()}`);
+      const currentFolder = payload?.currentFolder ?? null;
+
+      onSelectFolder({
+        id: folder.id,
+        name: folder.name,
+        breadcrumbs: Array.isArray(payload?.breadcrumbs)
+          ? payload.breadcrumbs
+          : [...browseState.breadcrumbs, { id: folder.id, name: folder.name }],
+        mediaCount: typeof currentFolder?.mediaCount === 'number' ? currentFolder.mediaCount : null,
+      });
+      onClose();
+    } catch (error) {
+      setBrowseState((current) => ({
+        ...current,
+        error: error instanceof Error ? error.message : 'Unable to load folder details.',
+      }));
+    }
+  };
+
   const loadFolders = async (parentId = null, options = {}) => {
     const { appendFiles = false, previewPageToken = null, previewPageSize = 8 } = options;
 
@@ -291,13 +317,7 @@ export default function GalleryDriveFolderPicker({
                                       type="button"
                                       className={buttonStyles}
                                       onClick={() => {
-                                        onSelectFolder({
-                                          id: folder.id,
-                                          name: folder.name,
-                                          breadcrumbs: [...browseState.breadcrumbs, { id: folder.id, name: folder.name }],
-                                          imageCount: folder.imageCount,
-                                        });
-                                        onClose();
+                                        void selectFolder(folder);
                                       }}
                                     >
                                       {isSelected ? 'Selected' : 'Select'}

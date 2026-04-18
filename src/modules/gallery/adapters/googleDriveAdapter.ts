@@ -12,7 +12,7 @@ export type GoogleDriveFolderEntry = {
   id: string;
   name: string;
   parentId: string | null;
-  imageCount: number | null;
+  mediaCount: number | null;
 };
 
 export type GoogleDriveFolderContext = {
@@ -145,7 +145,7 @@ export class GoogleDriveAdapter {
       id: folder.id,
       name: folder.name || 'Untitled folder',
       parentId: Array.isArray(folder.parents) && folder.parents.length > 0 ? folder.parents[0] : null,
-      imageCount: null,
+      mediaCount: null,
     };
   }
 
@@ -169,8 +169,33 @@ export class GoogleDriveAdapter {
         id: file.id,
         name: file.name || 'Untitled folder',
         parentId: Array.isArray(file.parents) && file.parents.length > 0 ? file.parents[0] : null,
-        imageCount: null,
+        mediaCount: null,
       }));
+  }
+
+  async getFolderMediaCount(args: { accessToken: string; folderId: string }): Promise<number> {
+    let total = 0;
+    let pageToken: string | null = null;
+
+    do {
+      const params = new URLSearchParams({
+        q: `'${args.folderId}' in parents and trashed = false and (mimeType contains 'image/' or mimeType contains 'video/')`,
+        pageSize: '1000',
+        fields: 'files(id),nextPageToken',
+        supportsAllDrives: 'true',
+        includeItemsFromAllDrives: 'true',
+      });
+
+      if (pageToken) {
+        params.set('pageToken', pageToken);
+      }
+
+      const data = await this.fetchFilesList({ accessToken: args.accessToken, params });
+      total += Array.isArray(data.files) ? data.files.length : 0;
+      pageToken = data.nextPageToken || null;
+    } while (pageToken);
+
+    return total;
   }
 
   async listFolderPreviewFiles(args: {
@@ -237,6 +262,15 @@ export class GoogleDriveAdapter {
 
       currentFolder = chain[chain.length - 1] ?? null;
       breadcrumbs.push(...chain.map((folder) => ({ id: folder.id, name: folder.name })));
+      if (currentFolder) {
+        currentFolder = {
+          ...currentFolder,
+          mediaCount: await this.getFolderMediaCount({
+            accessToken: args.accessToken,
+            folderId: currentFolder.id,
+          }),
+        };
+      }
     }
 
     const folders = await this.listFolders({

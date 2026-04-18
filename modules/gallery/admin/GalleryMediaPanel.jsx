@@ -13,6 +13,7 @@ import {
   GalleryPanelCard,
 } from './galleryAdminShared';
 import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
+import GalleryDriveImportSection from './GalleryDriveImportSection';
 import GalleryUploadDropzone from './GalleryUploadDropzone';
 
 export default function GalleryMediaPanel({ controller, embedded = false }) {
@@ -106,16 +107,30 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
               title={`Intake for ${selectedAlbum.name}`}
               description="This page stays scoped to media ingestion only."
             >
-              <GalleryUploadDropzone
-                uploading={uploadingFiles}
-                uploadProgress={uploadProgress}
-                uploadSummary={uploadSummary}
-                onUploadFiles={uploadFiles}
-                title="Upload media"
-                description="Drag and drop images or videos here, or choose files from your device."
-                helpText="Batch uploads go straight into the selected album."
-                uploadLabel="Choose files"
-              />
+              <div className="space-y-6">
+                <GalleryUploadDropzone
+                  uploading={uploadingFiles}
+                  uploadProgress={uploadProgress}
+                  uploadSummary={uploadSummary}
+                  onUploadFiles={uploadFiles}
+                  title="Upload media"
+                  description="Drag and drop images or videos here, or choose files from your device."
+                  helpText="Batch uploads go straight into the selected album."
+                  uploadLabel="Choose files"
+                />
+
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                  <div className="mb-4 space-y-1">
+                    <h3 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                      Import from Google Drive
+                    </h3>
+                    <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
+                      Connect Drive, select one folder, and import its images and videos into the current album.
+                    </p>
+                  </div>
+                  <GalleryDriveImportSection controller={controller} selectedAlbum={selectedAlbum} />
+                </div>
+              </div>
             </GalleryPanelCard>
 
             <GalleryPanelCard
@@ -174,6 +189,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                         <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                           <MediaPreview
                             url={photo.imageUrl}
+                            mimeType={photo.mimeType}
                             sourceType={photo.sourceType}
                             sourceId={photo.sourceId}
                             alt={photo.caption || `Media ${photo.id}`}

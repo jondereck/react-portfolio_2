@@ -2,18 +2,24 @@
 'use client';
 
 import { getAdminMediaUrl, getPlayableMediaUrl, isVideoUrl } from '../utils';
+import { isPhotoVideo } from '@/lib/gallery-media';
 
 export default function MediaPreview({
   url,
   alt,
   className = 'h-full w-full object-cover',
   controls = false,
+  mimeType,
   sourceType,
   sourceId,
 }) {
   const resolvedUrl = getAdminMediaUrl(url, sourceType, sourceId);
+  const mediaRecord =
+    url && typeof url === 'object'
+      ? url
+      : { imageUrl: resolvedUrl, mimeType, sourceType, sourceId };
 
-  if (isVideoUrl(resolvedUrl)) {
+  if (isPhotoVideo(mediaRecord, resolvedUrl) || isVideoUrl(resolvedUrl)) {
     return (
       <video
         src={getPlayableMediaUrl(resolvedUrl)}

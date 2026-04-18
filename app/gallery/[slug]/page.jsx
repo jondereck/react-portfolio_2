@@ -7,6 +7,11 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { downloadFromApi } from "@/lib/download-client";
 import {
+  getPlayableMediaUrl,
+  getVideoPosterUrl,
+  isPhotoVideo,
+} from "@/lib/gallery-media";
+import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
@@ -33,64 +38,6 @@ const formatDate = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString();
-};
-
-const isVideoUrl = (value) => {
-  if (!value || typeof value !== "string") return false;
-  const normalized = value.toLowerCase();
-  return (
-    normalized.includes("/video/upload/") ||
-    normalized.endsWith(".mp4") ||
-    normalized.endsWith(".mov") ||
-    normalized.endsWith(".webm") ||
-    normalized.endsWith(".mkv")
-  );
-};
-
-const getPlayableMediaUrl = (value) => {
-  if (!value || typeof value !== "string") return value;
-  if (!isVideoUrl(value)) return value;
-  if (
-    !value.includes("res.cloudinary.com") ||
-    !value.includes("/video/upload/")
-  )
-    return value;
-
-  const [withoutQuery, query] = value.split("?");
-  const uploadToken = "/video/upload/";
-  const uploadIndex = withoutQuery.indexOf(uploadToken);
-  const afterUpload =
-    uploadIndex >= 0
-      ? withoutQuery.slice(uploadIndex + uploadToken.length)
-      : "";
-  const firstPathSegment = afterUpload.split("/")[0] || "";
-  const hasTransformationSegment = firstPathSegment.includes(",");
-  const transformedBase = hasTransformationSegment
-    ? withoutQuery
-    : withoutQuery.replace(
-        uploadToken,
-        `${uploadToken}f_mp4,vc_h264,ac_aac,q_auto/`,
-      );
-  const transformed = transformedBase.replace(/\.(mov|mkv|webm)$/i, ".mp4");
-
-  return query ? `${transformed}?${query}` : transformed;
-};
-
-const getVideoPosterUrl = (value) => {
-  if (
-    !isVideoUrl(value) ||
-    !value.includes("res.cloudinary.com") ||
-    !value.includes("/video/upload/")
-  ) {
-    return "";
-  }
-
-  const [withoutQuery, query] = value.split("?");
-  const posterBase = withoutQuery
-    .replace("/video/upload/", "/video/upload/so_0,f_jpg,q_auto/")
-    .replace(/\.(mp4|mov|webm|mkv)$/i, ".jpg");
-
-  return query ? `${posterBase}?${query}` : posterBase;
 };
 
 const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
@@ -164,8 +111,8 @@ const getSplitPanelFilter = (panelId) =>
 
 const mediaMatchesFilter = (item, filter) => {
   if (!item) return false;
-  if (filter === "photos") return !isVideoUrl(item.imageUrl);
-  if (filter === "videos") return isVideoUrl(item.imageUrl);
+  if (filter === "photos") return !isPhotoVideo(item);
+  if (filter === "videos") return isPhotoVideo(item);
   return true;
 };
 
@@ -270,6 +217,10 @@ const SplitPanelMediaSurface = ({
   hasError,
   onForegroundVideoReady,
   className = "",
+  zoomScale = 1,
+  onPinchStart,
+  onPinchMove,
+  onPinchEnd,
 }) => {
   const [layers, setLayers] = useState(() =>
     item && media?.key
@@ -349,6 +300,10 @@ const SplitPanelMediaSurface = ({
           ? "rounded-none border border-transparent bg-black"
           : "rounded-lg border border-white/10 bg-black/70"
       }`}
+      onTouchStart={onPinchStart}
+      onTouchMove={onPinchMove}
+      onTouchEnd={onPinchEnd}
+      onTouchCancel={onPinchEnd}
     >
       {!hideUI ? (
         <span className="absolute left-2 top-2 z-20 rounded-full border border-white/20 bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
@@ -378,74 +333,83 @@ const SplitPanelMediaSurface = ({
                 isForeground ? "z-10" : "z-0 pointer-events-none"
               } ${transitionClass}`}
             >
-              {layerIsVideo ? (
-                <video
-                  ref={isForeground ? assignVideoRef : undefined}
-                  className="h-full w-full object-contain"
-                  controls={controls && isForeground}
-                  autoPlay={autoPlay && isForeground}
-                  muted={isForeground ? muted : true}
-                  playsInline
-                  preload="metadata"
-                  poster={
-                    getVideoPosterUrl(layerItem?.imageUrl) || undefined
-                  }
-                  crossOrigin="anonymous"
-                  onLoadedMetadata={() => {
-                    onMediaSuccess(layerItem);
-                  }}
-                  onLoadedData={(event) => {
-                    onMediaSuccess(layerItem);
-                    if (isForeground) {
-                      onForegroundVideoReady?.(
-                        event.currentTarget,
-                        "onLoadedData",
-                        layerItem,
-                      );
+              <div
+                className="h-full w-full"
+                style={{
+                  transform: zoomScale > 1 ? `scale(${zoomScale})` : "none",
+                  transformOrigin: "center",
+                  transition: "transform 120ms ease-out",
+                }}
+              >
+                {layerIsVideo ? (
+                  <video
+                    ref={isForeground ? assignVideoRef : undefined}
+                    className="h-full w-full object-contain"
+                    controls={controls && isForeground}
+                    autoPlay={autoPlay && isForeground}
+                    muted={isForeground ? muted : true}
+                    playsInline
+                    preload="metadata"
+                    poster={
+                      getVideoPosterUrl(layerItem?.imageUrl) || undefined
                     }
-                  }}
-                  onCanPlay={(event) => {
-                    onMediaSuccess(layerItem);
-                    if (isForeground) {
-                      onForegroundVideoReady?.(
-                        event.currentTarget,
-                        "onCanPlay",
+                    crossOrigin="anonymous"
+                    onLoadedMetadata={() => {
+                      onMediaSuccess(layerItem);
+                    }}
+                    onLoadedData={(event) => {
+                      onMediaSuccess(layerItem);
+                      if (isForeground) {
+                        onForegroundVideoReady?.(
+                          event.currentTarget,
+                          "onLoadedData",
+                          layerItem,
+                        );
+                      }
+                    }}
+                    onCanPlay={(event) => {
+                      onMediaSuccess(layerItem);
+                      if (isForeground) {
+                        onForegroundVideoReady?.(
+                          event.currentTarget,
+                          "onCanPlay",
+                          layerItem,
+                        );
+                      }
+                    }}
+                    onEnded={isForeground ? onEnded : undefined}
+                    onError={(event) => {
+                      onMediaError(
                         layerItem,
+                        "onError",
+                        event.currentTarget,
+                        layerMedia.playableSrc,
                       );
-                    }
-                  }}
-                  onEnded={isForeground ? onEnded : undefined}
-                  onError={(event) => {
-                    onMediaError(
-                      layerItem,
-                      "onError",
-                      event.currentTarget,
-                      layerMedia.playableSrc,
-                    );
-                  }}
-                >
-                  {layerMedia.sources.map((src) => (
-                    <source key={src} src={src} />
-                  ))}
-                </video>
-              ) : (
-                <img
-                  src={layerItem?.imageUrl}
-                  alt={layerItem?.caption || `Photo ${layerItem?.id}`}
-                  className="h-full w-full object-contain"
-                  onLoad={() => {
-                    onMediaSuccess(layerItem);
-                  }}
-                  onError={(event) => {
-                    onMediaError(
-                      layerItem,
-                      "onError",
-                      event.currentTarget,
-                      layerMedia.playableSrc,
-                    );
-                  }}
-                />
-              )}
+                    }}
+                  >
+                    {layerMedia.sources.map((src) => (
+                      <source key={src} src={src} />
+                    ))}
+                  </video>
+                ) : (
+                  <img
+                    src={layerItem?.imageUrl}
+                    alt={layerItem?.caption || `Photo ${layerItem?.id}`}
+                    className="h-full w-full object-contain"
+                    onLoad={() => {
+                      onMediaSuccess(layerItem);
+                    }}
+                    onError={(event) => {
+                      onMediaError(
+                        layerItem,
+                        "onError",
+                        event.currentTarget,
+                        layerMedia.playableSrc,
+                      );
+                    }}
+                  />
+                )}
+              </div>
 
               {!isVisible ? (
                 <div className="absolute inset-0 bg-black/20" />
@@ -525,6 +489,22 @@ export default function AlbumDetailPage({ params }) {
   const splitLeftVideoRef = useRef(null);
   const splitRightVideoRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0, active: false });
+  const zoomSurfaceRef = useRef(null);
+  const zoomGestureRef = useRef({
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    startOffsetX: 0,
+    startOffsetY: 0,
+    pinchDistance: 0,
+    pinchScale: 1,
+  });
+  const [imageZoom, setImageZoom] = useState({ scale: 1, x: 0, y: 0 });
+  const [splitZoom, setSplitZoom] = useState({ left: 1, right: 1 });
+  const splitPinchRef = useRef({
+    left: { distance: 0, scale: 1 },
+    right: { distance: 0, scale: 1 },
+  });
   const shareToken = searchParams?.get("share") || "";
 
   useEffect(() => {
@@ -628,10 +608,10 @@ export default function AlbumDetailPage({ params }) {
 
   const filteredPhotos = photos.filter((item) => {
     if (mediaFilter === "photos") {
-      return !isVideoUrl(item.imageUrl);
+      return !isPhotoVideo(item);
     }
     if (mediaFilter === "videos") {
-      return isVideoUrl(item.imageUrl);
+      return isPhotoVideo(item);
     }
     return true;
   });
@@ -827,10 +807,25 @@ export default function AlbumDetailPage({ params }) {
       document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, [viewerOpen, hideUI]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    if (!viewerOpen) return undefined;
+
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+
+    // Prevent background scroll while the viewer modal is open (especially during wheel zoom).
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [viewerOpen]);
+
   const activeItem = viewerOpen ? filteredPhotos[activeIndex] : null;
-  const activeItemIsVideo = activeItem
-    ? isVideoUrl(activeItem.imageUrl)
-    : false;
+  const activeItemIsVideo = activeItem ? isPhotoVideo(activeItem) : false;
   const activePlayableSrc = activeItemIsVideo
     ? getPlayableMediaUrl(activeItem?.imageUrl)
     : activeItem?.imageUrl || "";
@@ -843,6 +838,38 @@ export default function AlbumDetailPage({ params }) {
     ? `primary:${activeItem.id}:${activeItemIsVideo ? activeVideoSources.join("|") : activePlayableSrc}`
     : "";
   const isPresetDelay = timerPresetMs.includes(delayMs);
+  const clampZoomOffset = useCallback((value, axis, scale) => {
+    const container = zoomSurfaceRef.current;
+    const size =
+      axis === "x" ? container?.clientWidth || 0 : container?.clientHeight || 0;
+    if (!size || scale <= 1) return 0;
+    const maxOffset = ((scale - 1) * size) / 2;
+    return Math.max(-maxOffset, Math.min(maxOffset, value));
+  }, []);
+  const resetImageZoom = useCallback(() => {
+    zoomGestureRef.current = {
+      pointerId: null,
+      startX: 0,
+      startY: 0,
+      startOffsetX: 0,
+      startOffsetY: 0,
+      pinchDistance: 0,
+      pinchScale: 1,
+    };
+    setImageZoom({ scale: 1, x: 0, y: 0 });
+  }, []);
+  const updateImageZoom = useCallback((nextScale, nextX, nextY) => {
+    const clampedScale = Math.max(1, Math.min(4, nextScale));
+    if (clampedScale <= 1) {
+      setImageZoom({ scale: 1, x: 0, y: 0 });
+      return;
+    }
+    setImageZoom({
+      scale: clampedScale,
+      x: clampZoomOffset(nextX, "x", clampedScale),
+      y: clampZoomOffset(nextY, "y", clampedScale),
+    });
+  }, [clampZoomOffset]);
 
   const getPanelMediaKey = useCallback((panelId, item) => {
     if (!item) return `${panelId}:none`;
@@ -982,18 +1009,14 @@ export default function AlbumDetailPage({ params }) {
   const rightSplitPanel = splitResolved?.right || null;
   const leftSplitItem = leftSplitPanel?.item || null;
   const rightSplitItem = rightSplitPanel?.item || null;
-  const leftSplitIsVideo = leftSplitItem
-    ? isVideoUrl(leftSplitItem.imageUrl)
-    : false;
-  const rightSplitIsVideo = rightSplitItem
-    ? isVideoUrl(rightSplitItem.imageUrl)
-    : false;
+  const leftSplitIsVideo = leftSplitItem ? isPhotoVideo(leftSplitItem) : false;
+  const rightSplitIsVideo = rightSplitItem ? isPhotoVideo(rightSplitItem) : false;
   const showSplitMode =
     viewerMode === "split" && !!leftSplitItem && !!rightSplitItem;
 
   const getMediaSources = useCallback((item) => {
     if (!item) return { isVideo: false, playableSrc: "", sources: [], key: "" };
-    const isVideo = isVideoUrl(item.imageUrl);
+    const isVideo = isPhotoVideo(item);
     const playableSrc = isVideo
       ? getPlayableMediaUrl(item.imageUrl)
       : item.imageUrl;
@@ -1006,6 +1029,79 @@ export default function AlbumDetailPage({ params }) {
 
   const leftSplitMedia = getMediaSources(leftSplitItem);
   const rightSplitMedia = getMediaSources(rightSplitItem);
+
+  useEffect(() => {
+    resetImageZoom();
+  }, [resetImageZoom, viewerOpen, viewerMode, activeItem?.id, activeItemIsVideo]);
+
+  useEffect(() => {
+    // Reset split zoom whenever panel content changes or split mode toggles.
+    if (!viewerOpen || viewerMode !== "split") {
+      setSplitZoom({ left: 1, right: 1 });
+      splitPinchRef.current = {
+        left: { distance: 0, scale: 1 },
+        right: { distance: 0, scale: 1 },
+      };
+      return;
+    }
+    setSplitZoom({ left: 1, right: 1 });
+    splitPinchRef.current = {
+      left: { distance: 0, scale: 1 },
+      right: { distance: 0, scale: 1 },
+    };
+  }, [viewerOpen, viewerMode, leftSplitItem?.id, rightSplitItem?.id]);
+
+  const buildSplitPinchHandlers = useCallback(
+    (panelId) => {
+      const clampScale = (value) => Math.max(1, Math.min(3, value));
+      const getTouches = (event) => {
+        const touches = event.touches;
+        if (!touches || touches.length !== 2) return null;
+        return [touches[0], touches[1]];
+      };
+
+      return {
+        onPinchStart: (event) => {
+          const touches = getTouches(event);
+          if (!touches) return;
+          const [a, b] = touches;
+          const distance = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+          splitPinchRef.current[panelId] = {
+            distance,
+            scale: splitZoom[panelId] || 1,
+          };
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        onPinchMove: (event) => {
+          const touches = getTouches(event);
+          if (!touches) return;
+          const [a, b] = touches;
+          const distance = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+          const state = splitPinchRef.current[panelId];
+          if (!state?.distance) return;
+          const next = clampScale(state.scale * (distance / state.distance));
+          setSplitZoom((current) => ({ ...current, [panelId]: next }));
+          event.preventDefault();
+          event.stopPropagation();
+        },
+        onPinchEnd: (event) => {
+          if (event.touches?.length >= 2) return;
+          splitPinchRef.current[panelId] = { distance: 0, scale: splitZoom[panelId] || 1 };
+        },
+      };
+    },
+    [splitZoom],
+  );
+
+  const leftSplitPinchHandlers = useMemo(
+    () => buildSplitPinchHandlers("left"),
+    [buildSplitPinchHandlers],
+  );
+  const rightSplitPinchHandlers = useMemo(
+    () => buildSplitPinchHandlers("right"),
+    [buildSplitPinchHandlers],
+  );
 
   const moveSplitPanel = useCallback(
     (panelId, direction) => {
@@ -1061,7 +1157,7 @@ export default function AlbumDetailPage({ params }) {
       const nextVideoIndex = findNextIndexByType(
         current,
         filteredPhotos,
-        (item) => isVideoUrl(item?.imageUrl),
+        (item) => isPhotoVideo(item),
         { wrap: true },
       );
       return nextVideoIndex >= 0 ? nextVideoIndex : current;
@@ -1250,12 +1346,96 @@ export default function AlbumDetailPage({ params }) {
     goToPrev();
   };
 
+  const handleImageWheel = useCallback((event) => {
+    if (activeItemIsVideo || showSplitMode) return;
+    event.preventDefault();
+    const zoomDelta = event.deltaY < 0 ? 0.22 : -0.22;
+    updateImageZoom(imageZoom.scale + zoomDelta, imageZoom.x, imageZoom.y);
+  }, [
+    activeItemIsVideo,
+    imageZoom.scale,
+    imageZoom.x,
+    imageZoom.y,
+    showSplitMode,
+    updateImageZoom,
+  ]);
+
+  const handleImagePointerDown = useCallback((event) => {
+    if (imageZoom.scale <= 1) return;
+    zoomGestureRef.current = {
+      ...zoomGestureRef.current,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startOffsetX: imageZoom.x,
+      startOffsetY: imageZoom.y,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, [imageZoom.scale, imageZoom.x, imageZoom.y]);
+
+  const handleImagePointerMove = useCallback((event) => {
+    const gesture = zoomGestureRef.current;
+    if (gesture.pointerId !== event.pointerId || imageZoom.scale <= 1) return;
+    event.preventDefault();
+    updateImageZoom(
+      imageZoom.scale,
+      gesture.startOffsetX + (event.clientX - gesture.startX),
+      gesture.startOffsetY + (event.clientY - gesture.startY),
+    );
+  }, [imageZoom.scale, updateImageZoom]);
+
+  const handleImagePointerEnd = useCallback((event) => {
+    if (zoomGestureRef.current.pointerId !== event.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    zoomGestureRef.current.pointerId = null;
+  }, []);
+
+  const handleImageTouchStart = useCallback((event) => {
+    if (event.touches.length === 2) {
+      const [firstTouch, secondTouch] = event.touches;
+      zoomGestureRef.current.pinchDistance = Math.hypot(
+        secondTouch.clientX - firstTouch.clientX,
+        secondTouch.clientY - firstTouch.clientY,
+      );
+      zoomGestureRef.current.pinchScale = imageZoom.scale;
+      event.stopPropagation();
+    } else if (imageZoom.scale > 1) {
+      event.stopPropagation();
+    }
+  }, [imageZoom.scale]);
+
+  const handleImageTouchMove = useCallback((event) => {
+    if (event.touches.length !== 2) return;
+    const [firstTouch, secondTouch] = event.touches;
+    const distance = Math.hypot(
+      secondTouch.clientX - firstTouch.clientX,
+      secondTouch.clientY - firstTouch.clientY,
+    );
+    if (!zoomGestureRef.current.pinchDistance) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const nextScale =
+      zoomGestureRef.current.pinchScale *
+      (distance / zoomGestureRef.current.pinchDistance);
+    updateImageZoom(nextScale, imageZoom.x, imageZoom.y);
+  }, [imageZoom.x, imageZoom.y, updateImageZoom]);
+
+  const handleImageTouchEnd = useCallback((event) => {
+    if (event.touches.length < 2) {
+      zoomGestureRef.current.pinchDistance = 0;
+      zoomGestureRef.current.pinchScale = imageZoom.scale;
+    }
+    if (imageZoom.scale > 1) {
+      event.stopPropagation();
+    }
+  }, [imageZoom.scale]);
+
   const albumCover =
     album?.coverPhoto?.imageUrl ||
     (Array.isArray(photos) && photos.length > 0 ? photos[0].imageUrl : "");
-  const albumCoverIsVideo = isVideoUrl(albumCover);
+  const albumCoverIsVideo = isPhotoVideo(album?.coverPhoto, albumCover);
   const totalPhotos = photos.length;
-  const totalVideos = photos.filter((item) => isVideoUrl(item.imageUrl)).length;
+  const totalVideos = photos.filter((item) => isPhotoVideo(item)).length;
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.95),_rgba(2,6,23,1)_45%)] px-4 py-6 sm:px-6 md:py-10">
@@ -1458,7 +1638,7 @@ export default function AlbumDetailPage({ params }) {
               onClick={() => openViewerAt(index, { mode: "focus" })}
             >
               <div className="relative aspect-[4/3] overflow-hidden bg-slate-900">
-                {isVideoUrl(photo.imageUrl) ? (
+                {isPhotoVideo(photo) ? (
                   <VideoPoster
                     src={photo.imageUrl}
                     alt={photo.caption || `Video ${photo.id}`}
@@ -1473,7 +1653,7 @@ export default function AlbumDetailPage({ params }) {
                   />
                 )}
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 to-transparent" />
-                {isVideoUrl(photo.imageUrl) ? (
+                {isPhotoVideo(photo) ? (
                   <span className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.13em] text-white">
                     Video
                   </span>
@@ -1567,6 +1747,10 @@ export default function AlbumDetailPage({ params }) {
                     item={leftSplitItem}
                     media={leftSplitMedia}
                     assignVideoRef={splitLeftVideoRef}
+                    zoomScale={splitZoom.left}
+                    onPinchStart={leftSplitPinchHandlers.onPinchStart}
+                    onPinchMove={leftSplitPinchHandlers.onPinchMove}
+                    onPinchEnd={leftSplitPinchHandlers.onPinchEnd}
                     onEnded={(event) => {
                       if (leftSplitPanel?.loop) {
                         event.currentTarget.currentTime = 0;
@@ -1603,6 +1787,10 @@ export default function AlbumDetailPage({ params }) {
                     item={rightSplitItem}
                     media={rightSplitMedia}
                     assignVideoRef={splitRightVideoRef}
+                    zoomScale={splitZoom.right}
+                    onPinchStart={rightSplitPinchHandlers.onPinchStart}
+                    onPinchMove={rightSplitPinchHandlers.onPinchMove}
+                    onPinchEnd={rightSplitPinchHandlers.onPinchEnd}
                     muted={Boolean(rightSplitPanel?.isMuted)}
                     autoPlay={Boolean(rightSplitPanel?.isPlaying)}
                     onForegroundVideoReady={(player) => {
@@ -1680,24 +1868,43 @@ export default function AlbumDetailPage({ params }) {
                   ))}
                 </video>
               ) : (
-                <img
-                  key={activeMediaKey}
-                  src={activeItem.imageUrl}
-                  alt={activeItem.caption || `Photo ${activeItem.id}`}
-                  className="h-full w-full object-contain"
-                  onLoad={() => {
-                    markPanelMediaSuccess("primary", activeItem);
-                  }}
-                  onError={(event) => {
-                    markPanelMediaError(
-                      "primary",
-                      activeItem,
-                      "onError",
-                      event.currentTarget,
-                      activePlayableSrc,
-                    );
-                  }}
-                />
+                <div
+                  ref={zoomSurfaceRef}
+                  className={`flex h-full w-full items-center justify-center overflow-hidden ${
+                    imageZoom.scale > 1 ? "cursor-grab active:cursor-grabbing" : ""
+                  }`}
+                  onWheel={handleImageWheel}
+                  onPointerDown={handleImagePointerDown}
+                  onPointerMove={handleImagePointerMove}
+                  onPointerUp={handleImagePointerEnd}
+                  onPointerCancel={handleImagePointerEnd}
+                  onTouchStart={handleImageTouchStart}
+                  onTouchMove={handleImageTouchMove}
+                  onTouchEnd={handleImageTouchEnd}
+                  style={{ touchAction: imageZoom.scale > 1 ? "none" : "pinch-zoom" }}
+                >
+                  <img
+                    key={activeMediaKey}
+                    src={activeItem.imageUrl}
+                    alt={activeItem.caption || `Photo ${activeItem.id}`}
+                    className="max-h-full max-w-full object-contain transition-transform duration-150 ease-out"
+                    style={{
+                      transform: `translate3d(${imageZoom.x}px, ${imageZoom.y}px, 0) scale(${imageZoom.scale})`,
+                    }}
+                    onLoad={() => {
+                      markPanelMediaSuccess("primary", activeItem);
+                    }}
+                    onError={(event) => {
+                      markPanelMediaError(
+                        "primary",
+                        activeItem,
+                        "onError",
+                        event.currentTarget,
+                        activePlayableSrc,
+                      );
+                    }}
+                  />
+                </div>
               )}
               {!showSplitMode &&
               mediaErrors[getPanelMediaKey("primary", activeItem)] ? (

@@ -1,10 +1,5 @@
-'use client';
-
-import GalleryImportPanel from '@/modules/gallery/admin/GalleryImportPanel';
-import { useGalleryAdminController } from '@/modules/gallery/admin/useGalleryAdminController';
+import { redirect } from 'next/navigation';
 
 export default function GalleryImportPage() {
-  const controller = useGalleryAdminController();
-
-  return <GalleryImportPanel controller={controller} />;
+  redirect('/admin/gallery/media');
 }
