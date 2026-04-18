@@ -147,34 +147,35 @@ export default function GalleryDriveFolderPicker({
               leaveFrom="opacity-100 scale-100 translate-y-0"
               leaveTo="opacity-0 scale-95 translate-y-2"
             >
-              <Dialog.Panel className="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[min(44rem,calc(100dvh-3rem))] sm:max-w-4xl sm:rounded-2xl">
-                <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1">
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Google Drive</p>
-                      <Dialog.Title className="text-lg font-semibold text-slate-950 dark:text-slate-50">
-                        Browse folders
-                      </Dialog.Title>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
-                        Navigate through Drive folders and select one import source.
-                      </p>
-                    </div>
+	              <Dialog.Panel className="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[min(44rem,calc(100dvh-3rem))] sm:max-w-4xl sm:rounded-2xl">
+	                <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5">
+	                  <div className="flex items-start justify-between gap-4">
+	                    <div className="min-w-0 space-y-1">
+	                      <div className="flex items-center justify-between gap-3">
+	                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Google Drive</p>
+	                        <button
+	                          type="button"
+	                          className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+	                          onClick={onClose}
+	                        >
+	                          <X className="size-4" />
+	                          <span className="ml-2 hidden sm:inline">Close</span>
+	                        </button>
+	                      </div>
+	                      <Dialog.Title className="text-lg font-semibold text-slate-950 dark:text-slate-50">
+	                        Browse folders
+	                      </Dialog.Title>
+	                      <p className="text-sm text-slate-500 dark:text-slate-400">
+	                        Navigate through Drive folders and select one import source.
+	                      </p>
+	                    </div>
+	                  </div>
 
-                    <button
-                      type="button"
-                      className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                      onClick={onClose}
-                    >
-                      <X className="size-4" />
-                      <span className="ml-2 hidden sm:inline">Close</span>
-                    </button>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {browseState.breadcrumbs.map((crumb, index) => {
-                      const isRoot = crumb.id === 'root';
-                      const isCurrent = index === browseState.breadcrumbs.length - 1;
-                      const crumbParentId = isRoot ? null : crumb.id;
+	                  <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+	                    {browseState.breadcrumbs.map((crumb, index) => {
+	                      const isRoot = crumb.id === 'root';
+	                      const isCurrent = index === browseState.breadcrumbs.length - 1;
+	                      const crumbParentId = isRoot ? null : crumb.id;
 
                       return (
                         <Fragment key={`${crumb.id}-${index}`}>
@@ -188,11 +189,11 @@ export default function GalleryDriveFolderPicker({
                             onClick={() => loadFolders(crumbParentId)}
                           >
                             {isRoot ? <Home className="size-3.5" /> : <Folder className="size-3.5" />}
-                            <span className="max-w-[10rem] truncate">{crumb.name}</span>
-                          </button>
-                          {index < browseState.breadcrumbs.length - 1 ? (
-                            <ChevronRight className="size-4 text-slate-400" />
-                          ) : null}
+	                            <span className="max-w-[10rem] truncate">{crumb.name}</span>
+	                          </button>
+	                          {index < browseState.breadcrumbs.length - 1 ? (
+	                            <ChevronRight className="size-4 text-slate-400" />
+	                          ) : null}
                         </Fragment>
                       );
                     })}
@@ -200,24 +201,26 @@ export default function GalleryDriveFolderPicker({
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-                  <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                        Current location
-                      </p>
-                      <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-                        {browseState.currentFolder?.name || 'My Drive'}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Select one folder only. Subfolders are not imported recursively in this version.
-                      </p>
-                    </div>
+	                  <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+	                    <div className="min-w-0">
+	                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+	                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+	                          Current location
+	                        </p>
+	                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+	                          {browseState.currentFolder?.name || 'My Drive'}
+	                        </p>
+	                      </div>
+	                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+	                        Select one folder only. Subfolders are not imported recursively in this version.
+	                      </p>
+	                    </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto sm:px-3"
-                        onClick={() => loadFolders(currentParentId)}
+	                    <div className="flex shrink-0 flex-wrap gap-2">
+	                      <button
+	                        type="button"
+	                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto sm:px-3"
+	                        onClick={() => loadFolders(currentParentId)}
                         disabled={browseState.loading}
                         aria-label={browseState.loading ? 'Refreshing folders' : 'Refresh folders'}
                         title={browseState.loading ? 'Refreshing folders' : 'Refresh folders'}
