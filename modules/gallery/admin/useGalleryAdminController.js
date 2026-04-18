@@ -72,7 +72,13 @@ export function useGalleryAdminController() {
   const [arrangeDragState, setArrangeDragState] = useState({ isDragging: false, draggingCount: 0 });
   const [moveTargetAlbumId, setMoveTargetAlbumId] = useState(null);
 
-  const [driveForm, setDriveForm] = useState({ folderId: '', limit: 50 });
+  const [driveForm, setDriveForm] = useState({
+    folderId: '',
+    folderName: '',
+    breadcrumbs: [],
+    imageCount: null,
+    limit: 50,
+  });
   const [importingDrive, setImportingDrive] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
 
@@ -162,6 +168,7 @@ export function useGalleryAdminController() {
   useEffect(() => {
     setUploadProgress(null);
     setUploadSummary(null);
+    setImportSummary(null);
   }, [selectedAlbumId]);
 
   useEffect(() => {
@@ -473,11 +480,18 @@ export function useGalleryAdminController() {
 
       const importedCount = Number(result.importedCount) || 0;
       const skippedCount = Number(result.skippedCount) || 0;
+      const skippedItems = Array.isArray(result.skipped) ? result.skipped : [];
 
       setImportSummary({
-        importedCount,
+        totalFiles: importedCount + skippedCount,
+        uploadedCount: importedCount,
         skippedCount,
-        skipped: Array.isArray(result.skipped) ? result.skipped : [],
+        failedCount: 0,
+        results: skippedItems.map((item, index) => ({
+          fileName: item.caption || item.sourceId || `Drive item ${index + 1}`,
+          status: 'duplicate-skipped',
+          reason: item.reason || 'Already imported into this album.',
+        })),
       });
       toast.success(
         skippedCount > 0

@@ -12,6 +12,8 @@ import {
   ghostButtonStyles,
   inputStyles,
 } from './galleryAdminShared';
+import GalleryDriveFolderPicker from './GalleryDriveFolderPicker';
+import GalleryBatchResultSummary from './GalleryBatchResultSummary';
 
 const emptyDriveConnection = {
   loading: true,
@@ -40,6 +42,17 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
   } = controller;
   const [driveConnection, setDriveConnection] = useState(emptyDriveConnection);
   const [connectionBusy, setConnectionBusy] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const clearDriveSelection = () => {
+    setDriveForm((previous) => ({
+      ...previous,
+      folderId: '',
+      folderName: '',
+      breadcrumbs: [],
+      imageCount: null,
+    }));
+  };
 
   const loadDriveConnection = async () => {
     setDriveConnection((current) => ({ ...current, loading: true }));
@@ -100,6 +113,21 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
     router.replace(nextQuery ? `?${nextQuery}` : window.location.pathname, { scroll: false });
   }, [router, searchParams]);
 
+  useEffect(() => {
+    if (driveConnection.loading) {
+      return;
+    }
+
+    if (!driveConnection.connected || !driveConnection.featureEnabled || !driveConnection.oauthConfigured) {
+      clearDriveSelection();
+    }
+  }, [
+    driveConnection.connected,
+    driveConnection.featureEnabled,
+    driveConnection.loading,
+    driveConnection.oauthConfigured,
+  ]);
+
   const handleConnectGoogleDrive = async () => {
     setConnectionBusy(true);
 
@@ -136,6 +164,7 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
       }
 
       toast.success('Google Drive disconnected.');
+      clearDriveSelection();
       await loadDriveConnection();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to disconnect Google Drive.');
@@ -149,7 +178,8 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
     driveConnection.loading ||
     !driveConnection.featureEnabled ||
     !driveConnection.oauthConfigured ||
-    !driveConnection.connected;
+    !driveConnection.connected ||
+    !driveForm.folderId;
 
   const connectionTone = useMemo(() => {
     if (!driveConnection.featureEnabled) {
@@ -178,9 +208,12 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
       ? 'Add Google OAuth client credentials on the server before admins can connect Drive.'
       : driveConnection.connected
         ? 'This admin account can import Google Drive images without pasting an access token.'
-        : 'Connect your Google account once, then import Drive images using only the folder ID.';
+        : 'Connect your Google account once, then browse Drive folders directly from this page.';
 
-  const folderPreview = driveForm.folderId.trim() || '...';
+  const folderPreview = driveForm.folderName?.trim() || driveForm.folderId.trim() || '...';
+  const folderPathPreview = Array.isArray(driveForm.breadcrumbs)
+    ? driveForm.breadcrumbs.map((entry) => entry?.name).filter(Boolean).join(' / ')
+    : '';
 
   return (
     <div className="space-y-6">
@@ -215,7 +248,7 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
                       <p className="mt-2 text-sm font-semibold">{connectionLabel}</p>
                       <p className="mt-1 text-sm opacity-90">{connectionDescription}</p>
                       <p className="mt-3 text-xs opacity-80">
-                        Imported images stay linked to Google Drive in this version. Folder ID still comes from the Drive folder URL.
+                        Imported images stay linked to Google Drive in this version. Choose a folder from Drive, then import it into the selected album.
                       </p>
                     </div>
 
@@ -248,34 +281,113 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
                   </div>
                 </div>
 
-                <form
-                  className="grid gap-3 rounded-xl border border-slate-200 p-4 md:grid-cols-[minmax(0,1fr)_120px_auto] dark:border-slate-700"
-                  onSubmit={handleDriveImport}
-                >
-                  <input
-                    className={inputStyles}
-                    placeholder="Google Drive Folder ID"
-                    value={driveForm.folderId}
-                    onChange={(event) => setDriveForm((previous) => ({ ...previous, folderId: event.target.value }))}
-                    required
-                    disabled={importDisabled}
-                  />
-                  <input
-                    className={inputStyles}
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={driveForm.limit}
-                    onChange={(event) => setDriveForm((previous) => ({ ...previous, limit: event.target.value }))}
-                    disabled={importDisabled}
-                  />
-                  <button className={buttonStyles} disabled={importDisabled}>
-                    {importingDrive ? 'Importing...' : 'Import Drive Folder'}
-                  </button>
-                </form>
+                <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        Drive source folder
+                      </p>
+                      <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
+                        {driveForm.folderId
+                          ? 'Selected folder is ready to import.'
+                          : 'Browse Google Drive and choose a folder to import.'}
+                      </p>
+                    </div>
 
-                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-300">
-                  Folder ID example: from `https://drive.google.com/drive/folders/abc123`, use `abc123`.
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={buttonStyles}
+                        disabled={
+                          connectionBusy ||
+                          driveConnection.loading ||
+                          !driveConnection.featureEnabled ||
+                          !driveConnection.oauthConfigured ||
+                          !driveConnection.connected
+                        }
+                        onClick={() => setPickerOpen(true)}
+                      >
+                        {driveForm.folderId ? 'Change folder' : 'Browse Google Drive'}
+                      </button>
+                      {driveForm.folderId ? (
+                        <button
+                          type="button"
+                          className={ghostButtonStyles}
+                          onClick={clearDriveSelection}
+                          disabled={importingDrive}
+                        >
+                          Clear selection
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {driveForm.folderId ? (
+                    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+                      <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                        {driveForm.folderName || 'Selected Google Drive folder'}
+                      </p>
+                      {folderPathPreview ? (
+                        <p className="mt-1 text-xs text-emerald-900/80 dark:text-emerald-100/80">
+                          {folderPathPreview}
+                        </p>
+                      ) : null}
+                      <details className="mt-3 text-xs text-emerald-900/80 dark:text-emerald-100/80">
+                        <summary className="cursor-pointer font-medium">Advanced details</summary>
+                        <p className="mt-2 break-all">Folder ID: {driveForm.folderId}</p>
+                        <p className="mt-1">
+                          {typeof driveForm.imageCount === 'number'
+                            ? `Estimated images: ${driveForm.imageCount}`
+                            : 'Image count preview is unavailable before import in this version.'}
+                        </p>
+                      </details>
+                    </div>
+                  ) : null}
+
+                  <form
+                    className="mt-4 grid gap-3 md:grid-cols-[120px_auto]"
+                    onSubmit={handleDriveImport}
+                  >
+                    <input
+                      className={inputStyles}
+                      type="number"
+                      min={1}
+                      max={200}
+                      value={driveForm.limit}
+                      onChange={(event) =>
+                        setDriveForm((previous) => ({ ...previous, limit: event.target.value }))
+                      }
+                      disabled={
+                        importingDrive ||
+                        driveConnection.loading ||
+                        !driveConnection.featureEnabled ||
+                        !driveConnection.oauthConfigured ||
+                        !driveConnection.connected
+                      }
+                    />
+                    <button className={buttonStyles} disabled={importDisabled}>
+                      {importingDrive ? 'Importing...' : 'Import Folder'}
+                    </button>
+                  </form>
+
+                  {importSummary ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Last import summary</p>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          Google Drive imports use the same result breakdown as direct uploads, including duplicate tracking.
+                        </p>
+                      </div>
+
+                      <GalleryBatchResultSummary
+                        summary={importSummary}
+                        uploadedLabel="Imported"
+                        skippedLabel="Duplicates"
+                        failedLabel="Failed"
+                        flaggedHeading="Duplicate and failed imports"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </GalleryPanelCard>
@@ -286,28 +398,6 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
                 {Number(driveForm.limit) || 50} items from folder {folderPreview}.
               </p>
             </GalleryPanelCard>
-
-            {importSummary ? (
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm dark:border-emerald-900/50 dark:bg-emerald-950/30">
-                <p className="font-semibold text-emerald-900 dark:text-emerald-100">Last import summary</p>
-                <p className="mt-1 text-emerald-900/80 dark:text-emerald-100/80">
-                  Imported: {importSummary.importedCount} | Duplicates skipped: {importSummary.skippedCount}
-                </p>
-                {Array.isArray(importSummary.skipped) && importSummary.skipped.length > 0 ? (
-                  <div className="mt-3 space-y-2">
-                    {importSummary.skipped.map((item, index) => (
-                      <div
-                        key={`${item.sourceId}-${index}`}
-                        className="rounded-lg border border-emerald-300/70 bg-white/70 px-3 py-2 text-xs text-emerald-950 dark:border-emerald-800/60 dark:bg-slate-900/40 dark:text-emerald-100"
-                      >
-                        <p className="font-semibold">{item.caption || item.sourceId}</p>
-                        <p className="mt-1 opacity-80">{item.reason}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
           </div>
         ) : (
           <GalleryPanelCard title="Select an album" description="Choose a destination album before importing media.">
@@ -315,6 +405,21 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
           </GalleryPanelCard>
         )}
       </div>
+
+      <GalleryDriveFolderPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        selectedFolderId={driveForm.folderId}
+        onSelectFolder={(folder) => {
+          setDriveForm((previous) => ({
+            ...previous,
+            folderId: folder.id,
+            folderName: folder.name,
+            breadcrumbs: Array.isArray(folder.breadcrumbs) ? folder.breadcrumbs : [],
+            imageCount: typeof folder.imageCount === 'number' ? folder.imageCount : null,
+          }));
+        }}
+      />
     </div>
   );
 }

@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment, useMemo, useState } from 'react';
-import { Check, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Fragment, useMemo, useRef, useState } from 'react';
+import { Check, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { getAdminMediaUrl } from '@/app/admin/gallery/utils';
 
 export const inputStyles =
@@ -141,12 +141,15 @@ export function GalleryAlbumPicker({
   onSelectAlbum,
   emptyTitle = 'No albums yet',
   emptyDescription = 'Create an album first to unlock this page.',
+  createAlbumHref = '/admin/gallery/albums',
+  createAlbumLabel = 'Add new album',
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [sortMode, setSortMode] = useState('newest');
   const [statusFilter, setStatusFilter] = useState('all');
   const [mobileFiltersCollapsed, setMobileFiltersCollapsed] = useState(false);
+  const dialogInitialFocusRef = useRef(null);
   const resolveAlbumCoverUrl = (album) => getAdminMediaUrl(album?.coverPhoto);
 
   const selectedAlbum = useMemo(
@@ -296,6 +299,13 @@ export function GalleryAlbumPicker({
               >
                 Browse all
               </button>
+              <Link
+                href={createAlbumHref}
+                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
+              >
+                <Plus className="size-4" />
+                {createAlbumLabel}
+              </Link>
             </div>
           </div>
         ) : (
@@ -303,23 +313,32 @@ export function GalleryAlbumPicker({
             title={emptyTitle}
             description={emptyDescription}
             action={
-              <button
-                type="button"
-                className={buttonStyles}
-                onClick={() => {
-                  setMobileFiltersCollapsed(false);
-                  setIsOpen(true);
-                }}
-              >
-                Choose album
-              </button>
+              <div className="flex flex-col items-center gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  className={buttonStyles}
+                  onClick={() => {
+                    setMobileFiltersCollapsed(false);
+                    setIsOpen(true);
+                  }}
+                >
+                  Choose album
+                </button>
+                <Link
+                  href={createAlbumHref}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <Plus className="size-4" />
+                  {createAlbumLabel}
+                </Link>
+              </div>
             }
           />
         )}
       </aside>
 
       <Transition show={isOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-50" onClose={setIsOpen}>
+        <Dialog as="div" className="relative z-50" onClose={setIsOpen} initialFocus={dialogInitialFocusRef}>
           <Transition.Child
             as={Fragment}
             enter="ease-out duration-200"
@@ -346,14 +365,12 @@ export function GalleryAlbumPicker({
                 <Dialog.Panel className="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[min(42rem,calc(100dvh-3rem))] sm:max-w-4xl sm:rounded-2xl">
                   <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5">
                     <div className="flex items-start justify-between gap-4">
-                      <div className='m-2'>
+                      <div ref={dialogInitialFocusRef} tabIndex={-1} className="m-2 outline-none">
                         <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Album picker</p>
                         <Dialog.Title className="mt-1 text-lg font-semibold text-slate-950 dark:text-slate-50">
                           Search and switch albums
                         </Dialog.Title>
-                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                          Search first, refine with filters, then select an album from the list below.
-                        </p>
+   
                       </div>
 
                       <button
@@ -366,74 +383,89 @@ export function GalleryAlbumPicker({
                     </div>
 
                     <div className="mt-4 space-y-3">
-                      <label className="block">
-                        <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                          <Search className="size-3.5" />
-                          Search
-                        </span>
-                        <input
-                          className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
-                          placeholder="Search name, slug, or description"
-                          value={query}
-                          onChange={(event) => setQuery(event.target.value)}
-                        />
-                      </label>
+                    
+                  <label className="block">
+  <div className="relative">
+    <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
 
-                      <div
-                        className={`space-y-3 transition-all duration-200 ${
-                          mobileFiltersCollapsed ? 'max-h-0 overflow-hidden opacity-0 sm:max-h-none sm:overflow-visible sm:opacity-100' : 'max-h-[18rem] opacity-100'
-                        }`}
-                      >
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <label className="block">
-                            <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                              <SlidersHorizontal className="size-3.5" />
-                              Status
-                            </span>
-                            <select
-                              className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
-                              value={statusFilter}
-                              onChange={(event) => setStatusFilter(event.target.value)}
-                            >
-                              <option value="all">All statuses</option>
-                              <option value="published">Published</option>
-                              <option value="draft">Draft</option>
-                            </select>
-                          </label>
+    <input
+      className="h-11 w-full rounded-md border border-slate-300 bg-white pl-10 pr-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+      placeholder="Search name, slug, or description"
+      value={query}
+      onChange={(event) => setQuery(event.target.value)}
+    />
+  </div>
+</label>
 
-                          <label className="block">
-                            <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">Sort</span>
-                            <select
-                              className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
-                              value={sortMode}
-                              onChange={(event) => setSortMode(event.target.value)}
-                            >
-                              <option value="newest">Sort by newest</option>
-                              <option value="oldest">Sort by oldest</option>
-                              <option value="az">Sort A-Z</option>
-                              <option value="media">Sort by most media</option>
-                            </select>
-                          </label>
-                        </div>
+                <div
+  className={`space-y-3 transition-all duration-200 ${
+    mobileFiltersCollapsed
+      ? 'max-h-0 overflow-hidden opacity-0 sm:max-h-none sm:overflow-visible sm:opacity-100'
+      : 'max-h-[18rem] opacity-100'
+  }`}
+>
+  <div className="grid gap-3 sm:grid-cols-2">
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
+        Status
+      </span>
 
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                          <p className="text-sm text-slate-500 dark:text-slate-400">
-                            {filteredAlbums.length} result{filteredAlbums.length === 1 ? '' : 's'}
-                          </p>
-                          <button
-                            type="button"
-                            className="inline-flex w-full items-center justify-center rounded-md border border-slate-300 px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 sm:w-auto"
-                            onClick={() => {
-                              setQuery('');
-                              setStatusFilter('all');
-                              setSortMode('newest');
-                              setMobileFiltersCollapsed(false);
-                            }}
-                          >
-                            Reset filters
-                          </button>
-                        </div>
-                      </div>
+      <div className="relative">
+        <SlidersHorizontal className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+
+        <select
+          className="h-11 w-full rounded-md border border-slate-300 bg-white pl-10 pr-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+        >
+          <option value="all">All statuses</option>
+          <option value="published">Published</option>
+          <option value="draft">Draft</option>
+        </select>
+      </div>
+    </label>
+
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
+        Sort
+      </span>
+
+      <div className="relative">
+        <SlidersHorizontal className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+
+        <select
+          className="h-11 w-full rounded-md border border-slate-300 bg-white pl-10 pr-3 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+          value={sortMode}
+          onChange={(event) => setSortMode(event.target.value)}
+        >
+          <option value="newest">Sort by newest</option>
+          <option value="oldest">Sort by oldest</option>
+          <option value="az">Sort A-Z</option>
+          <option value="media">Sort by most media</option>
+        </select>
+      </div>
+    </label>
+  </div>
+
+  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <p className="text-sm text-slate-500 dark:text-slate-400">
+      {filteredAlbums.length} result{filteredAlbums.length === 1 ? '' : 's'}
+    </p>
+
+    <button
+      type="button"
+      className="inline-flex w-full items-center justify-center rounded-md border border-slate-300 px-3 py-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100 sm:w-auto"
+      onClick={() => {
+        setQuery('');
+        setStatusFilter('all');
+        setSortMode('newest');
+        setMobileFiltersCollapsed(false);
+      }}
+    >
+      Reset filters
+    </button>
+  </div>
+</div>
                     </div>
                   </div>
 
@@ -444,11 +476,34 @@ export function GalleryAlbumPicker({
                     }}
                   >
                     {!loadingAlbums && albums.length === 0 ? (
-                      <GalleryEmptyState title={emptyTitle} description={emptyDescription} />
+                      <GalleryEmptyState
+                        title={emptyTitle}
+                        description={emptyDescription}
+                        action={
+                          <Link
+                            href={createAlbumHref}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                            onClick={() => setIsOpen(false)}
+                          >
+                            <Plus className="size-4" />
+                            {createAlbumLabel}
+                          </Link>
+                        }
+                      />
                     ) : filteredAlbums.length === 0 ? (
                       <GalleryEmptyState
                         title="No matching albums"
-                        description="Try a different search term or remove the current filters."
+                        description="Try a different search term, remove the current filters, or create a new album."
+                        action={
+                          <Link
+                            href={createAlbumHref}
+                            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                            onClick={() => setIsOpen(false)}
+                          >
+                            <Plus className="size-4" />
+                            {createAlbumLabel}
+                          </Link>
+                        }
                       />
                     ) : (
                       <div className="space-y-2">
@@ -491,10 +546,7 @@ export function GalleryAlbumPicker({
                                     </span>
                                   ) : null}
                                 </div>
-                                <p className="mt-1 hidden line-clamp-1 text-xs text-slate-500 dark:text-slate-400 sm:block">
-                                  {album.slug ? `Slug: ${album.slug}` : 'No slug'}
-                                  {album.description ? ` · ${album.description}` : ''}
-                                </p>
+              
                               </div>
 
                               <div className="ml-auto flex flex-shrink-0 flex-wrap items-center gap-2">
@@ -552,9 +604,7 @@ export function GalleryAlbumPicker({
                                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                   {selectedMediaCount} media item{selectedMediaCount === 1 ? '' : 's'}
                                 </p>
-                                <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
-                                  {selectedAlbum.slug ? `Slug: ${selectedAlbum.slug}` : 'No slug'}
-                                </p>
+                    
                               </>
                             ) : (
                               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">

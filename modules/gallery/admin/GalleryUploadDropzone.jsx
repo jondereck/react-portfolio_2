@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { AlertTriangle, Check, CloudUpload, FolderInput, X } from 'lucide-react';
+import { CloudUpload, FolderInput } from 'lucide-react';
+import GalleryBatchResultSummary from './GalleryBatchResultSummary';
 
 export default function GalleryUploadDropzone({
   title = 'Upload files',
@@ -48,7 +49,6 @@ const truncateText = (text, max = 44) => {
 
   const hasSummary = uploadSummary && uploadSummary.totalFiles > 0;
   const resultEntries = Array.isArray(uploadSummary?.results) ? uploadSummary.results : [];
-  const flaggedEntries = resultEntries.filter((entry) => entry.status !== 'success');
   const lastResult = uploadProgress?.lastResult ?? resultEntries[resultEntries.length - 1] ?? null;
 
   return (
@@ -169,92 +169,7 @@ const truncateText = (text, max = 44) => {
       ) : null}
 
       {hasSummary ? (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/80 sm:p-4">
-          <div className="grid gap-2 sm:grid-cols-3 sm:gap-3">
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2.5 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-100 sm:rounded-xl sm:px-3 sm:py-3">
-              <div className="flex items-center gap-2">
-                <Check className="size-4" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.16em]">
-                  Uploaded
-                </p>
-              </div>
-              <p className="mt-2 text-base font-semibold sm:text-lg">{uploadSummary.uploadedCount}</p>
-            </div>
-
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2.5 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100 sm:rounded-xl sm:px-3 sm:py-3">
-              <div className="flex items-center gap-2">
-                <X className="size-4" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.16em]">
-                  Duplicates
-                </p>
-              </div>
-              <p className="mt-2 text-base font-semibold sm:text-lg">{uploadSummary.skippedCount}</p>
-            </div>
-
-            <div className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-2.5 text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-100 sm:rounded-xl sm:px-3 sm:py-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="size-4" />
-                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] sm:text-xs sm:tracking-[0.16em]">
-                  Failed
-                </p>
-              </div>
-              <p className="mt-2 text-base font-semibold sm:text-lg">{uploadSummary.failedCount}</p>
-            </div>
-            
-          </div>
-
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-
-
-          {lastResult ? (
-  <div className="w-full min-w-0 overflow-hidden sm:flex-1">
-    <p
-      className="block w-full min-w-0 overflow-hidden text-xs text-slate-500 dark:text-slate-400 sm:text-right"
-      title={`${lastResult.fileName} · ${lastResult.reason}`}
-    >
-
-    </p>
-  </div>
-) : null}
-          </div>
-
-   {flaggedEntries.length > 0 ? (
-  <div className="mt-4 space-y-2">
-    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400 sm:text-xs sm:tracking-[0.16em]">
-      Skipped and failed files
-    </p>
-
-    <div className="space-y-2">
-      {flaggedEntries.map((entry, index) => (
-        <div
-          key={`${entry.fileName}-${entry.status}-${index}`}
-          className={`min-w-0 overflow-hidden rounded-lg border px-2.5 py-2.5 text-sm sm:rounded-xl sm:px-3 sm:py-3 ${
-            entry.status === 'duplicate-skipped'
-              ? 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100'
-              : 'border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-100'
-          }`}
-        >
-          <div className="min-w-0 overflow-hidden">
-            <p
-              className="block w-full min-w-0 overflow-hidden truncate text-sm font-semibold"
-              title={entry.fileName}
-            >
-              {truncateFileName(entry.fileName, 20)}
-            </p>
-
-            <p
-              className="mt-1 block w-full min-w-0 overflow-hidden break-all text-[11px] leading-4 opacity-80 sm:text-xs"
-              title={entry.reason}
-            >
-              {truncateText(entry.reason, 80)}
-            </p>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-) : null}
-        </div>
+        <GalleryBatchResultSummary summary={uploadSummary} className="mt-4" />
       ) : null}
 
       <input
