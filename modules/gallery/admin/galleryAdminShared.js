@@ -13,6 +13,24 @@ export const buttonStyles =
 export const ghostButtonStyles =
   'h-10 rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800';
 
+export function createEmptyAlbumForm() {
+  return {
+    name: '',
+    slug: '',
+    description: '',
+    isPublished: true,
+  };
+}
+
+export function normalizeAlbumForm(form = {}) {
+  return {
+    name: String(form.name ?? '').trim(),
+    slug: String(form.slug ?? '').trim(),
+    description: String(form.description ?? '').trim(),
+    isPublished: Boolean(form.isPublished),
+  };
+}
+
 export function toRequestError(data, fallbackMessage = 'Request failed', status) {
   const error = new Error(data?.error || fallbackMessage);
   error.status = status;

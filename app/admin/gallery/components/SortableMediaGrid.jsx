@@ -30,6 +30,9 @@ const SortableMediaCard = memo(function SortableMediaCard({
   isDropTarget,
   dragActive,
   onToggleSelect,
+  onSelectRange,
+  touchSelectStateRef,
+  suppressNextClickRef,
   onSetCover,
   onPreview,
 }) {
@@ -54,6 +57,10 @@ const SortableMediaCard = memo(function SortableMediaCard({
   };
 
   const handleCardClick = (event) => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
     if (isDragging) return;
     const target = event.target;
     if (target instanceof Element && target.closest('button,input,label,a,video')) {
@@ -66,7 +73,33 @@ const SortableMediaCard = memo(function SortableMediaCard({
     <article
       ref={setNodeRef}
       style={style}
+      data-photo-id={photo.id}
       onClick={handleCardClick}
+      onPointerDown={(event) => {
+        if (event.pointerType !== 'touch' || isDragging) return;
+        const target = event.target;
+        if (target instanceof Element && target.closest('button,input,label,a,video,[data-drag-handle]')) {
+          return;
+        }
+        suppressNextClickRef.current = true;
+        onSelectRange?.(photo.id, { resetAnchor: true });
+        touchSelectStateRef.current = { active: true, lastPhotoId: photo.id };
+      }}
+      onPointerMove={(event) => {
+        if (event.pointerType !== 'touch' || !touchSelectStateRef.current.active) return;
+        const target = event.target instanceof Element ? event.target.closest('[data-photo-id]') : null;
+        const nextPhotoId = target?.getAttribute('data-photo-id');
+        if (!nextPhotoId || nextPhotoId === touchSelectStateRef.current.lastPhotoId) return;
+        touchSelectStateRef.current.lastPhotoId = nextPhotoId;
+        onSelectRange?.(Number(nextPhotoId));
+      }}
+      onPointerUp={() => {
+        touchSelectStateRef.current = { active: false, lastPhotoId: null };
+      }}
+      onPointerCancel={() => {
+        touchSelectStateRef.current = { active: false, lastPhotoId: null };
+        suppressNextClickRef.current = false;
+      }}
       className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-200 will-change-transform dark:bg-slate-900 ${
         isDragging
           ? 'z-20 scale-[0.97] border-slate-400/80 opacity-20 shadow-none ring-2 ring-slate-300/80 dark:border-slate-500 dark:ring-slate-700/70'
@@ -98,7 +131,10 @@ const SortableMediaCard = memo(function SortableMediaCard({
       ) : null}
 
       <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-3 py-2.5 dark:border-slate-700/80 md:px-3 md:py-3">
-        <label className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-600 dark:text-slate-300 md:text-xs">
+        <label
+          className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-600 touch-manipulation dark:text-slate-300 md:text-xs"
+          onClick={(event) => event.stopPropagation()}
+        >
           <input
             type="checkbox"
             className="h-4 w-4"
@@ -255,12 +291,30 @@ function moveSelectedBlock(items, draggedIds, overId) {
   return nextItems;
 }
 
+function getPointFromEvent(event) {
+  if (!event) return null;
+
+  if ('touches' in event) {
+    const touch = event.touches?.[0] ?? event.changedTouches?.[0];
+    if (touch) {
+      return { x: touch.clientX, y: touch.clientY };
+    }
+  }
+
+  if (typeof event.clientX === 'number' && typeof event.clientY === 'number') {
+    return { x: event.clientX, y: event.clientY };
+  }
+
+  return null;
+}
+
 export default function SortableMediaGrid({
   items,
   selectedIds,
   coverPhotoId,
   onItemsChange,
   onToggleSelect,
+  onSelectRange,
   onSetCover,
   onPreview,
   onDragStateChange,
@@ -269,7 +323,15 @@ export default function SortableMediaGrid({
   const [draggedIds, setDraggedIds] = useState([]);
   const [overId, setOverId] = useState(null);
   const [previewItems, setPreviewItems] = useState(items);
-  const scrollStateRef = useRef(null);
+  const previewItemsRef = useRef(items);
+  const draggedIdsRef = useRef([]);
+  const touchSelectStateRef = useRef({ active: false, lastPhotoId: null });
+  const suppressNextClickRef = useRef(false);
+  const pointerPositionRef = useRef(null);
+  const pointerVelocityRef = useRef({ x: 0, y: 0 });
+  const lastPointerSampleRef = useRef({ x: 0, y: 0, time: 0 });
+  const autoScrollFrameRef = useRef(null);
+  const previewCommitFrameRef = useRef(null);
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const draggedSet = useMemo(() => new Set(draggedIds), [draggedIds]);
   const dragActive = activeId !== null;
@@ -278,43 +340,95 @@ export default function SortableMediaGrid({
 
   useEffect(() => {
     if (!dragActive) {
+      previewItemsRef.current = items;
       setPreviewItems(items);
     }
   }, [items, dragActive]);
 
+  useEffect(
+    () => () => {
+      if (previewCommitFrameRef.current !== null) {
+        window.cancelAnimationFrame(previewCommitFrameRef.current);
+        previewCommitFrameRef.current = null;
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
-    if (!dragActive || typeof document === 'undefined') {
+    if (!dragActive || typeof window === 'undefined') {
       return undefined;
     }
 
-    const { body, documentElement } = document;
-    scrollStateRef.current = {
-      bodyOverflow: body.style.overflow,
-      bodyTouchAction: body.style.touchAction,
-      bodyOverscrollBehavior: body.style.overscrollBehavior,
-      htmlOverflow: documentElement.style.overflow,
-      htmlTouchAction: documentElement.style.touchAction,
-      htmlOverscrollBehavior: documentElement.style.overscrollBehavior,
+    const samplePointer = (clientX, clientY) => {
+      const previous = lastPointerSampleRef.current;
+      const now = performance.now();
+      const elapsed = previous.time > 0 ? Math.max(now - previous.time, 16) : 16;
+      const deltaX = clientX - previous.x;
+      const deltaY = clientY - previous.y;
+
+      pointerPositionRef.current = { x: clientX, y: clientY };
+      pointerVelocityRef.current = {
+        x: previous.time > 0 ? (deltaX / elapsed) * 16 : 0,
+        y: previous.time > 0 ? (deltaY / elapsed) * 16 : 0,
+      };
+      lastPointerSampleRef.current = { x: clientX, y: clientY, time: now };
     };
 
-    body.style.overflow = 'hidden';
-    body.style.touchAction = 'none';
-    body.style.overscrollBehavior = 'none';
-    documentElement.style.overflow = 'hidden';
-    documentElement.style.touchAction = 'none';
-    documentElement.style.overscrollBehavior = 'none';
+    const handlePointerMove = (event) => {
+      samplePointer(event.clientX, event.clientY);
+    };
+
+    const handleTouchMove = (event) => {
+      const point = getPointFromEvent(event);
+      if (point) {
+        samplePointer(point.x, point.y);
+      }
+    };
+
+    const tick = () => {
+      const point = pointerPositionRef.current;
+      if (point) {
+        const viewportHeight = window.innerHeight || 0;
+        const edgeZone = Math.max(96, Math.min(180, Math.round(viewportHeight * 0.18)));
+        const topDistance = point.y;
+        const bottomDistance = viewportHeight - point.y;
+        let direction = 0;
+        let proximity = 0;
+
+        if (topDistance < edgeZone) {
+          direction = -1;
+          proximity = 1 - topDistance / edgeZone;
+        } else if (bottomDistance < edgeZone) {
+          direction = 1;
+          proximity = 1 - bottomDistance / edgeZone;
+        }
+
+        if (direction !== 0) {
+          const velocityBoost = Math.min(1, Math.abs(pointerVelocityRef.current.y) / 22);
+          const curvedProximity = proximity * proximity;
+          const speed = Math.min(56, 4 + curvedProximity * 40 + velocityBoost * 12);
+          window.scrollBy(0, direction * speed);
+        }
+      }
+
+      autoScrollFrameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: true });
+    autoScrollFrameRef.current = window.requestAnimationFrame(tick);
 
     return () => {
-      const previous = scrollStateRef.current;
-      if (!previous) return;
-
-      body.style.overflow = previous.bodyOverflow;
-      body.style.touchAction = previous.bodyTouchAction;
-      body.style.overscrollBehavior = previous.bodyOverscrollBehavior;
-      documentElement.style.overflow = previous.htmlOverflow;
-      documentElement.style.touchAction = previous.htmlTouchAction;
-      documentElement.style.overscrollBehavior = previous.htmlOverscrollBehavior;
-      scrollStateRef.current = null;
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('touchmove', handleTouchMove);
+      if (autoScrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(autoScrollFrameRef.current);
+        autoScrollFrameRef.current = null;
+      }
+      pointerPositionRef.current = null;
+      pointerVelocityRef.current = { x: 0, y: 0 };
+      lastPointerSampleRef.current = { x: 0, y: 0, time: 0 };
     };
   }, [dragActive]);
 
@@ -323,7 +437,7 @@ export default function SortableMediaGrid({
       activationConstraint: { distance: 6 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 140, tolerance: 12 },
+      activationConstraint: { delay: 260, tolerance: 8 },
     }),
   );
 
@@ -332,15 +446,24 @@ export default function SortableMediaGrid({
     [visibleItems, items, activeId],
   );
 
-  const handleDragStart = ({ active }) => {
+  const handleDragStart = ({ active, activatorEvent }) => {
     const activePhotoId = active.id;
     const dragIds = selectedSet.has(activePhotoId)
       ? items.filter((item) => selectedSet.has(item.id)).map((item) => item.id)
       : [activePhotoId];
+    draggedIdsRef.current = dragIds;
+
+    const startPoint = getPointFromEvent(activatorEvent);
+    if (startPoint) {
+      pointerPositionRef.current = startPoint;
+      lastPointerSampleRef.current = { x: startPoint.x, y: startPoint.y, time: performance.now() };
+      pointerVelocityRef.current = { x: 0, y: 0 };
+    }
 
     setDraggedIds(dragIds);
     setActiveId(active.id);
     setOverId(active.id);
+    previewItemsRef.current = items;
     setPreviewItems(items);
     onDragStateChange?.({ isDragging: true, draggingCount: dragIds.length });
   };
@@ -350,12 +473,25 @@ export default function SortableMediaGrid({
     if (!nextOverId) return;
 
     setOverId(nextOverId);
-    setPreviewItems((previous) => {
-      const nextItems = draggedIds.length > 1
-        ? moveSelectedBlock(previous, draggedIds, nextOverId)
-        : moveSingleItem(previous, active.id, nextOverId);
 
-      return areItemOrdersEqual(previous, nextItems) ? previous : nextItems;
+    const previous = previewItemsRef.current;
+    const nextItems = draggedIdsRef.current.length > 1
+      ? moveSelectedBlock(previous, draggedIdsRef.current, nextOverId)
+      : moveSingleItem(previous, active.id, nextOverId);
+
+    if (areItemOrdersEqual(previous, nextItems)) {
+      return;
+    }
+
+    previewItemsRef.current = nextItems;
+
+    if (previewCommitFrameRef.current !== null) {
+      window.cancelAnimationFrame(previewCommitFrameRef.current);
+    }
+
+    previewCommitFrameRef.current = window.requestAnimationFrame(() => {
+      previewCommitFrameRef.current = null;
+      setPreviewItems(nextItems);
     });
   };
 
@@ -368,16 +504,24 @@ export default function SortableMediaGrid({
 
     setActiveId(null);
     setDraggedIds([]);
+    draggedIdsRef.current = [];
     setOverId(null);
+    previewItemsRef.current = items;
     setPreviewItems(items);
+    pointerPositionRef.current = null;
+    pointerVelocityRef.current = { x: 0, y: 0 };
     onDragStateChange?.({ isDragging: false, draggingCount: 0 });
   };
 
   const handleDragCancel = () => {
     setActiveId(null);
     setDraggedIds([]);
+    draggedIdsRef.current = [];
     setOverId(null);
+    previewItemsRef.current = items;
     setPreviewItems(items);
+    pointerPositionRef.current = null;
+    pointerVelocityRef.current = { x: 0, y: 0 };
     onDragStateChange?.({ isDragging: false, draggingCount: 0 });
   };
 
@@ -397,6 +541,7 @@ export default function SortableMediaGrid({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      autoScroll={false}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
@@ -436,6 +581,9 @@ export default function SortableMediaGrid({
               isDropTarget={overId === photo.id && !draggedSet.has(photo.id)}
               dragActive={dragActive}
               onToggleSelect={onToggleSelect}
+              onSelectRange={onSelectRange}
+              touchSelectStateRef={touchSelectStateRef}
+              suppressNextClickRef={suppressNextClickRef}
               onSetCover={onSetCover}
               onPreview={onPreview}
             />

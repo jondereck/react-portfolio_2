@@ -6,7 +6,7 @@ import {
   areIdListsEqual,
   getPhotoSortTime,
 } from '@/app/admin/gallery/utils';
-import { fetchJson } from './galleryAdminShared';
+import { createEmptyAlbumForm, fetchJson, normalizeAlbumForm } from './galleryAdminShared';
 import {
   createEmptyUploadSummary,
   getUploadSummaryToast,
@@ -44,7 +44,7 @@ export function useGalleryAdminController() {
 
   const [sortMode, setSortMode] = useState('custom');
 
-  const [albumForm, setAlbumForm] = useState({ name: '', slug: '', description: '', isPublished: true });
+  const [albumForm, setAlbumForm] = useState(() => createEmptyAlbumForm());
   const [savingAlbum, setSavingAlbum] = useState(false);
 
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -221,26 +221,37 @@ export function useGalleryAdminController() {
     setOrderHistory((previous) => [snapshot, ...previous].slice(0, 30));
   };
 
-  const createAlbum = async (event) => {
-    event.preventDefault();
+  const createAlbumRecord = async (albumData) => {
     setSavingAlbum(true);
 
     try {
       const created = await fetchJson('/api/gallery/albums', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(albumForm),
+        body: JSON.stringify(normalizeAlbumForm(albumData)),
       });
 
       toast.success('Album created');
-      setAlbumForm({ name: '', slug: '', description: '', isPublished: true });
-      await loadAlbums();
-      selectAlbum(created.id);
+      return created;
     } catch (error) {
       toast.error(error.message);
+      return null;
     } finally {
       setSavingAlbum(false);
     }
+  };
+
+  const createAlbum = async (event) => {
+    event.preventDefault();
+
+    const created = await createAlbumRecord(albumForm);
+    if (!created) {
+      return;
+    }
+
+    setAlbumForm(createEmptyAlbumForm());
+    await loadAlbums();
+    selectAlbum(created.id);
   };
 
   const deleteAlbum = async (albumId = selectedAlbumId, options = {}) => {
@@ -545,6 +556,41 @@ export function useGalleryAdminController() {
     setSelectionAnchorId(photoId);
   };
 
+  const selectPhotoRange = (
+    photoId,
+    orderedIds = arrangePhotos.map((photo) => photo.id),
+    options = {},
+  ) => {
+    if (!photoId || !Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return;
+    }
+
+    const { resetAnchor = false } = options;
+
+    setSelectedPhotoIds((previous) => {
+      const anchorId =
+        !resetAnchor && selectionAnchorId && orderedIds.includes(selectionAnchorId)
+          ? selectionAnchorId
+          : photoId;
+      const start = orderedIds.indexOf(anchorId);
+      const end = orderedIds.indexOf(photoId);
+
+      if (start === -1 || end === -1) {
+        return previous.includes(photoId) ? previous : [...previous, photoId];
+      }
+
+      const [minIndex, maxIndex] = start < end ? [start, end] : [end, start];
+      const rangeIds = orderedIds.slice(minIndex, maxIndex + 1);
+      return Array.from(new Set([...previous, ...rangeIds]));
+    });
+
+    setSelectionAnchorId(
+      resetAnchor || !selectionAnchorId || !orderedIds.includes(selectionAnchorId)
+        ? photoId
+        : selectionAnchorId,
+    );
+  };
+
   const clearPhotoSelection = () => {
     setSelectedPhotoIds([]);
     setSelectionAnchorId(null);
@@ -668,6 +714,7 @@ export function useGalleryAdminController() {
     setSelectedAlbumId: selectAlbum,
     loadAlbums,
     loadPhotos,
+    createAlbumRecord,
     createAlbum,
     deleteAlbum,
     saveAlbumDetails,
@@ -683,6 +730,7 @@ export function useGalleryAdminController() {
     togglePhotoSelect,
     clearPhotoSelection,
     moveSelection,
+    selectPhotoRange,
     undoOrder,
     saveOrder,
     handleDragStateChange,

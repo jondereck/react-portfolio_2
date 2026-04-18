@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import AdminStatusBadge from '@/components/admin/shared/AdminStatusBadge';
 import { toast } from 'sonner';
 import { formatLocalDate } from '@/app/admin/gallery/utils';
@@ -13,6 +14,7 @@ import {
 } from './galleryAdminShared';
 
 export default function GallerySettingsPanel({ controller, embedded = false }) {
+  const [siteOrigin, setSiteOrigin] = useState('');
   const {
     albums,
     selectedAlbum,
@@ -30,9 +32,17 @@ export default function GallerySettingsPanel({ controller, embedded = false }) {
     setSelectedAlbumId,
   } = controller;
 
-  const shareLink = selectedAlbum?.shareLinkEnabled && selectedAlbum?.shareToken
-    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`
-    : '';
+  useEffect(() => {
+    setSiteOrigin(window.location.origin);
+  }, []);
+
+  const shareLink = useMemo(
+    () =>
+      selectedAlbum?.shareLinkEnabled && selectedAlbum?.shareToken
+        ? `${siteOrigin}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`
+        : '',
+    [selectedAlbum, siteOrigin],
+  );
 
   const handleCopyShareLink = async () => {
     if (!shareLink) return;

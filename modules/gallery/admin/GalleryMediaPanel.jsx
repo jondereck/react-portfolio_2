@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Check, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -29,6 +29,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     deleteSelectedPhotos,
     selectedPhotoIds,
     togglePhotoSelect,
+    selectPhotoRange,
     clearPhotoSelection,
     setSelectedAlbumId,
   } = controller;
@@ -37,6 +38,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const touchSelectStateRef = useRef({ active: false, lastPhotoId: null });
 
   return (
     <div className={`space-y-6 ${showSelectionBar ? 'pb-36 sm:pb-28' : ''}`}>
@@ -111,11 +113,35 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   {photos.map((photo) => (
                     <article
                       key={photo.id}
+                      data-photo-id={photo.id}
                       className={`relative overflow-hidden rounded-2xl border bg-slate-50 p-2 dark:bg-slate-950/40 sm:p-4 ${
                         selectedPhotoIds.includes(photo.id)
                           ? 'border-sky-500 ring-2 ring-sky-200 dark:border-sky-400 dark:ring-sky-900/40'
                           : 'border-slate-200 dark:border-slate-700'
                       }`}
+                      onPointerDown={(event) => {
+                        if (event.pointerType !== 'touch') return;
+                        const target = event.target;
+                        if (target instanceof Element && target.closest('button,input,label,a,video')) {
+                          return;
+                        }
+                        touchSelectStateRef.current = { active: true, lastPhotoId: photo.id };
+                        selectPhotoRange(photo.id, photos.map((item) => item.id), { resetAnchor: true });
+                      }}
+                      onPointerMove={(event) => {
+                        if (event.pointerType !== 'touch' || !touchSelectStateRef.current.active) return;
+                        const target = event.target instanceof Element ? event.target.closest('[data-photo-id]') : null;
+                        const nextPhotoId = Number(target?.getAttribute('data-photo-id'));
+                        if (!nextPhotoId || nextPhotoId === touchSelectStateRef.current.lastPhotoId) return;
+                        touchSelectStateRef.current.lastPhotoId = nextPhotoId;
+                        selectPhotoRange(nextPhotoId, photos.map((item) => item.id));
+                      }}
+                      onPointerUp={() => {
+                        touchSelectStateRef.current = { active: false, lastPhotoId: null };
+                      }}
+                      onPointerCancel={() => {
+                        touchSelectStateRef.current = { active: false, lastPhotoId: null };
+                      }}
                     >
                       <button
                         type="button"

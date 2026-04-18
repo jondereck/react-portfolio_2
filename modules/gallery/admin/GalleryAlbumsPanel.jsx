@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import AdminStatusBadge from '@/components/admin/shared/AdminStatusBadge';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -16,6 +16,7 @@ import {
 
 export default function GalleryAlbumsPanel({ controller, embedded = false }) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [siteOrigin, setSiteOrigin] = useState('');
   const {
     albums,
     selectedAlbum,
@@ -35,6 +36,18 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
     saveAlbumDetails,
     setSelectedAlbumId,
   } = controller;
+
+  useEffect(() => {
+    setSiteOrigin(window.location.origin);
+  }, []);
+
+  const selectedShareLink = useMemo(
+    () =>
+      selectedAlbum?.shareLinkEnabled && selectedAlbum?.shareToken
+        ? `${siteOrigin}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`
+        : '',
+    [selectedAlbum, siteOrigin],
+  );
 
   return (
     <div className="space-y-6">
@@ -209,12 +222,12 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Share link</p>
-                    {selectedAlbum.shareLinkEnabled && selectedAlbum.shareToken ? (
+                    {selectedShareLink ? (
                       <div className="mt-2 space-y-3">
                         <input
                           className={inputStyles}
                           readOnly
-                          value={`${typeof window !== 'undefined' ? window.location.origin : ''}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`}
+                          value={selectedShareLink}
                           onFocus={(event) => event.currentTarget.select()}
                         />
                         <button
@@ -222,9 +235,7 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                           className={ghostButtonStyles}
                           onClick={async () => {
                             try {
-                              await navigator.clipboard.writeText(
-                                `${window.location.origin}/gallery/${selectedAlbum.slug}?share=${selectedAlbum.shareToken}`,
-                              );
+                              await navigator.clipboard.writeText(selectedShareLink);
                               toast.success('Share link copied');
                             } catch {
                               toast.error('Unable to copy share link');
