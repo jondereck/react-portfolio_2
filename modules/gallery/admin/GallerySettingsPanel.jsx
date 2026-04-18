@@ -12,9 +12,11 @@ import {
   buttonStyles,
   inputStyles,
 } from './galleryAdminShared';
+import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
 
 export default function GallerySettingsPanel({ controller, embedded = false }) {
   const [siteOrigin, setSiteOrigin] = useState('');
+  const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
   const {
     albums,
     selectedAlbum,
@@ -27,8 +29,11 @@ export default function GallerySettingsPanel({ controller, embedded = false }) {
     detailsDirty,
     setDetailsDirty,
     savingDetails,
+    savingAlbum,
     saveAlbumDetails,
     setCoverPhoto,
+    createAlbumRecord,
+    loadAlbums,
     setSelectedAlbumId,
   } = controller;
 
@@ -56,6 +61,22 @@ export default function GallerySettingsPanel({ controller, embedded = false }) {
 
   return (
     <div className="space-y-6">
+      <GalleryCreateAlbumModal
+        open={createAlbumOpen}
+        onOpenChange={setCreateAlbumOpen}
+        loading={savingAlbum}
+        onCreate={async (albumData) => {
+          const created = await createAlbumRecord(albumData);
+          if (!created) {
+            return null;
+          }
+
+          await loadAlbums();
+          setSelectedAlbumId(created.id);
+          return created;
+        }}
+      />
+
       {!embedded ? (
         <GalleryPageHeader
           eyebrow="Gallery Settings"
@@ -71,6 +92,7 @@ export default function GallerySettingsPanel({ controller, embedded = false }) {
           loadingAlbums={loadingAlbums}
           onSelectAlbum={setSelectedAlbumId}
           emptyDescription="Create an album first so there is something to configure."
+          onCreateAlbumClick={() => setCreateAlbumOpen(true)}
         />
 
         {selectedAlbum ? (

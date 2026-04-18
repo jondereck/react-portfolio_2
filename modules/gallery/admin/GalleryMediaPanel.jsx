@@ -12,6 +12,7 @@ import {
   GalleryPageHeader,
   GalleryPanelCard,
 } from './galleryAdminShared';
+import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
 import GalleryUploadDropzone from './GalleryUploadDropzone';
 
 export default function GalleryMediaPanel({ controller, embedded = false }) {
@@ -25,7 +26,10 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     uploadingFiles,
     uploadProgress,
     uploadSummary,
+    savingAlbum,
     uploadFiles,
+    createAlbumRecord,
+    loadAlbums,
     deleteSelectedPhotos,
     selectedPhotoIds,
     togglePhotoSelect,
@@ -38,6 +42,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
   const touchSelectStateRef = useRef({ active: false, lastPhotoId: null });
 
   return (
@@ -61,6 +66,22 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         }}
       />
 
+      <GalleryCreateAlbumModal
+        open={createAlbumOpen}
+        onOpenChange={setCreateAlbumOpen}
+        loading={savingAlbum}
+        onCreate={async (albumData) => {
+          const created = await createAlbumRecord(albumData);
+          if (!created) {
+            return null;
+          }
+
+          await loadAlbums();
+          setSelectedAlbumId(created.id);
+          return created;
+        }}
+      />
+
       {!embedded ? (
         <GalleryPageHeader
           eyebrow="Media Intake"
@@ -76,6 +97,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           loadingAlbums={loadingAlbums}
           onSelectAlbum={setSelectedAlbumId}
           emptyDescription="Create an album first so media can be ingested into a target collection."
+          onCreateAlbumClick={() => setCreateAlbumOpen(true)}
         />
 
         {selectedAlbum ? (

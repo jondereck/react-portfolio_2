@@ -116,6 +116,7 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
           loadingAlbums={loadingAlbums}
           onSelectAlbum={setSelectedAlbumId}
           emptyDescription="Create an album before you can reorder its media."
+          onCreateAlbumClick={() => setCreateAlbumOpen(true)}
         />
 
         {selectedAlbum ? (

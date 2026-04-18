@@ -12,6 +12,8 @@ import {
   ghostButtonStyles,
   inputStyles,
 } from './galleryAdminShared';
+import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
+import GalleryBatchProgressCard from './GalleryBatchProgressCard';
 import GalleryDriveFolderPicker from './GalleryDriveFolderPicker';
 import GalleryBatchResultSummary from './GalleryBatchResultSummary';
 
@@ -36,13 +38,18 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
     driveForm,
     setDriveForm,
     importingDrive,
+    importProgress,
     importSummary,
     handleDriveImport,
+    savingAlbum,
+    createAlbumRecord,
+    loadAlbums,
     setSelectedAlbumId,
   } = controller;
   const [driveConnection, setDriveConnection] = useState(emptyDriveConnection);
   const [connectionBusy, setConnectionBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
 
   const clearDriveSelection = () => {
     setDriveForm((previous) => ({
@@ -211,6 +218,22 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
 
   return (
     <div className="space-y-6">
+      <GalleryCreateAlbumModal
+        open={createAlbumOpen}
+        onOpenChange={setCreateAlbumOpen}
+        loading={savingAlbum}
+        onCreate={async (albumData) => {
+          const created = await createAlbumRecord(albumData);
+          if (!created) {
+            return null;
+          }
+
+          await loadAlbums();
+          setSelectedAlbumId(created.id);
+          return created;
+        }}
+      />
+
       {!embedded ? (
         <GalleryPageHeader
           eyebrow="Import Workflow"
@@ -226,6 +249,7 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
           loadingAlbums={loadingAlbums}
           onSelectAlbum={setSelectedAlbumId}
           emptyDescription="Create an album before importing external media."
+          onCreateAlbumClick={() => setCreateAlbumOpen(true)}
         />
 
         {selectedAlbum ? (
@@ -363,6 +387,20 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
                       {importingDrive ? 'Importing...' : 'Import Folder'}
                     </button>
                   </form>
+
+                  {importingDrive && importProgress ? (
+                    <GalleryBatchProgressCard
+                      progress={importProgress}
+                      heading="Google Drive import in progress"
+                      currentItemFallback="Importing Google Drive folder"
+                      currentItemTitle={importProgress.currentFileName || 'Importing Google Drive folder'}
+                      itemUnit="item"
+                      uploadedLabel="Imported"
+                      skippedLabel="Skipped"
+                      failedLabel="Failed"
+                      className="mt-4"
+                    />
+                  ) : null}
 
                   {importSummary ? (
                     <div className="mt-4 space-y-3">

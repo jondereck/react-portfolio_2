@@ -80,6 +80,7 @@ export function useGalleryAdminController() {
     limit: 50,
   });
   const [importingDrive, setImportingDrive] = useState(false);
+  const [importProgress, setImportProgress] = useState(null);
   const [importSummary, setImportSummary] = useState(null);
 
   const selectedAlbum = useMemo(
@@ -168,6 +169,7 @@ export function useGalleryAdminController() {
   useEffect(() => {
     setUploadProgress(null);
     setUploadSummary(null);
+    setImportProgress(null);
     setImportSummary(null);
   }, [selectedAlbumId]);
 
@@ -477,9 +479,44 @@ export function useGalleryAdminController() {
     }
 
     setImportingDrive(true);
+    const expectedTotal = Math.max(1, Number(driveForm.limit) || 50);
+    const importTargetName =
+      driveForm.folderName?.trim() || driveForm.folderId?.trim() || 'Google Drive folder';
+    setImportProgress({
+      percent: 3,
+      currentFileName: importTargetName,
+      currentFileIndex: 1,
+      totalFiles: expectedTotal,
+      uploadedCount: 0,
+      skippedCount: 0,
+      failedCount: 0,
+      lastResult: null,
+    });
     setImportSummary(null);
 
+    let importProgressInterval = null;
+
     try {
+      importProgressInterval = window.setInterval(() => {
+        setImportProgress((current) => {
+          if (!current) {
+            return current;
+          }
+
+          const nextPercent = Math.min(92, current.percent + (current.percent < 40 ? 7 : current.percent < 75 ? 4 : 2));
+          const nextIndex = Math.min(
+            current.totalFiles,
+            Math.max(1, Math.round((nextPercent / 100) * current.totalFiles)),
+          );
+
+          return {
+            ...current,
+            percent: nextPercent,
+            currentFileIndex: nextIndex,
+          };
+        });
+      }, 350);
+
       const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/import/google-drive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -492,6 +529,24 @@ export function useGalleryAdminController() {
       const importedCount = Number(result.importedCount) || 0;
       const skippedCount = Number(result.skippedCount) || 0;
       const skippedItems = Array.isArray(result.skipped) ? result.skipped : [];
+      const totalItems = Math.max(importedCount + skippedCount, expectedTotal);
+
+      setImportProgress({
+        percent: 100,
+        currentFileName: importTargetName,
+        currentFileIndex: totalItems,
+        totalFiles: totalItems,
+        uploadedCount: importedCount,
+        skippedCount,
+        failedCount: 0,
+        lastResult:
+          skippedItems.length > 0
+            ? {
+                fileName: skippedItems[skippedItems.length - 1]?.caption || skippedItems[skippedItems.length - 1]?.sourceId || 'Drive item',
+                reason: skippedItems[skippedItems.length - 1]?.reason || 'Already imported into this album.',
+              }
+            : null,
+      });
 
       setImportSummary({
         totalFiles: importedCount + skippedCount,
@@ -514,8 +569,15 @@ export function useGalleryAdminController() {
       await loadAlbums();
     } catch (error) {
       toast.error(error.message);
+      setImportProgress(null);
     } finally {
+      if (importProgressInterval !== null) {
+        window.clearInterval(importProgressInterval);
+      }
       setImportingDrive(false);
+      window.setTimeout(() => {
+        setImportProgress((current) => (current?.percent === 100 ? null : current));
+      }, 1200);
     }
   };
 
@@ -707,6 +769,7 @@ export function useGalleryAdminController() {
     driveForm,
     setDriveForm,
     importingDrive,
+    importProgress,
     importSummary,
     saveState,
     selectedAlbumMediaCount,

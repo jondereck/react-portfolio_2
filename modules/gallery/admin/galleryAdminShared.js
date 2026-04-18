@@ -161,6 +161,7 @@ export function GalleryAlbumPicker({
   emptyDescription = 'Create an album first to unlock this page.',
   createAlbumHref = '/admin/gallery/albums',
   createAlbumLabel = 'Add new album',
+  onCreateAlbumClick,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -233,6 +234,43 @@ export function GalleryAlbumPicker({
 
   const selectedMediaCount = selectedAlbum?._count?.photos ?? 0;
   const selectedAlbumCoverUrl = resolveAlbumCoverUrl(selectedAlbum);
+  const createAlbumAction = onCreateAlbumClick ? (
+    <button
+      type="button"
+      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
+      onClick={onCreateAlbumClick}
+    >
+      <Plus className="size-4" />
+      {createAlbumLabel}
+    </button>
+  ) : (
+    <Link
+      href={createAlbumHref}
+      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
+    >
+      <Plus className="size-4" />
+      {createAlbumLabel}
+    </Link>
+  );
+
+  const createAlbumEmptyAction = onCreateAlbumClick ? (
+    <button
+      type="button"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+      onClick={onCreateAlbumClick}
+    >
+      <Plus className="size-4" />
+      {createAlbumLabel}
+    </button>
+  ) : (
+    <Link
+      href={createAlbumHref}
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+    >
+      <Plus className="size-4" />
+      {createAlbumLabel}
+    </Link>
+  );
 
   return (
     <>
@@ -317,13 +355,7 @@ export function GalleryAlbumPicker({
               >
                 Browse all
               </button>
-              <Link
-                href={createAlbumHref}
-                className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
-              >
-                <Plus className="size-4" />
-                {createAlbumLabel}
-              </Link>
+              {createAlbumAction}
             </div>
           </div>
         ) : (
@@ -342,13 +374,7 @@ export function GalleryAlbumPicker({
                 >
                   Choose album
                 </button>
-                <Link
-                  href={createAlbumHref}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  <Plus className="size-4" />
-                  {createAlbumLabel}
-                </Link>
+                {createAlbumEmptyAction}
               </div>
             }
           />
@@ -498,14 +524,28 @@ export function GalleryAlbumPicker({
                         title={emptyTitle}
                         description={emptyDescription}
                         action={
-                          <Link
-                            href={createAlbumHref}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                            onClick={() => setIsOpen(false)}
-                          >
-                            <Plus className="size-4" />
-                            {createAlbumLabel}
-                          </Link>
+                          onCreateAlbumClick ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                              onClick={() => {
+                                setIsOpen(false);
+                                onCreateAlbumClick();
+                              }}
+                            >
+                              <Plus className="size-4" />
+                              {createAlbumLabel}
+                            </button>
+                          ) : (
+                            <Link
+                              href={createAlbumHref}
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                              onClick={() => setIsOpen(false)}
+                            >
+                              <Plus className="size-4" />
+                              {createAlbumLabel}
+                            </Link>
+                          )
                         }
                       />
                     ) : filteredAlbums.length === 0 ? (
@@ -513,14 +553,28 @@ export function GalleryAlbumPicker({
                         title="No matching albums"
                         description="Try a different search term, remove the current filters, or create a new album."
                         action={
-                          <Link
-                            href={createAlbumHref}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                            onClick={() => setIsOpen(false)}
-                          >
-                            <Plus className="size-4" />
-                            {createAlbumLabel}
-                          </Link>
+                          onCreateAlbumClick ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                              onClick={() => {
+                                setIsOpen(false);
+                                onCreateAlbumClick();
+                              }}
+                            >
+                              <Plus className="size-4" />
+                              {createAlbumLabel}
+                            </button>
+                          ) : (
+                            <Link
+                              href={createAlbumHref}
+                              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                              onClick={() => setIsOpen(false)}
+                            >
+                              <Plus className="size-4" />
+                              {createAlbumLabel}
+                            </Link>
+                          )
                         }
                       />
                     ) : (
