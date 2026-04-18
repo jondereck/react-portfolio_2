@@ -21,6 +21,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Move, ScanLine } from 'lucide-react';
 import MediaPreview from './MediaPreview';
 
+const TOUCH_MULTI_SELECT_DISTANCE = 14;
+
 const SortableMediaCard = memo(function SortableMediaCard({
   photo,
   index,
@@ -81,23 +83,76 @@ const SortableMediaCard = memo(function SortableMediaCard({
         if (target instanceof Element && target.closest('button,input,label,a,video,[data-drag-handle]')) {
           return;
         }
-        suppressNextClickRef.current = true;
-        onSelectRange?.(photo.id, { resetAnchor: true });
-        touchSelectStateRef.current = { active: true, lastPhotoId: photo.id };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        touchSelectStateRef.current = {
+          active: true,
+          activated: false,
+          pointerId: event.pointerId,
+          originPhotoId: photo.id,
+          lastPhotoId: photo.id,
+          startX: event.clientX,
+          startY: event.clientY,
+        };
       }}
       onPointerMove={(event) => {
-        if (event.pointerType !== 'touch' || !touchSelectStateRef.current.active) return;
-        const target = event.target instanceof Element ? event.target.closest('[data-photo-id]') : null;
-        const nextPhotoId = target?.getAttribute('data-photo-id');
+        const touchState = touchSelectStateRef.current;
+        if (
+          event.pointerType !== 'touch' ||
+          !touchState.active ||
+          touchState.pointerId !== event.pointerId
+        ) {
+          return;
+        }
+
+        if (!touchState.activated) {
+          const distanceX = event.clientX - touchState.startX;
+          const distanceY = event.clientY - touchState.startY;
+          if (Math.hypot(distanceX, distanceY) < TOUCH_MULTI_SELECT_DISTANCE) {
+            return;
+          }
+
+          touchState.activated = true;
+          suppressNextClickRef.current = true;
+          onSelectRange?.(touchState.originPhotoId, { resetAnchor: true });
+        }
+
+        event.preventDefault();
+
+        const hoveredElement = document.elementFromPoint(event.clientX, event.clientY);
+        const nextPhotoId = hoveredElement?.closest?.('[data-photo-id]')?.getAttribute('data-photo-id');
         if (!nextPhotoId || nextPhotoId === touchSelectStateRef.current.lastPhotoId) return;
         touchSelectStateRef.current.lastPhotoId = nextPhotoId;
         onSelectRange?.(Number(nextPhotoId));
       }}
-      onPointerUp={() => {
-        touchSelectStateRef.current = { active: false, lastPhotoId: null };
+      onPointerUp={(event) => {
+        if (touchSelectStateRef.current.pointerId === event.pointerId) {
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+          const shouldSuppressClick = touchSelectStateRef.current.activated;
+          touchSelectStateRef.current = {
+            active: false,
+            activated: false,
+            pointerId: null,
+            originPhotoId: null,
+            lastPhotoId: null,
+            startX: 0,
+            startY: 0,
+          };
+          suppressNextClickRef.current = shouldSuppressClick;
+        }
       }}
-      onPointerCancel={() => {
-        touchSelectStateRef.current = { active: false, lastPhotoId: null };
+      onPointerCancel={(event) => {
+        if (touchSelectStateRef.current.pointerId === event.pointerId) {
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+        }
+        touchSelectStateRef.current = {
+          active: false,
+          activated: false,
+          pointerId: null,
+          originPhotoId: null,
+          lastPhotoId: null,
+          startX: 0,
+          startY: 0,
+        };
         suppressNextClickRef.current = false;
       }}
       className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-200 will-change-transform dark:bg-slate-900 ${
@@ -177,6 +232,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
             type="button"
             {...attributes}
             {...listeners}
+            data-drag-handle
             className={`absolute bottom-2 right-2 inline-flex min-h-11 min-w-11 items-center gap-1.5 rounded-full border px-3 py-2 text-[10px] font-semibold shadow-sm transition active:scale-[0.97] touch-none select-none md:min-h-9 md:min-w-9 md:px-2.5 md:py-1.5 md:text-[11px] ${
               isDropTarget || dragActive
                 ? 'border-blue-300 bg-white/95 text-blue-700 backdrop-blur dark:border-blue-700 dark:bg-slate-950/90 dark:text-blue-200'
@@ -325,7 +381,15 @@ export default function SortableMediaGrid({
   const [previewItems, setPreviewItems] = useState(items);
   const previewItemsRef = useRef(items);
   const draggedIdsRef = useRef([]);
-  const touchSelectStateRef = useRef({ active: false, lastPhotoId: null });
+  const touchSelectStateRef = useRef({
+    active: false,
+    activated: false,
+    pointerId: null,
+    originPhotoId: null,
+    lastPhotoId: null,
+    startX: 0,
+    startY: 0,
+  });
   const suppressNextClickRef = useRef(false);
   const pointerPositionRef = useRef(null);
   const pointerVelocityRef = useRef({ x: 0, y: 0 });
