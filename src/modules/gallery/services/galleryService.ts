@@ -329,8 +329,12 @@ export class GalleryService {
     for (const photo of orderedSourcePhotos) {
       try {
         const result = await prisma.$transaction(async (tx) => {
-          const duplicate =
-            photo.sourceType === PhotoSourceType.gdrive && photo.sourceId
+          const duplicate = photo.contentHash
+            ? await tx.albumPhoto.findFirst({
+                where: { albumId: targetAlbumId, contentHash: photo.contentHash },
+                select: albumPhotoSelect,
+              })
+            : photo.sourceType === PhotoSourceType.gdrive && photo.sourceId
               ? await tx.albumPhoto.findFirst({
                   where: {
                     albumId: targetAlbumId,
@@ -339,12 +343,7 @@ export class GalleryService {
                   },
                   select: albumPhotoSelect,
                 })
-              : photo.contentHash
-                ? await tx.albumPhoto.findFirst({
-                    where: { albumId: targetAlbumId, contentHash: photo.contentHash },
-                    select: albumPhotoSelect,
-                  })
-                : null;
+              : null;
 
           if (duplicate) {
             return {
@@ -452,7 +451,7 @@ export class GalleryService {
   }
 
   async importGoogleDriveFolder(albumId: number, args: { accessToken: string; folderId: string; limit: number }) {
-    const drivePhotos = await this.driveAdapter.listFolderImages(args);
+    const drivePhotos = await this.driveAdapter.listFolderMedia(args);
 
     const created = [];
     const skipped = [];
@@ -468,15 +467,59 @@ export class GalleryService {
         continue;
       }
 
-      const dateTaken = photo.dateTaken ? new Date(photo.dateTaken) : undefined;
-      const row = await this.addAlbumPhoto(albumId, {
-        imageUrl: photo.imageUrl,
-        caption: photo.caption,
-        dateTaken: dateTaken && !Number.isNaN(dateTaken.getTime()) ? dateTaken.toISOString() : undefined,
-        sourceType: 'gdrive',
-        sourceId: photo.sourceId,
+      const contentHash = await this.driveAdapter.getFileContentHash({
+        accessToken: args.accessToken,
+        fileId: photo.sourceId,
       });
-      created.push(row);
+
+      const duplicateByHash = await this.repo.findAlbumPhotoByContentHash(albumId, contentHash);
+      if (duplicateByHash) {
+        skipped.push({
+          sourceId: photo.sourceId,
+          caption: photo.caption,
+          reason: 'Duplicate media already exists in this album.',
+          duplicateId: duplicateByHash.id,
+        });
+        continue;
+      }
+
+      const dateTaken = photo.dateTaken ? new Date(photo.dateTaken) : undefined;
+      try {
+        const row = await this.addAlbumPhoto(albumId, {
+          imageUrl: photo.imageUrl,
+          caption: photo.caption,
+          dateTaken: dateTaken && !Number.isNaN(dateTaken.getTime()) ? dateTaken.toISOString() : undefined,
+          mimeType: photo.mimeType,
+          contentHash,
+          sourceType: 'gdrive',
+          sourceId: photo.sourceId,
+        });
+        created.push(row);
+      } catch (error) {
+        if (error instanceof RequestValidationError && error.errorCode === 'DUPLICATE_MEDIA') {
+          const duplicate = error.meta as { duplicate?: { id?: number } } | undefined;
+          skipped.push({
+            sourceId: photo.sourceId,
+            caption: photo.caption,
+            reason: 'Duplicate media already exists in this album.',
+            duplicateId: duplicate?.duplicate?.id,
+          });
+          continue;
+        }
+
+        if (error instanceof RequestValidationError && error.errorCode === 'DUPLICATE_SOURCE_MEDIA') {
+          const duplicate = error.meta as { duplicate?: { id?: number } } | undefined;
+          skipped.push({
+            sourceId: photo.sourceId,
+            caption: photo.caption,
+            reason: 'Already imported into this album.',
+            duplicateId: duplicate?.duplicate?.id,
+          });
+          continue;
+        }
+
+        throw error;
+      }
     }
 
     return { created, skipped };

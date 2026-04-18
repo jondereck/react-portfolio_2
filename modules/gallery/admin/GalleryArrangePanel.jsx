@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRightLeft, Plus, Trash2, X } from 'lucide-react';
+import { ArrowRightLeft, Image, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ConfirmModal from '@/components/ConfirmModal';
 import SortableMediaGrid from '@/app/admin/gallery/components/SortableMediaGrid';
@@ -227,82 +227,89 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
 
           {showSelectionBar ? (
             <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-10px_30px_-18px_rgba(15,23,42,0.4)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:px-4">
-              <div className="mx-auto flex max-w-5xl flex-col gap-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      {selectedCount} selected
+              <div className="mx-auto max-w-5xl rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:px-5">
+                <div className="flex items-start gap-4">
+                  <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm">
+                    <Image className="size-5" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 sm:text-base">
+                      {selectedCount} media item{selectedCount === 1 ? '' : 's'} selected
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Move, delete, or clear the current batch.
+                    <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400 sm:text-sm">
+                      Use delete or move to apply a bulk action to the selected items.
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 shrink-0 px-3 text-xs sm:h-9"
-                    onClick={() => setCreateAlbumOpen(true)}
-                  >
-                    <Plus className="size-4" />
-                    Album
-                  </Button>
                 </div>
 
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                  <select
-                    className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:disabled:bg-slate-800"
-                    value={moveTargetAlbumId ?? ''}
-                    onChange={(event) => setMoveTargetAlbumId(Number(event.target.value) || null)}
-                    disabled={movingPhotos || albums.filter((album) => album.id !== selectedAlbumId).length === 0}
-                  >
-                    <option value="">Move to album</option>
-                    {albums
-                      .filter((album) => album.id !== selectedAlbumId)
-                      .map((album) => (
-                        <option key={album.id} value={album.id}>
-                          {album.name}
-                        </option>
-                      ))}
-                  </select>
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Add to album</p>
+                  <div className="grid grid-cols-[minmax(0,1.25fr)_auto] gap-3 items-end">
+                    <select
+                      className="h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:bg-slate-800"
+                      value={moveTargetAlbumId ?? ''}
+                      onChange={(event) => setMoveTargetAlbumId(Number(event.target.value) || null)}
+                      disabled={movingPhotos || albums.filter((album) => album.id !== selectedAlbumId).length === 0}
+                    >
+                      <option value="">Move to album</option>
+                      {albums
+                        .filter((album) => album.id !== selectedAlbumId)
+                        .map((album) => (
+                          <option key={album.id} value={album.id}>
+                            {album.name}
+                          </option>
+                        ))}
+                    </select>
 
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11 w-full sm:w-auto"
-                    onClick={() => moveSelectedPhotos()}
-                    disabled={
-                      movingPhotos ||
-                      !moveTargetAlbumId ||
-                      moveTargetAlbumId === selectedAlbumId ||
-                      albums.filter((album) => album.id !== selectedAlbumId).length === 0
-                    }
-                  >
-                    <ArrowRightLeft className="size-4" />
-                    {movingPhotos ? 'Moving...' : 'Move'}
-                  </Button>
-                </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-12 shrink-0 rounded-xl border-blue-200 px-4 text-blue-700 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-200 dark:hover:bg-blue-950/40"
+                      onClick={() => setCreateAlbumOpen(true)}
+                    >
+                      <Plus className="size-4" />
+                      Create album
+                    </Button>
+                  </div>
 
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    className="h-11"
-                    onClick={() => setConfirmDeleteOpen(true)}
-                    disabled={confirmingDelete || movingPhotos}
-                  >
-                    <Trash2 className="size-4" />
-                    Delete
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-11"
-                    onClick={clearPhotoSelection}
-                    disabled={movingPhotos}
-                  >
-                    <X className="size-4" />
-                    Clear
-                  </Button>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 rounded-xl"
+                      onClick={() => moveSelectedPhotos()}
+                      disabled={
+                        movingPhotos ||
+                        !moveTargetAlbumId ||
+                        moveTargetAlbumId === selectedAlbumId ||
+                        albums.filter((album) => album.id !== selectedAlbumId).length === 0
+                      }
+                    >
+                      <ArrowRightLeft className="size-4" />
+                      {movingPhotos ? 'Moving...' : 'Move'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="h-11 rounded-xl"
+                      onClick={() => setConfirmDeleteOpen(true)}
+                      disabled={confirmingDelete || movingPhotos}
+                    >
+                      <Trash2 className="size-4" />
+                      Delete
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 rounded-xl col-span-2 sm:col-span-1"
+                      onClick={clearPhotoSelection}
+                      disabled={movingPhotos}
+                    >
+                      <X className="size-4" />
+                      Clear
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>

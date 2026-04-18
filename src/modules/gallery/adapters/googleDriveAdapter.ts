@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
+
 export type ImportedDrivePhoto = {
   sourceId: string;
   imageUrl: string;
   caption?: string;
   dateTaken?: string;
+  mimeType?: string;
 };
 
 export type GoogleDriveFolderEntry = {
@@ -48,6 +51,7 @@ type GoogleFileResponse = {
   imageMediaMetadata?: {
     time?: string;
   };
+  createdTime?: string;
 };
 
 type GoogleFilesListResponse = {
@@ -55,7 +59,7 @@ type GoogleFilesListResponse = {
   nextPageToken?: string;
 };
 
-const ALLOWED_MIME_PREFIX = 'image/';
+const ALLOWED_MEDIA_MIME_PREFIXES = ['image/', 'video/'];
 const PREVIEW_MIME_PREFIXES = ['image/', 'video/'];
 const GOOGLE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder';
 
@@ -196,16 +200,13 @@ export class GoogleDriveAdapter {
     return {
       files: files
         .filter((file) => file?.id && typeof file?.mimeType === 'string' && PREVIEW_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix)))
-        .map((file) => {
-          const isVideo = file.mimeType.startsWith('video/');
-          return {
-            id: file.id,
-            name: file.name || 'Untitled media',
-            mimeType: file.mimeType,
-            previewUrl: `/api/admin/integrations/google-drive/files/${encodeURIComponent(file.id)}`,
-            kind: isVideo ? 'video' : 'image',
-          };
-        }),
+        .map((file) => ({
+          id: file.id,
+          name: file.name || 'Untitled media',
+          mimeType: file.mimeType,
+          previewUrl: `/api/admin/integrations/google-drive/files/${encodeURIComponent(file.id)}`,
+          kind: file.mimeType.startsWith('video/') ? 'video' : 'image',
+        })),
       nextPageToken: data.nextPageToken || null,
     };
   }
@@ -258,12 +259,12 @@ export class GoogleDriveAdapter {
     };
   }
 
-  async listFolderImages(args: { accessToken: string; folderId: string; limit: number }): Promise<ImportedDrivePhoto[]> {
-    const query = `'${args.folderId}' in parents and trashed = false and mimeType contains 'image/'`;
+  async listFolderMedia(args: { accessToken: string; folderId: string; limit: number }): Promise<ImportedDrivePhoto[]> {
+    const query = `'${args.folderId}' in parents and trashed = false and (mimeType contains 'image/' or mimeType contains 'video/')`;
     const params = new URLSearchParams({
       q: query,
       pageSize: String(args.limit),
-      fields: 'files(id,name,mimeType,imageMediaMetadata(time))',
+      fields: 'files(id,name,mimeType,imageMediaMetadata(time),createdTime)',
       orderBy: 'createdTime desc',
       supportsAllDrives: 'true',
       includeItemsFromAllDrives: 'true',
@@ -273,12 +274,55 @@ export class GoogleDriveAdapter {
     const files = Array.isArray(data.files) ? data.files : [];
 
     return files
-      .filter((file) => file?.id && typeof file?.mimeType === 'string' && file.mimeType.startsWith(ALLOWED_MIME_PREFIX))
+      .filter(
+        (file) =>
+          file?.id &&
+          typeof file?.mimeType === 'string' &&
+          ALLOWED_MEDIA_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix)),
+      )
       .map((file) => ({
         sourceId: file.id,
         imageUrl: `https://drive.google.com/thumbnail?id=${encodeURIComponent(file.id)}&sz=w2000`,
         caption: file.name,
-        dateTaken: file.imageMediaMetadata?.time,
+        dateTaken: file.imageMediaMetadata?.time || file.createdTime,
+        mimeType: file.mimeType,
       }));
+  }
+
+  async getFileContentHash(args: { accessToken: string; fileId: string }): Promise<string> {
+    const response = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(args.fileId)}?alt=media&supportsAllDrives=true`,
+      {
+        headers: {
+          Authorization: `Bearer ${args.accessToken}`,
+        },
+        cache: 'no-store',
+      },
+    );
+
+    if (!response.ok) {
+      throw await createGoogleDriveRequestError(response);
+    }
+
+    if (!response.body) {
+      throw new Error('Failed to load file content from Google Drive.');
+    }
+
+    const reader = response.body.getReader();
+    const hash = createHash('sha256');
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          break;
+        }
+        hash.update(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    return hash.digest('hex');
   }
 }
