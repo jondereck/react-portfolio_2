@@ -23,6 +23,26 @@ export const getPlayableMediaUrl = (value) => {
   return query ? `${transformed}?${query}` : transformed;
 };
 
+export const getAdminMediaUrl = (photoOrUrl, sourceTypeArg, sourceIdArg) => {
+  if (photoOrUrl && typeof photoOrUrl === 'object') {
+    const sourceType = photoOrUrl.sourceType;
+    const sourceId = photoOrUrl.sourceId;
+    const imageUrl = photoOrUrl.imageUrl;
+
+    if (sourceType === 'gdrive' && sourceId) {
+      return `/api/admin/integrations/google-drive/files/${encodeURIComponent(sourceId)}`;
+    }
+
+    return imageUrl ?? '';
+  }
+
+  if (sourceTypeArg === 'gdrive' && sourceIdArg) {
+    return `/api/admin/integrations/google-drive/files/${encodeURIComponent(sourceIdArg)}`;
+  }
+
+  return photoOrUrl;
+};
+
 export const formatLocalDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);

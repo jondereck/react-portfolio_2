@@ -94,11 +94,49 @@ const getVideoPosterUrl = (value) => {
 
 const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
   const posterSrc = getVideoPosterUrl(src);
-  if (!posterSrc) {
-    return <div className={fallbackClassName} />;
+  const [showVideoFallback, setShowVideoFallback] = useState(!posterSrc);
+
+  useEffect(() => {
+    setShowVideoFallback(!posterSrc);
+  }, [posterSrc, src]);
+
+  if (showVideoFallback) {
+    const playableSrc = getPlayableMediaUrl(src);
+    if (!playableSrc) {
+      return <div className={fallbackClassName} />;
+    }
+
+    return (
+      <video
+        src={playableSrc}
+        className={className}
+        muted
+        playsInline
+        preload="metadata"
+        onLoadedMetadata={(event) => {
+          const player = event.currentTarget;
+          if (Number.isFinite(player.duration) && player.duration > 0.12) {
+            try {
+              player.currentTime = Math.min(0.1, player.duration / 2);
+            } catch {
+              // ignore poster seek failures; the browser can still render the first frame
+            }
+          }
+        }}
+      />
+    );
   }
 
-  return <img src={posterSrc} alt={alt} className={className} />;
+  return (
+    <img
+      src={posterSrc}
+      alt={alt}
+      className={className}
+      onError={() => {
+        setShowVideoFallback(true);
+      }}
+    />
+  );
 };
 
 const densityGridMap = {
@@ -178,6 +216,42 @@ const viewerModeStorageKey = "galleryViewerMode";
 const splitMobileSwapStorageKey = "gallerySplitMobileSwapped";
 const authLastVisitedPathStorageKey = "auth:lastVisitedPath";
 const splitPanelTransitionMs = 260;
+
+const buildGalleryMediaUrl = (albumId, photoId, shareToken = "") => {
+  if (!albumId || !photoId) return "";
+
+  const params = new URLSearchParams();
+  if (shareToken) {
+    params.set("share", shareToken);
+  }
+
+  const query = params.toString();
+  return `/api/gallery/albums/${albumId}/photos/${photoId}/media${
+    query ? `?${query}` : ""
+  }`;
+};
+
+const normalizeGalleryPhoto = (photo, albumId, shareToken = "") => {
+  if (!photo || photo.sourceType !== "gdrive" || !photo.sourceId) {
+    return photo;
+  }
+
+  return {
+    ...photo,
+    imageUrl: buildGalleryMediaUrl(albumId, photo.id, shareToken),
+  };
+};
+
+const normalizeGalleryAlbum = (album, shareToken = "") => {
+  if (!album) return album;
+
+  return {
+    ...album,
+    coverPhoto: album.coverPhoto
+      ? normalizeGalleryPhoto(album.coverPhoto, album.id, shareToken)
+      : album.coverPhoto,
+  };
+};
 
 const SplitPanelMediaSurface = ({
   panelId,
@@ -524,12 +598,19 @@ export default function AlbumDetailPage({ params }) {
             ? `/api/gallery/albums/by-share-token/${shareToken}`
             : `/api/gallery/albums/by-slug/${slug}`,
         );
-        setAlbum(albumData);
+        const normalizedAlbum = normalizeGalleryAlbum(albumData, shareToken);
+        setAlbum(normalizedAlbum);
 
         const photoData = await fetchJson(
           `/api/gallery/albums/${albumData.id}/photos?sort=${sort}`,
         );
-        setPhotos(Array.isArray(photoData.photos) ? photoData.photos : []);
+        setPhotos(
+          Array.isArray(photoData.photos)
+            ? photoData.photos.map((photo) =>
+                normalizeGalleryPhoto(photo, albumData.id, shareToken),
+              )
+            : [],
+        );
       } catch (err) {
         setError(err.message);
       } finally {

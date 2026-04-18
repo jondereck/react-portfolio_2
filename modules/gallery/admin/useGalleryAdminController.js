@@ -72,7 +72,7 @@ export function useGalleryAdminController() {
   const [arrangeDragState, setArrangeDragState] = useState({ isDragging: false, draggingCount: 0 });
   const [moveTargetAlbumId, setMoveTargetAlbumId] = useState(null);
 
-  const [driveForm, setDriveForm] = useState({ folderId: '', accessToken: '', limit: 50 });
+  const [driveForm, setDriveForm] = useState({ folderId: '', limit: 50 });
   const [importingDrive, setImportingDrive] = useState(false);
   const [importSummary, setImportSummary] = useState(null);
 
@@ -467,7 +467,6 @@ export function useGalleryAdminController() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folderId: driveForm.folderId,
-          accessToken: driveForm.accessToken,
           limit: Number(driveForm.limit) || 50,
         }),
       });

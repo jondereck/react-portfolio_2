@@ -126,6 +126,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                         <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                           <MediaPreview
                             url={photo.imageUrl}
+                            sourceType={photo.sourceType}
+                            sourceId={photo.sourceId}
                             alt={photo.caption || `Media ${photo.id}`}
                             className="h-full w-full object-contain"
                             controls={false}

@@ -98,6 +98,32 @@ const normalizeAlbumPhotosPayload = (payload) => {
   return [];
 };
 
+const buildGalleryMediaUrl = (albumId, photoId) => {
+  if (!albumId || !photoId) return '';
+  return `/api/gallery/albums/${albumId}/photos/${photoId}/media`;
+};
+
+const normalizeGalleryPhoto = (photo, albumId) => {
+  if (!photo || photo.sourceType !== 'gdrive' || !photo.sourceId) {
+    return photo;
+  }
+
+  return {
+    ...photo,
+    imageUrl: buildGalleryMediaUrl(albumId, photo.id),
+  };
+};
+
+const normalizeGalleryAlbum = (album) => {
+  if (!album) return album;
+
+  return {
+    ...album,
+    coverPhoto: album.coverPhoto ? normalizeGalleryPhoto(album.coverPhoto, album.id) : album.coverPhoto,
+    photos: Array.isArray(album.photos) ? album.photos.map((photo) => normalizeGalleryPhoto(photo, album.id)) : album.photos,
+  };
+};
+
 const resolveAlbumCover = (album) => album?.coverPhoto?.imageUrl || album?.photos?.[0]?.imageUrl || '';
 
 const attachAlbumMediaCounts = async (albums) => {
@@ -528,7 +554,7 @@ export default function GalleryPage() {
         const albumsWithCounts = await attachAlbumMediaCounts(publishedAlbums);
         const resolvedDefaultView = normalizeGalleryView(settingsPayload?.settings?.integrations?.defaultGalleryView);
 
-        setAlbums(albumsWithCounts);
+        setAlbums(albumsWithCounts.map((album) => normalizeGalleryAlbum(album)));
         setActiveIndex(0);
 
         let storedView = null;

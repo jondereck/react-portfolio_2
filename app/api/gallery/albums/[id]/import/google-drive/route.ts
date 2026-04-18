@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { canMutateContent } from '@/lib/auth/roles';
+import { getGoogleDriveAccessTokenForUser } from '@/lib/auth/google-drive';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { getAdminSettings } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
@@ -42,9 +43,10 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
     const parsed = driveImportSchema.parse(body);
+    const accessToken = await getGoogleDriveAccessTokenForUser(actor.user.id);
     const result = await galleryService.importGoogleDriveFolder(albumId, {
       folderId: String(parsed.folderId),
-      accessToken: String(parsed.accessToken),
+      accessToken,
       limit: Number(parsed.limit ?? 50),
     });
 
@@ -61,6 +63,32 @@ export async function POST(request: Request, context: RouteContext) {
     const authError = toAuthErrorResponse(error);
     if (authError) {
       return authError;
+    }
+    if (error instanceof Error) {
+      if (error.message === 'GOOGLE_DRIVE_NOT_CONNECTED') {
+        return NextResponse.json({ error: 'Connect Google Drive before importing.' }, { status: 403 });
+      }
+      if (error.message === 'GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED') {
+        return NextResponse.json({ error: 'Google Drive OAuth is not configured.' }, { status: 503 });
+      }
+      if (error.message === 'GOOGLE_DRIVE_RECONNECT_REQUIRED') {
+        return NextResponse.json({ error: 'Google Drive access expired. Reconnect and try again.' }, { status: 403 });
+      }
+      if (error.message === 'GOOGLE_DRIVE_TOKEN_REFRESH_FAILED') {
+        return NextResponse.json({ error: 'Unable to refresh Google Drive access. Reconnect and try again.' }, { status: 502 });
+      }
+      if (error.message === 'Google Drive API is not enabled for this Google Cloud project. Enable the Drive API and try again in a few minutes.') {
+        return NextResponse.json({ error: error.message }, { status: 503 });
+      }
+      if (error.message === 'Google Drive folder not found, or the connected Google account does not have access to it.') {
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      }
+      if (error.message === 'The connected Google account does not have permission to read that Google Drive folder.') {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      if (error.message.startsWith('Google Drive error:')) {
+        return NextResponse.json({ error: error.message }, { status: 502 });
+      }
     }
     return toErrorResponse(error, 'Unable to import Google Drive folder.');
   }

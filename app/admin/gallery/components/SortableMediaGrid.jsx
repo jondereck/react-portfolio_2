@@ -128,6 +128,8 @@ const SortableMediaCard = memo(function SortableMediaCard({
           >
             <MediaPreview
               url={photo.imageUrl}
+              sourceType={photo.sourceType}
+              sourceId={photo.sourceId}
               alt={photo.caption || `Media ${photo.id}`}
               className="h-full w-full bg-slate-100 object-contain dark:bg-slate-800"
               controls={false}
@@ -203,6 +205,8 @@ const OverlayCard = memo(function OverlayCard({ photo, draggingCount }) {
       <div className="mb-2 aspect-[4/3] overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
         <MediaPreview
           url={photo.imageUrl}
+          sourceType={photo.sourceType}
+          sourceId={photo.sourceId}
           alt={photo.caption || `Media ${photo.id}`}
           className="h-full w-full bg-slate-100 object-contain dark:bg-slate-800"
           controls={false}

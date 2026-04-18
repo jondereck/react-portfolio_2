@@ -43,7 +43,6 @@ export const movePhotosSchema = z.object({
 
 export const driveImportSchema = z.object({
   folderId: z.string().trim().min(1),
-  accessToken: z.string().trim().min(1),
   limit: z.number().int().min(1).max(200).optional().default(50),
 });
 

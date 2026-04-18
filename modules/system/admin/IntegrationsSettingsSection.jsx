@@ -173,17 +173,22 @@ export default function IntegrationsSettingsSection() {
             </label>
 
             <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-              <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-                <span>Enable Google Drive imports</span>
-                <input
-                  type="checkbox"
-                  checked={integrations.googleDriveImportEnabled}
-                  onChange={(event) => {
-                    setIntegrations((previous) => ({ ...previous, googleDriveImportEnabled: event.target.checked }));
-                    clearField('googleDriveImportEnabled');
-                  }}
-                />
-              </label>
+              <div className="space-y-3">
+                <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <span>Enable Google Drive imports</span>
+                  <input
+                    type="checkbox"
+                    checked={integrations.googleDriveImportEnabled}
+                    onChange={(event) => {
+                      setIntegrations((previous) => ({ ...previous, googleDriveImportEnabled: event.target.checked }));
+                      clearField('googleDriveImportEnabled');
+                    }}
+                  />
+                </label>
+                <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  This is the global master switch only. Individual admins connect their own Google Drive account from the gallery import workflow.
+                </p>
+              </div>
             </div>
 
             <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40">

@@ -1,12 +1,21 @@
 'use client';
 
-import { getPlayableMediaUrl, isVideoUrl } from '../utils';
+import { getAdminMediaUrl, getPlayableMediaUrl, isVideoUrl } from '../utils';
 
-export default function MediaPreview({ url, alt, className = 'h-full w-full object-cover', controls = false }) {
-  if (isVideoUrl(url)) {
+export default function MediaPreview({
+  url,
+  alt,
+  className = 'h-full w-full object-cover',
+  controls = false,
+  sourceType,
+  sourceId,
+}) {
+  const resolvedUrl = getAdminMediaUrl(url, sourceType, sourceId);
+
+  if (isVideoUrl(resolvedUrl)) {
     return (
       <video
-        src={getPlayableMediaUrl(url)}
+        src={getPlayableMediaUrl(resolvedUrl)}
         className={className}
         controls={controls}
         playsInline
@@ -15,5 +24,5 @@ export default function MediaPreview({ url, alt, className = 'h-full w-full obje
     );
   }
 
-  return <img src={url} alt={alt} className={className} />;
+  return <img src={resolvedUrl} alt={alt} className={className} />;
 }

@@ -56,6 +56,8 @@ export default function GalleryMediaViewer({ open, photo, onClose }) {
                     {photo ? (
                       <MediaPreview
                         url={photo.imageUrl}
+                        sourceType={photo.sourceType}
+                        sourceId={photo.sourceId}
                         alt={title}
                         className="mx-auto block max-h-[58dvh] max-w-[88vw] object-contain sm:max-h-[68dvh] sm:max-w-[78vw] lg:max-h-[66dvh] lg:max-w-[820px]"
                         controls

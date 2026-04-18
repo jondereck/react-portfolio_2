@@ -163,6 +163,7 @@ export async function getCloudinaryFolderPath(pathSuffix = '') {
 
 export async function getAdminSettingsDashboardData() {
   const settings = await getAdminSettings({ fresh: true });
+  const googleDriveOAuthConfigured = Boolean(process.env.GOOGLE_CLIENT_ID) && Boolean(process.env.GOOGLE_CLIENT_SECRET);
 
   const statuses: IntegrationStatus[] = [];
 
@@ -216,10 +217,12 @@ export async function getAdminSettingsDashboardData() {
   statuses.push({
     key: 'googleDrive',
     label: 'Google Drive Import',
-    configured: settings.integrations.googleDriveImportEnabled,
-    state: settings.integrations.googleDriveImportEnabled ? 'connected' : 'disabled',
+    configured: settings.integrations.googleDriveImportEnabled && googleDriveOAuthConfigured,
+    state: !settings.integrations.googleDriveImportEnabled ? 'disabled' : googleDriveOAuthConfigured ? 'connected' : 'warning',
     description: settings.integrations.googleDriveImportEnabled
-      ? 'Google Drive imports are enabled. Access tokens are still supplied per import session.'
+      ? googleDriveOAuthConfigured
+        ? 'Google Drive imports are enabled globally. Each admin connects their own Google account from the import workflow.'
+        : 'Google Drive imports are enabled globally, but Google OAuth client env variables are missing.'
       : 'Google Drive imports are disabled by admin settings.',
   });
 
