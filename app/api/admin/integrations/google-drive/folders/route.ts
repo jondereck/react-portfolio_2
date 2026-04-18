@@ -29,10 +29,15 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const parentId = url.searchParams.get('parentId')?.trim() || null;
+    const previewPageToken = url.searchParams.get('previewPageToken')?.trim() || null;
+    const previewPageSizeRaw = Number.parseInt(url.searchParams.get('previewPageSize') || '', 10);
+    const previewLimit = Number.isFinite(previewPageSizeRaw) ? previewPageSizeRaw : 8;
     const accessToken = await getGoogleDriveAccessTokenForUser(actor.user.id);
     const payload = await driveAdapter.getFolderContext({
       accessToken,
       parentId,
+      previewPageToken,
+      previewLimit,
     });
 
     return NextResponse.json(payload);

@@ -202,13 +202,7 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
         ? 'Connected'
         : 'Not connected';
 
-  const connectionDescription = !driveConnection.featureEnabled
-    ? 'Google Drive imports are disabled in system settings.'
-    : !driveConnection.oauthConfigured
-      ? 'Add Google OAuth client credentials on the server before admins can connect Drive.'
-      : driveConnection.connected
-        ? 'This admin account can import Google Drive images without pasting an access token.'
-        : 'Connect your Google account once, then browse Drive folders directly from this page.';
+  
 
   const folderPreview = driveForm.folderName?.trim() || driveForm.folderId.trim() || '...';
   const folderPathPreview = Array.isArray(driveForm.breadcrumbs)
@@ -246,7 +240,7 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-80">Google Drive connection</p>
                       <p className="mt-2 text-sm font-semibold">{connectionLabel}</p>
-                      <p className="mt-1 text-sm opacity-90">{connectionDescription}</p>
+            
                       <p className="mt-3 text-xs opacity-80">
                         Imported images stay linked to Google Drive in this version. Choose a folder from Drive, then import it into the selected album.
                       </p>
