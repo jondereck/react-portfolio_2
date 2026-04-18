@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import React from "react";
 import Blog from "../assets/portfolio/Blog.jpg"
 import RestApi from "../assets/portfolio/RestApi.jpg"

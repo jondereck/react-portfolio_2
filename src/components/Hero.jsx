@@ -1,15 +1,14 @@
+/* eslint-disable @next/next/no-img-element */
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-scroll';
 import heroFallbackImage from '../assets/heroImage.jpg';
 import { isSafeHttpUrl } from '@/lib/url-safety';
 
-const Hero = ({ hero }) => {
-  if (!hero) {
-    return null;
-  }
+const EMPTY_HERO_CONTENT = {};
 
-  const content = hero;
+const Hero = ({ hero }) => {
+  const content = hero ?? EMPTY_HERO_CONTENT;
 
   const heroImageSrc = content.image?.length ? content.image : heroFallbackImage;
 
@@ -62,6 +61,10 @@ const Hero = ({ hero }) => {
 
     return { primary, secondary };
   }, [content]);
+
+  if (!hero) {
+    return null;
+  }
 
   return (
     <section name="home" className="w-full px-4 pb-16 pt-28 md:pb-24 md:pt-36">

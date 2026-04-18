@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -1144,9 +1145,9 @@ export default function AlbumDetailPage({ params }) {
 
   useEffect(() => {
     if (!viewerOpen || viewerMode !== "split") return undefined;
+    const leftPlayer = splitLeftVideoRef.current;
+    const rightPlayer = splitRightVideoRef.current;
     return () => {
-      const leftPlayer = splitLeftVideoRef.current;
-      const rightPlayer = splitRightVideoRef.current;
       if (leftPlayer) {
         leftPlayer.pause();
       }

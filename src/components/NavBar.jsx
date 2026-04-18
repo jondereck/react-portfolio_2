@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import React, { useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';

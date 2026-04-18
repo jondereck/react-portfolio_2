@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import SectionContainer from './SectionContainer';
@@ -5,6 +6,8 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { Dialog, DialogContent } from './ui/dialog';
 import useSWR from 'swr';
 import { isSafeHttpUrl } from '@/lib/url-safety';
+
+const EMPTY_ITEMS = [];
 
 const fetcher = (url) =>
   fetch(url, { cache: 'no-store' }).then((response) => {
@@ -29,7 +32,7 @@ const Certificates = ({ profileSlug = null }) => {
   const [page, setPage] = useState(1);
   const itemsPerPage = 6;
   const { data, error } = useSWR(withProfile('/api/certificates', profileSlug), fetcher);
-  const items = Array.isArray(data) ? data : [];
+  const items = Array.isArray(data) ? data : EMPTY_ITEMS;
 
   const categories = useMemo(() => {
     const unique = new Set(items.map((item) => item.category));

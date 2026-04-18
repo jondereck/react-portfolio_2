@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 import React from "react";
 import { AiOutlineArrowRight } from "react-icons/ai";
 import heroImage from "../assets/heroImage.jpg";
@@ -19,11 +20,11 @@ const Home = () => {
        md:mt-20 h-full md:py-auto">
           <div className=" text-4xl  md:text-5xl lg:text-7xl font-bold pt-10  ">
           <h2 className="pt-8">
-          I'm a Front-End Developer
+          I&apos;m a Front-End Developer
           </h2>
           </div>
           <p className="text-gray-500 py-4 max-w-md">
-            Hello! I'm Jon Dereck Nifas, a Front End Developer specializing in
+            Hello! I&apos;m Jon Dereck Nifas, a Front End Developer specializing in
             HTML, CSS, JavaScript, Tailwind, and React. I also have knowledge in data
             analytics. I am passionate about crafting exceptional user
             experiences and delivering seamless web applications.
