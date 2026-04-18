@@ -57,25 +57,15 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false }) {
               <h1 className="text-2xl font-bold leading-tight text-slate-900 dark:text-slate-100">{title}</h1>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsMenuOpen(true)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                aria-label="Open menu"
-                title="Open menu"
-              >
-                <Menu className="size-5" />
-              </button>
-              <button
-                type="button"
-                onClick={onLogout}
-                disabled={isLoggingOut}
-                className="h-9 rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100"
-              >
-                {isLoggingOut ? 'Logging out...' : 'Logout'}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsMenuOpen(true)}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              aria-label="Open menu"
+              title="Open menu"
+            >
+              <Menu className="size-5" />
+            </button>
           </div>
 
           <div className="pt-0.5">
@@ -175,6 +165,19 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false }) {
                       </section>
                     ))}
                   </nav>
+                </div>
+                <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      onLogout();
+                    }}
+                    disabled={isLoggingOut}
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                  >
+                    {isLoggingOut ? 'Logging out...' : 'Logout'}
+                  </button>
                 </div>
               </Dialog.Panel>
             </Transition.Child>

@@ -12,7 +12,7 @@ import {
   inputStyles,
 } from './galleryAdminShared';
 
-export default function GallerySettingsPanel({ controller }) {
+export default function GallerySettingsPanel({ controller, embedded = false }) {
   const {
     albums,
     selectedAlbum,
@@ -46,11 +46,13 @@ export default function GallerySettingsPanel({ controller }) {
 
   return (
     <div className="space-y-6">
-      <GalleryPageHeader
-        eyebrow="Gallery Settings"
-        title="Settings"
-        description="Edit album metadata, publish state, share-link access, and cover-photo assignment in a settings-only view."
-      />
+      {!embedded ? (
+        <GalleryPageHeader
+          eyebrow="Gallery Settings"
+          title="Settings"
+          description="Edit album metadata, publish state, share-link access, and cover-photo assignment in a settings-only view."
+        />
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <GalleryAlbumPicker

@@ -61,7 +61,7 @@ export default function AdminOverviewCard({
     >
       <article
         className={cn(
-          'relative flex min-h-[180px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-300 ease-out hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:min-h-[220px] sm:p-5',
+          'relative flex h-full min-h-[180px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-300 ease-out hover:-translate-y-1 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900 sm:min-h-[220px] sm:p-5',
           styles.glow,
         )}
       >

@@ -16,7 +16,7 @@ import {
   ghostButtonStyles,
 } from './galleryAdminShared';
 
-export default function GalleryArrangePanel({ controller }) {
+export default function GalleryArrangePanel({ controller, embedded = false }) {
   const {
     albums,
     selectedAlbum,
@@ -76,11 +76,13 @@ export default function GalleryArrangePanel({ controller }) {
         }}
       />
 
-      <GalleryPageHeader
-        eyebrow="Sorting Workspace"
-        title="Arrange"
-        description="A dedicated ordering workspace for the selected album with selection, reordering, and save controls only."
-      />
+      {!embedded ? (
+        <GalleryPageHeader
+          eyebrow="Sorting Workspace"
+          title="Arrange"
+          description="A dedicated ordering workspace for the selected album with selection, reordering, and save controls only."
+        />
+      ) : null}
 
       <div className="space-y-6">
         <GalleryAlbumPicker

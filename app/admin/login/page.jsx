@@ -8,8 +8,9 @@ import { Button } from '@/src/components/ui/button';
 import { Input } from '@/src/components/ui/input';
 
 const adminLastVisitedPathStorageKey = 'admin:lastVisitedPath';
+const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
 
-const normalizeAdminPath = (value) => {
+const normalizeProtectedPath = (value) => {
   if (!value || typeof value !== 'string') return null;
 
   try {
@@ -18,7 +19,7 @@ const normalizeAdminPath = (value) => {
       return null;
     }
     const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
-    if (!path.startsWith('/admin')) {
+    if (!path.startsWith('/admin') && !path.startsWith('/gallery')) {
       return null;
     }
     if (resolved.pathname === '/admin/login') {
@@ -52,11 +53,20 @@ export default function AdminLoginPage() {
         if (!active || !session?.user) return;
         if (typeof window === 'undefined') return;
 
-        const safeCallback = normalizeAdminPath(callbackUrl);
-        const safeLastVisited = normalizeAdminPath(
+        const safeCallback = normalizeProtectedPath(callbackUrl);
+        const safeLastVisitedAuth = normalizeProtectedPath(
+          window.localStorage.getItem(authLastVisitedPathStorageKey) || '',
+        );
+        const safeLastVisitedAdmin = normalizeProtectedPath(
           window.localStorage.getItem(adminLastVisitedPathStorageKey) || '',
         );
-        const target = safeCallback || safeLastVisited || '/admin';
+        const safeReferrer = normalizeProtectedPath(document.referrer || '');
+        const target =
+          safeCallback ||
+          safeLastVisitedAuth ||
+          safeLastVisitedAdmin ||
+          safeReferrer ||
+          '/admin';
 
         setRedirecting(true);
         window.location.assign(target);
@@ -78,7 +88,20 @@ export default function AdminLoginPage() {
     setSubmitting(true);
     setError('');
 
-    const safeCallback = normalizeAdminPath(callbackUrl) || '/admin';
+    const safeCallbackFromQuery = normalizeProtectedPath(callbackUrl);
+    const safeLastVisitedAuth = normalizeProtectedPath(
+      window.localStorage.getItem(authLastVisitedPathStorageKey) || '',
+    );
+    const safeLastVisitedAdmin = normalizeProtectedPath(
+      window.localStorage.getItem(adminLastVisitedPathStorageKey) || '',
+    );
+    const safeReferrer = normalizeProtectedPath(document.referrer || '');
+    const safeCallback =
+      safeCallbackFromQuery ||
+      safeLastVisitedAuth ||
+      safeLastVisitedAdmin ||
+      safeReferrer ||
+      '/admin';
 
     const result = await signIn('credentials', {
       email,
@@ -93,7 +116,7 @@ export default function AdminLoginPage() {
       return;
     }
 
-    window.location.assign(normalizeAdminPath(result.url || '') || safeCallback);
+    window.location.assign(normalizeProtectedPath(result.url || '') || safeCallback);
   };
 
   const disableInputs = submitting || redirecting || checkingSession;

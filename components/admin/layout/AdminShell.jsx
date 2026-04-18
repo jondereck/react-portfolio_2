@@ -8,6 +8,7 @@ import AdminTopbar from '@/components/admin/layout/AdminTopbar';
 import { useLoadingStore } from '@/store/loading';
 
 const adminLastVisitedPathStorageKey = 'admin:lastVisitedPath';
+const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
 
 export default function AdminShell({ children }) {
   const pathname = usePathname();
@@ -20,6 +21,7 @@ export default function AdminShell({ children }) {
     if (!pathname || pathname === '/admin/login') return;
     if (!pathname.startsWith('/admin')) return;
     window.localStorage.setItem(adminLastVisitedPathStorageKey, pathname);
+    window.localStorage.setItem(authLastVisitedPathStorageKey, pathname);
   }, [pathname]);
 
   const handleLogout = async () => {

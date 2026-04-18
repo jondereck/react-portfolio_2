@@ -110,9 +110,9 @@ export default async function GalleryAdminPage() {
         />
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <section className="grid auto-rows-fr gap-3 md:grid-cols-2 xl:grid-cols-3">
         {galleryOverviewCards.map((card) => (
-          <AdminOverviewCard key={card.title} {...card} />
+          <AdminOverviewCard key={card.title} className="h-full" {...card} />
         ))}
       </section>
     </div>

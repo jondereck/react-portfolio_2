@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { downloadFromApi } from "@/lib/download-client";
 import {
@@ -176,6 +176,7 @@ const findPrevIndexByType = (startIndex, photos, matcher, options = {}) => {
 
 const viewerModeStorageKey = "galleryViewerMode";
 const splitMobileSwapStorageKey = "gallerySplitMobileSwapped";
+const authLastVisitedPathStorageKey = "auth:lastVisitedPath";
 const splitPanelTransitionMs = 260;
 
 const SplitPanelMediaSurface = ({
@@ -400,6 +401,7 @@ export default function AlbumDetailPage({ params }) {
 
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [slug, setSlug] = useState("");
   const [album, setAlbum] = useState(null);
@@ -449,6 +451,14 @@ export default function AlbumDetailPage({ params }) {
   const splitRightVideoRef = useRef(null);
   const touchStartRef = useRef({ x: 0, y: 0, active: false });
   const shareToken = searchParams?.get("share") || "";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!pathname || !pathname.startsWith("/gallery")) return;
+    const query = searchParams?.toString();
+    const fullPath = query ? `${pathname}?${query}` : pathname;
+    window.localStorage.setItem(authLastVisitedPathStorageKey, fullPath);
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     let mounted = true;

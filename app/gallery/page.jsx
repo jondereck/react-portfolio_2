@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLoadingStore } from '@/store/loading';
 
 const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
 const GALLERY_ADMIN_HOLD_MS = 700;
+const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
 
 const fetchJson = async (url) => {
   const response = await fetch(url, { cache: 'no-store' });
@@ -480,6 +481,7 @@ function CompactGalleryView({
 }
 
 export default function GalleryPage() {
+  const pathname = usePathname();
   const router = useRouter();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
@@ -493,6 +495,12 @@ export default function GalleryPage() {
   const [touchStartX, setTouchStartX] = useState(null);
   const [slideDirection, setSlideDirection] = useState(1);
   const [compactSearchQuery, setCompactSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!pathname || !pathname.startsWith('/gallery')) return;
+    window.localStorage.setItem(authLastVisitedPathStorageKey, pathname);
+  }, [pathname]);
 
   useEffect(() => {
     let finished = false;

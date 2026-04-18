@@ -8,7 +8,7 @@ import {
   inputStyles,
 } from './galleryAdminShared';
 
-export default function GalleryImportPanel({ controller }) {
+export default function GalleryImportPanel({ controller, embedded = false }) {
   const {
     albums,
     selectedAlbum,
@@ -24,11 +24,13 @@ export default function GalleryImportPanel({ controller }) {
 
   return (
     <div className="space-y-6">
-      <GalleryPageHeader
-        eyebrow="Import Workflow"
-        title="Import"
-        description="Import Google Drive media into a selected album with duplicate-aware handling and a focused workflow."
-      />
+      {!embedded ? (
+        <GalleryPageHeader
+          eyebrow="Import Workflow"
+          title="Import"
+          description="Import Google Drive media into a selected album with duplicate-aware handling and a focused workflow."
+        />
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <GalleryAlbumPicker

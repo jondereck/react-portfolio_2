@@ -14,7 +14,7 @@ import {
 } from './galleryAdminShared';
 import GalleryUploadDropzone from './GalleryUploadDropzone';
 
-export default function GalleryMediaPanel({ controller }) {
+export default function GalleryMediaPanel({ controller, embedded = false }) {
   const {
     albums,
     selectedAlbum,
@@ -59,11 +59,13 @@ export default function GalleryMediaPanel({ controller }) {
         }}
       />
 
-      <GalleryPageHeader
-        eyebrow="Media Intake"
-        title="Media"
-        description="Upload files and review the current album's intake list from one focused page."
-      />
+      {!embedded ? (
+        <GalleryPageHeader
+          eyebrow="Media Intake"
+          title="Media"
+          description="Upload files and review the current album's intake list from one focused page."
+        />
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <GalleryAlbumPicker

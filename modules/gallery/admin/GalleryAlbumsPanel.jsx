@@ -14,7 +14,7 @@ import {
   inputStyles,
 } from './galleryAdminShared';
 
-export default function GalleryAlbumsPanel({ controller }) {
+export default function GalleryAlbumsPanel({ controller, embedded = false }) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const {
     albums,
@@ -52,11 +52,13 @@ export default function GalleryAlbumsPanel({ controller }) {
         }}
       />
 
-      <GalleryPageHeader
-        eyebrow="Album Management"
-        title="Albums"
-        description="Create albums, switch with the shared picker, and rename the selected album from one focused view."
-      />
+      {!embedded ? (
+        <GalleryPageHeader
+          eyebrow="Album Management"
+          title="Albums"
+          description="Create albums, switch with the shared picker, and rename the selected album from one focused view."
+        />
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <div className="space-y-6">
