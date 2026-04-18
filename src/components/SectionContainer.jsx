@@ -5,7 +5,7 @@ const SectionContainer = ({ name, title, subtitle, children, className = '' }) =
   return (
     <motion.section
       name={name}
-      initial={{ opacity: 0, y: 32 }}
+      initial={false}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.25 }}
       transition={{ duration: 0.6, ease: 'easeOut' }}

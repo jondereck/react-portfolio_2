@@ -55,7 +55,7 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
 
   const isDragging = Boolean(arrangeDragState.isDragging);
   const selectedCount = selectedPhotoIds.length;
-  const showSelectionBar = selectedCount > 0;
+  const showSelectionBar = selectedCount > 0 && !isDragging;
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -124,11 +124,7 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
             description=""
             className={`relative overflow-visible ${showSelectionBar ? 'pb-32 md:pb-16' : 'pb-24 md:pb-0'}`}
           >
-            {isDragging ? (
-              <div className="rounded-xl border border-blue-200 bg-blue-50/95 px-3 py-2 text-xs font-medium text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/40 dark:text-blue-200">
-                Dragging {arrangeDragState.draggingCount > 1 ? `${arrangeDragState.draggingCount} selected items` : '1 item'}. Release to drop.
-              </div>
-            ) : (
+            {!isDragging ? (
               <div className="hidden rounded-xl border border-slate-200 bg-white/95 p-3 dark:border-slate-700 dark:bg-slate-900/95 md:block">
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
@@ -174,28 +170,28 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
                   </button>
                 </div>
               </div>
-            )}
+            ) : null}
 
-            {!showSelectionBar ? (
-            <div className="md:hidden">
-              <GalleryArrangeMobileControls
-                orderDirty={orderDirty}
-                orderSaving={orderSaving}
-                onSaveOrder={saveOrder}
-                onManualOrder={async () => {
-                  if (sortMode !== 'custom') {
-                    setSortMode('custom');
-                  }
-                  await loadPhotos(selectedAlbumId, 'custom');
-                }}
-                onSortNewest={() => reorderChange([...arrangePhotos].sort((a, b) => getPhotoSortTime(b) - getPhotoSortTime(a)))}
-                onSortOldest={() => reorderChange([...arrangePhotos].sort((a, b) => getPhotoSortTime(a) - getPhotoSortTime(b)))}
-                onReverseOrder={() => reorderChange([...arrangePhotos].reverse())}
-                onMoveTop={() => moveSelection('top')}
-                onMoveBottom={() => moveSelection('bottom')}
-                onUndo={undoOrder}
-              />
-            </div>
+            {!showSelectionBar && !isDragging ? (
+              <div className="md:hidden">
+                <GalleryArrangeMobileControls
+                  orderDirty={orderDirty}
+                  orderSaving={orderSaving}
+                  onSaveOrder={saveOrder}
+                  onManualOrder={async () => {
+                    if (sortMode !== 'custom') {
+                      setSortMode('custom');
+                    }
+                    await loadPhotos(selectedAlbumId, 'custom');
+                  }}
+                  onSortNewest={() => reorderChange([...arrangePhotos].sort((a, b) => getPhotoSortTime(b) - getPhotoSortTime(a)))}
+                  onSortOldest={() => reorderChange([...arrangePhotos].sort((a, b) => getPhotoSortTime(a) - getPhotoSortTime(b)))}
+                  onReverseOrder={() => reorderChange([...arrangePhotos].reverse())}
+                  onMoveTop={() => moveSelection('top')}
+                  onMoveBottom={() => moveSelection('bottom')}
+                  onUndo={undoOrder}
+                />
+              </div>
             ) : null}
 
             {loadingPhotos ? (
@@ -206,18 +202,18 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
                 description="Use the Media page first, then return here to manually sequence the album."
               />
             ) : (
-            <SortableMediaGrid
-              items={arrangePhotos}
-              selectedIds={selectedPhotoIds}
-              coverPhotoId={selectedAlbum.coverPhotoId}
-              onItemsChange={reorderChange}
-              onToggleSelect={togglePhotoSelect}
-              onSelectRange={(photoId, options) => selectPhotoRange(photoId, arrangePhotos.map((photo) => photo.id), options)}
-              onSetCover={setCoverPhoto}
-              onPreview={setPreviewPhoto}
-              onDragStateChange={handleDragStateChange}
-            />
-          )}
+              <SortableMediaGrid
+                items={arrangePhotos}
+                selectedIds={selectedPhotoIds}
+                coverPhotoId={selectedAlbum.coverPhotoId}
+                onItemsChange={reorderChange}
+                onToggleSelect={togglePhotoSelect}
+                onSelectRange={(photoId, options) => selectPhotoRange(photoId, arrangePhotos.map((photo) => photo.id), options)}
+                onSetCover={setCoverPhoto}
+                onPreview={setPreviewPhoto}
+                onDragStateChange={handleDragStateChange}
+              />
+            )}
 
           <GalleryMediaViewer
             open={Boolean(previewPhoto)}
@@ -243,9 +239,9 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-2">
+                <div className="mt-4 space-y-3">
                   <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Add to album</p>
-                  <div className="grid grid-cols-[minmax(0,1.25fr)_auto] gap-3 items-end">
+                  <div className="grid items-end gap-3">
                     <select
                       className="h-12 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:disabled:bg-slate-800"
                       value={moveTargetAlbumId ?? ''}
@@ -261,23 +257,13 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
                           </option>
                         ))}
                     </select>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-12 shrink-0 rounded-xl border-blue-200 px-4 text-blue-700 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-200 dark:hover:bg-blue-950/40"
-                      onClick={() => setCreateAlbumOpen(true)}
-                    >
-                      <Plus className="size-4" />
-                      Create album
-                    </Button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <div className="grid grid-cols-4 gap-2">
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-11 rounded-xl"
+                      className="h-16 flex-col rounded-xl px-2 text-xs leading-tight"
                       onClick={() => moveSelectedPhotos()}
                       disabled={
                         movingPhotos ||
@@ -287,27 +273,36 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
                       }
                     >
                       <ArrowRightLeft className="size-4" />
-                      {movingPhotos ? 'Moving...' : 'Move'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      className="h-11 rounded-xl"
-                      onClick={() => setConfirmDeleteOpen(true)}
-                      disabled={confirmingDelete || movingPhotos}
-                    >
-                      <Trash2 className="size-4" />
-                      Delete
+                      <span>{movingPhotos ? 'Moving...' : 'Move'}</span>
                     </Button>
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-11 rounded-xl col-span-2 sm:col-span-1"
+                      className="h-16 flex-col rounded-xl border-blue-200 px-2 text-xs leading-tight text-blue-700 hover:bg-blue-50 dark:border-blue-900/50 dark:text-blue-200 dark:hover:bg-blue-950/40"
+                      onClick={() => setCreateAlbumOpen(true)}
+                    >
+                      <Plus className="size-4" />
+                      <span>Create album</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="h-16 flex-col rounded-xl px-2 text-xs leading-tight"
+                      onClick={() => setConfirmDeleteOpen(true)}
+                      disabled={confirmingDelete || movingPhotos}
+                    >
+                      <Trash2 className="size-4" />
+                      <span>Delete</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-16 flex-col rounded-xl px-2 text-xs leading-tight"
                       onClick={clearPhotoSelection}
                       disabled={movingPhotos}
                     >
                       <X className="size-4" />
-                      Clear
+                      <span>Clear</span>
                     </Button>
                   </div>
                 </div>
