@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Share2, X } from 'lucide-react';
 
-const DISMISS_KEY = 'portfolio:pwa-install-dismissed';
-const IOS_INSTRUCTION_KEY = 'portfolio:pwa-ios-instructions';
+const SESSION_DISMISS_KEY = 'portfolio:pwa-install-dismissed-session';
 
 const isMobileViewport = () => {
   if (typeof window === 'undefined') {
@@ -35,20 +34,19 @@ const isIosSafari = () => {
 
 export default function PwaInstallPrompt() {
   const [installEvent, setInstallEvent] = useState(null);
-  const [isDismissed, setIsDismissed] = useState(true);
-  const [showIosInstructions, setShowIosInstructions] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
       return undefined;
     }
 
-    const dismissed = window.localStorage.getItem(DISMISS_KEY) === 'true';
-    const iosInstructionsSeen = window.localStorage.getItem(IOS_INSTRUCTION_KEY) === 'seen';
-    const shouldShowIos = isIosSafari() && isMobileViewport() && !isStandaloneDisplay() && !iosInstructionsSeen;
+    const dismissed = window.sessionStorage.getItem(SESSION_DISMISS_KEY) === 'true';
+    const installed = isStandaloneDisplay();
 
     setIsDismissed(dismissed);
-    setShowIosInstructions(shouldShowIos);
+    setIsInstalled(installed);
 
     const handleBeforeInstallPrompt = (event) => {
       event.preventDefault();
@@ -57,44 +55,58 @@ export default function PwaInstallPrompt() {
       }
 
       setInstallEvent(event);
-      setIsDismissed(window.localStorage.getItem(DISMISS_KEY) === 'true');
+      setIsInstalled(false);
+      setIsDismissed(window.sessionStorage.getItem(SESSION_DISMISS_KEY) === 'true');
     };
 
     const handleInstalled = () => {
-      window.localStorage.removeItem(DISMISS_KEY);
       setInstallEvent(null);
+      setIsInstalled(true);
       setIsDismissed(true);
-      setShowIosInstructions(false);
+    };
+
+    const handleFocus = () => {
+      setIsInstalled(isStandaloneDisplay());
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     window.addEventListener('appinstalled', handleInstalled);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleInstalled);
+      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 
   const promptType = useMemo(() => {
+    if (isInstalled) {
+      return null;
+    }
+
     if (installEvent) {
       return 'native';
     }
 
-    if (showIosInstructions) {
+    if (isIosSafari() && isMobileViewport()) {
       return 'ios';
     }
 
-    return null;
-  }, [installEvent, showIosInstructions]);
+    if (isMobileViewport()) {
+      return 'fallback';
+    }
 
-  if (!promptType || isDismissed || isStandaloneDisplay()) {
+    return null;
+  }, [installEvent, isInstalled]);
+
+  if (!promptType || isDismissed) {
     return null;
   }
 
   const dismiss = () => {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(DISMISS_KEY, 'true');
+      window.sessionStorage.setItem(SESSION_DISMISS_KEY, 'true');
     }
 
     setIsDismissed(true);
@@ -110,22 +122,20 @@ export default function PwaInstallPrompt() {
       const result = await installEvent.userChoice;
 
       if (result?.outcome !== 'accepted' && typeof window !== 'undefined') {
-        window.localStorage.setItem(DISMISS_KEY, 'true');
+        window.sessionStorage.setItem(SESSION_DISMISS_KEY, 'true');
       }
     } finally {
       setInstallEvent(null);
-      setIsDismissed(typeof window !== 'undefined' && window.localStorage.getItem(DISMISS_KEY) === 'true');
+      setIsDismissed(typeof window !== 'undefined' && window.sessionStorage.getItem(SESSION_DISMISS_KEY) === 'true');
     }
   };
 
-  const handleIosAcknowledge = () => {
+  const handleInstallGuide = () => {
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem(IOS_INSTRUCTION_KEY, 'seen');
-      window.localStorage.setItem(DISMISS_KEY, 'true');
+      window.sessionStorage.setItem(SESSION_DISMISS_KEY, 'true');
     }
 
     setIsDismissed(true);
-    setShowIosInstructions(false);
   };
 
   return (
@@ -144,11 +154,19 @@ export default function PwaInstallPrompt() {
                   Add it to your home screen so it opens like an app and stays one tap away.
                 </p>
               </>
-            ) : (
+            ) : promptType === 'ios' ? (
               <>
                 <h2 className="mt-1 text-lg font-semibold text-white">Add this site to your home screen</h2>
                 <p className="mt-1 text-sm leading-6 text-slate-300">
                   On iPhone, tap <span className="font-medium text-white">Share</span> then choose{' '}
+                  <span className="font-medium text-white">Add to Home Screen</span>.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="mt-1 text-lg font-semibold text-white">Add this site to your home screen</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-300">
+                  Open your browser menu and choose <span className="font-medium text-white">Install app</span> or{' '}
                   <span className="font-medium text-white">Add to Home Screen</span>.
                 </p>
               </>
@@ -165,10 +183,10 @@ export default function PwaInstallPrompt() {
               ) : (
                 <button
                   type="button"
-                  onClick={handleIosAcknowledge}
+                  onClick={handleInstallGuide}
                   className="inline-flex h-10 items-center rounded-full bg-cyan-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
                 >
-                  I understand
+                  Got it
                 </button>
               )}
               <button
