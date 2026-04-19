@@ -30,6 +30,8 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const parentId = url.searchParams.get('parentId')?.trim() || null;
     const previewPageToken = url.searchParams.get('previewPageToken')?.trim() || null;
+    const folderSortRaw = url.searchParams.get('folderSort')?.trim() || 'recent';
+    const folderSort = folderSortRaw === 'name' ? 'name' : 'recent';
     const previewPageSizeRaw = Number.parseInt(url.searchParams.get('previewPageSize') || '', 10);
     const previewLimit = Number.isFinite(previewPageSizeRaw) ? previewPageSizeRaw : 8;
     const accessToken = await getGoogleDriveAccessTokenForUser(actor.user.id);
@@ -38,6 +40,7 @@ export async function GET(request: Request) {
       parentId,
       previewPageToken,
       previewLimit,
+      folderSort,
     });
 
     return NextResponse.json(payload);

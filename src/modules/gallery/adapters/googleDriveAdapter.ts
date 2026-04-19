@@ -13,6 +13,7 @@ export type GoogleDriveFolderEntry = {
   name: string;
   parentId: string | null;
   mediaCount: number | null;
+  modifiedTime: string | null;
 };
 
 export type GoogleDriveFolderContext = {
@@ -48,6 +49,7 @@ type GoogleFileResponse = {
   name: string;
   mimeType: string;
   parents?: string[];
+  modifiedTime?: string;
   imageMediaMetadata?: {
     time?: string;
   };
@@ -118,7 +120,7 @@ export class GoogleDriveAdapter {
 
   private async getFolderInfo(args: { accessToken: string; folderId: string }): Promise<GoogleDriveFolderEntry> {
     const params = new URLSearchParams({
-      fields: 'id,name,mimeType,parents',
+      fields: 'id,name,mimeType,parents,modifiedTime',
       supportsAllDrives: 'true',
     });
 
@@ -146,16 +148,23 @@ export class GoogleDriveAdapter {
       name: folder.name || 'Untitled folder',
       parentId: Array.isArray(folder.parents) && folder.parents.length > 0 ? folder.parents[0] : null,
       mediaCount: null,
+      modifiedTime: typeof folder.modifiedTime === 'string' ? folder.modifiedTime : null,
     };
   }
 
-  async listFolders(args: { accessToken: string; parentId?: string | null }): Promise<GoogleDriveFolderEntry[]> {
+  async listFolders(args: {
+    accessToken: string;
+    parentId?: string | null;
+    sort?: 'recent' | 'name';
+  }): Promise<GoogleDriveFolderEntry[]> {
     const parentId = args.parentId || 'root';
+    const sortMode = args.sort === 'name' ? 'name' : 'recent';
+    const orderBy = sortMode === 'name' ? 'name_natural' : 'modifiedTime desc,name_natural';
     const params = new URLSearchParams({
       q: `'${parentId}' in parents and trashed = false and mimeType = '${GOOGLE_FOLDER_MIME_TYPE}'`,
       pageSize: '100',
-      fields: 'files(id,name,mimeType,parents)',
-      orderBy: 'name_natural',
+      fields: 'files(id,name,mimeType,parents,modifiedTime)',
+      orderBy,
       supportsAllDrives: 'true',
       includeItemsFromAllDrives: 'true',
     });
@@ -170,6 +179,7 @@ export class GoogleDriveAdapter {
         name: file.name || 'Untitled folder',
         parentId: Array.isArray(file.parents) && file.parents.length > 0 ? file.parents[0] : null,
         mediaCount: null,
+        modifiedTime: typeof file.modifiedTime === 'string' ? file.modifiedTime : null,
       }));
   }
 
@@ -241,6 +251,7 @@ export class GoogleDriveAdapter {
     parentId?: string | null;
     previewPageToken?: string | null;
     previewLimit?: number;
+    folderSort?: 'recent' | 'name';
   }): Promise<GoogleDriveFolderContext> {
     const breadcrumbs: Array<{ id: string; name: string }> = [{ id: 'root', name: 'My Drive' }];
     let currentFolder: GoogleDriveFolderEntry | null = null;
@@ -276,6 +287,7 @@ export class GoogleDriveAdapter {
     const folders = await this.listFolders({
       accessToken: args.accessToken,
       parentId: args.parentId,
+      sort: args.folderSort,
     });
     const preview = await this.listFolderPreviewFiles({
       accessToken: args.accessToken,
