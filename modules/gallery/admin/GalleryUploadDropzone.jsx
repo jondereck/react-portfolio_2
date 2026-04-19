@@ -10,6 +10,8 @@ export default function GalleryUploadDropzone({
   description = 'Drag and drop images or videos here, or choose files from your device.',
   helpText = 'Uploads go directly into the selected album.',
   uploadLabel = 'Choose files',
+  buttonTone = 'outline',
+  buttonClassName = '',
   uploading = false,
   uploadProgress = null,
   uploadSummary = null,
@@ -30,6 +32,11 @@ export default function GalleryUploadDropzone({
   };
 
   const hasSummary = uploadSummary && uploadSummary.totalFiles > 0;
+  const isPrimary = buttonTone === 'primary';
+
+  const baseButtonClassName = isPrimary
+    ? 'inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-50 dark:text-slate-900 dark:hover:bg-slate-200'
+    : 'inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto';
 
   return (
     <div
@@ -64,7 +71,7 @@ export default function GalleryUploadDropzone({
       <div className="mt-4 flex flex-col gap-2">
         <button
           type="button"
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto"
+          className={`${baseButtonClassName} ${buttonClassName}`}
           onClick={openPicker}
           disabled={uploading}
         >

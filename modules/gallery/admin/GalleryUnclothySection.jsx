@@ -59,14 +59,24 @@ function isProbablyImage(photo) {
   return inferImageFromUrl(photo.imageUrl);
 }
 
-export default function GalleryUnclothySection({ controller, selectedAlbum }) {
-  const selectedAlbumId = controller?.selectedAlbumId;
+export default function GalleryUnclothySection({
+  controller,
+  selectedAlbum,
+  photo: photoProp = null,
+  album: albumProp = null,
+  showPreview = true,
+}) {
+  const resolvedAlbum = albumProp || selectedAlbum || controller?.selectedAlbum || null;
+  const selectedAlbumId = resolvedAlbum?.id ?? controller?.selectedAlbumId ?? null;
+
   const selectedPhotoIds = Array.isArray(controller?.selectedPhotoIds) ? controller.selectedPhotoIds : [];
-  const selectedPhotoId = selectedPhotoIds.length === 1 ? selectedPhotoIds[0] : null;
+  const selectedPhotoId = photoProp?.id ?? (selectedPhotoIds.length === 1 ? selectedPhotoIds[0] : null);
+
   const selectedPhoto = useMemo(() => {
+    if (photoProp) return photoProp;
     if (!selectedPhotoId) return null;
     return Array.isArray(controller?.photos) ? controller.photos.find((photo) => photo.id === selectedPhotoId) : null;
-  }, [controller?.photos, selectedPhotoId]);
+  }, [controller?.photos, photoProp, selectedPhotoId]);
 
   const [status, setStatus] = useState({
     loading: true,
@@ -194,7 +204,8 @@ export default function GalleryUnclothySection({ controller, selectedAlbum }) {
 
   const disableInputs = Boolean(active && active.phase === 'ingesting' && isActiveForSelection);
 
-  const fields = useMemo(() => ['generationMode', 'bodyType', 'breastsSize', 'assSize', 'pussy'], []);
+  const basicFields = useMemo(() => ['generationMode', 'bodyType'], []);
+  const advancedFields = useMemo(() => ['breastsSize', 'assSize', 'pussy'], []);
 
   const handleEnqueue = () => {
     if (!canEnqueue) {
@@ -228,7 +239,7 @@ export default function GalleryUnclothySection({ controller, selectedAlbum }) {
         </button>
       </div>
 
-      {selectedPhoto ? (
+      {showPreview && selectedPhoto ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
           <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
             <MediaPreview
@@ -244,30 +255,34 @@ export default function GalleryUnclothySection({ controller, selectedAlbum }) {
           <p className="mt-3 truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
             {selectedPhoto.caption || `media ${selectedPhoto.id}`}
           </p>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedAlbum?.name}</p>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{resolvedAlbum?.name}</p>
         </div>
       ) : null}
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-950/40">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-sm font-medium text-slate-800 dark:text-slate-100">
-            Status:{' '}
-            <span className="font-semibold">
+      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quick info</p>
+        <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-slate-500 dark:text-slate-400">Status</span>
+            <span className="font-semibold text-slate-900 dark:text-slate-50">
               {!status.enabled ? 'Disabled' : !status.configured ? 'Needs setup' : 'Ready'}
             </span>
           </div>
-          <div className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300">
-            <Coins className="size-4" />
-            <span className="font-semibold">{status.credits ?? '—'}</span>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-slate-500 dark:text-slate-400">Credits</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-50">
+              <Coins className="size-4" />
+              {status.credits ?? '—'}
+            </span>
           </div>
         </div>
 
         {selectionProblem ? (
-          <p className="mt-2 text-sm text-amber-700 dark:text-amber-200">{selectionProblem}</p>
+          <p className="mt-3 text-sm text-amber-700 dark:text-amber-200">{selectionProblem}</p>
         ) : null}
 
         {active ? (
-          <div className="mt-3 space-y-2">
+          <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
               <span className="font-semibold">
                 {phaseLabel}
@@ -289,7 +304,7 @@ export default function GalleryUnclothySection({ controller, selectedAlbum }) {
             </p>
           </div>
         ) : queue.length > 0 ? (
-          <p className="mt-3 text-sm text-slate-700 dark:text-slate-200">{queue.length} task(s) queued.</p>
+          <p className="mt-4 text-sm text-slate-700 dark:text-slate-200">{queue.length} task(s) queued.</p>
         ) : null}
 
         {status.warnings.length > 0 ? (
@@ -305,32 +320,72 @@ export default function GalleryUnclothySection({ controller, selectedAlbum }) {
         ) : null}
       </div>
 
-      <div className="grid gap-3">
-        {fields.map((key) => {
-          const options = getOptions(key);
-          const value = settings[key] ?? '';
+      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Basic settings</p>
+        <div className="mt-4 space-y-4">
+          {basicFields.map((key) => {
+            const options = getOptions(key);
+            const value = settings[key] ?? '';
+            const label = key === 'generationMode' ? 'Generation mode' : key === 'bodyType' ? 'Body type' : key;
 
-          return (
-            <label key={key} className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              {key}
-              <select
-                className={inputStyles}
-                value={String(value)}
-                onChange={(event) => setSettings((previous) => ({ ...previous, [key]: event.target.value }))}
-                disabled={disableInputs}
-              >
-                {options.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </label>
-          );
-        })}
+            return (
+              <label key={key} className="block text-sm font-medium text-slate-900 dark:text-slate-50">
+                <span className="mb-1.5 block">{label}</span>
+                <select
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-50"
+                  value={String(value)}
+                  onChange={(event) => setSettings((previous) => ({ ...previous, [key]: event.target.value }))}
+                  disabled={disableInputs}
+                >
+                  {options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900">
+      <details className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-50">Advanced settings</summary>
+        <div className="mt-4 space-y-4">
+          {advancedFields.map((key) => {
+            const options = getOptions(key);
+            const value = settings[key] ?? '';
+            const label =
+              key === 'breastsSize'
+                ? 'Breast size'
+                : key === 'assSize'
+                  ? 'Ass size'
+                  : key === 'pussy'
+                    ? 'Pussy'
+                    : key;
+
+            return (
+              <label key={key} className="block text-sm font-medium text-slate-900 dark:text-slate-50">
+                <span className="mb-1.5 block">{label}</span>
+                <select
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-50"
+                  value={String(value)}
+                  onChange={(event) => setSettings((previous) => ({ ...previous, [key]: event.target.value }))}
+                  disabled={disableInputs}
+                >
+                  {options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            );
+          })}
+        </div>
+      </details>
+
+      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <label className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-200">
           <input
             type="checkbox"
@@ -344,20 +399,33 @@ export default function GalleryUnclothySection({ controller, selectedAlbum }) {
             No non-consensual imagery.
           </span>
         </label>
+      </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" className={buttonStyles} disabled={!canEnqueue || disableInputs} onClick={handleEnqueue}>
-            {queue.length > 0 || active ? 'Add to queue' : 'Generate'}
+      <button
+        type="button"
+        className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-50 dark:text-slate-900"
+        disabled={!canEnqueue || disableInputs}
+        onClick={handleEnqueue}
+      >
+        {queue.length > 0 || active ? 'Add to queue' : 'Generate'}
+      </button>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        {queue.length > 0 ? (
+          <button type="button" className={ghostButtonStyles} onClick={clearQueue} disabled={disableInputs}>
+            Clear queue
           </button>
-          {queue.length > 0 ? (
-            <button type="button" className={ghostButtonStyles} onClick={clearQueue} disabled={disableInputs}>
-              Clear queue
-            </button>
-          ) : null}
-          <button type="button" className={ghostButtonStyles} disabled={disableInputs} onClick={() => setSettings(defaultSettings)}>
-            Reset
-          </button>
-        </div>
+        ) : (
+          <span className="text-xs text-slate-500 dark:text-slate-400">Age enforced to explicit 18+.</span>
+        )}
+        <button
+          type="button"
+          className={ghostButtonStyles}
+          disabled={disableInputs}
+          onClick={() => setSettings(defaultSettings)}
+        >
+          Reset settings
+        </button>
       </div>
     </div>
   );

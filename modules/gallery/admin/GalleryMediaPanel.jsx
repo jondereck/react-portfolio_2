@@ -1,21 +1,46 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { Check, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import ConfirmModal from '@/components/ConfirmModal';
-import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
-import GalleryMediaViewer from './GalleryMediaViewer';
-import {
-  GalleryAlbumPicker,
-  GalleryEmptyState,
-  GalleryPageHeader,
-  GalleryPanelCard,
-} from './galleryAdminShared';
 import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
 import GalleryDriveImportSection from './GalleryDriveImportSection';
+import GalleryMediaViewer from './GalleryMediaViewer';
 import GalleryUnclothySection from './GalleryUnclothySection';
 import GalleryUploadDropzone from './GalleryUploadDropzone';
+import { GalleryEmptyState, GalleryPageHeader } from './galleryAdminShared';
+import {
+  GalleryAlbumsSidebar,
+  GalleryAlbumSwitchSheet,
+  GalleryCmsHeader,
+  GalleryCmsModal,
+  GalleryCmsShell,
+  GalleryInspectorPanel,
+  GalleryMediaGrid,
+  GalleryMediaToolbar,
+  GalleryMobileStickyActionsBar,
+  GalleryMobileTabs,
+} from './cms';
+import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
+
+function isVideoMime(mimeType) {
+  return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
+}
+
+function getPhotoSearchText(photo) {
+  return [photo?.caption, photo?.originalFilename, photo?.sourceId]
+    .map((value) => (typeof value === 'string' ? value.toLowerCase() : ''))
+    .filter(Boolean)
+    .join(' ');
+}
+
+function getSortTime(photo) {
+  const candidate = photo?.uploadedAt || photo?.createdAt || photo?.updatedAt;
+  const date = candidate ? new Date(candidate) : null;
+  return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
+}
 
 export default function GalleryMediaPanel({ controller, embedded = false }) {
   const {
@@ -39,16 +64,124 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     clearPhotoSelection,
     setSelectedAlbumId,
   } = controller;
+
   const selectedCount = selectedPhotoIds.length;
-  const showSelectionBar = selectedCount > 0;
   const [previewPhoto, setPreviewPhoto] = useState(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
-  const touchSelectStateRef = useRef({ active: false, lastPhotoId: null });
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [albumSwitchOpen, setAlbumSwitchOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('media');
+  const [searchValue, setSearchValue] = useState('');
+  const [activeChip, setActiveChip] = useState('all');
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const update = () => setIsDesktop(Boolean(mediaQuery.matches));
+    update();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', update);
+      return () => mediaQuery.removeEventListener('change', update);
+    }
+    mediaQuery.addListener(update);
+    return () => mediaQuery.removeListener(update);
+  }, []);
+
+  const chips = useMemo(
+    () => [
+      { id: 'all', label: 'All' },
+      { id: 'images', label: 'Images' },
+      { id: 'videos', label: 'Videos' },
+      { id: 'recent', label: 'Recent' },
+      { id: 'selected', label: `Selected${selectedCount ? ` (${selectedCount})` : ''}` },
+    ],
+    [selectedCount],
+  );
+
+  const selectedPhoto =
+    selectedPhotoIds.length === 1 ? photos.find((photo) => photo.id === selectedPhotoIds[0]) ?? null : null;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isDesktop = window.matchMedia?.('(min-width: 1024px)')?.matches;
+    if (isDesktop) return;
+
+    if (activeTab === 'media' && selectedPhotoIds.length === 1) {
+      setActiveTab('details');
+    }
+
+    if (activeTab === 'details' && selectedPhotoIds.length !== 1) {
+      setActiveTab('media');
+    }
+  }, [activeTab, selectedPhotoIds.length]);
+
+  const albumCountLabel = useMemo(() => {
+    if (!selectedAlbum) return null;
+    const count =
+      typeof selectedAlbum?._count?.photos === 'number'
+        ? selectedAlbum._count.photos
+        : typeof selectedAlbum.photoCount === 'number'
+          ? selectedAlbum.photoCount
+          : typeof selectedAlbum.mediaCount === 'number'
+            ? selectedAlbum.mediaCount
+            : typeof selectedAlbum.count === 'number'
+              ? selectedAlbum.count
+              : null;
+    return typeof count === 'number' ? `${count} items` : null;
+  }, [selectedAlbum]);
+
+  const filteredPhotos = useMemo(() => {
+    const list = Array.isArray(photos) ? photos : [];
+    const query = searchValue.trim().toLowerCase();
+
+    let next = list;
+
+    if (activeChip === 'images') {
+      next = next.filter((photo) => !isVideoMime(photo.mimeType));
+    } else if (activeChip === 'videos') {
+      next = next.filter((photo) => isVideoMime(photo.mimeType));
+    } else if (activeChip === 'selected') {
+      const selectedSet = new Set(selectedPhotoIds);
+      next = next.filter((photo) => selectedSet.has(photo.id));
+    }
+
+    if (query) {
+      next = next.filter((photo) => getPhotoSearchText(photo).includes(query));
+    }
+
+    if (activeChip === 'recent') {
+      next = [...next].sort((a, b) => getSortTime(b) - getSortTime(a));
+    }
+
+    return next;
+  }, [activeChip, photos, searchValue, selectedPhotoIds]);
+
+  const handleOpenUpload = () => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches) {
+      setUploadOpen(true);
+      return;
+    }
+    setActiveTab('upload');
+  };
+
+  const handleOpenImport = () => {
+    if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches) {
+      setImportOpen(true);
+      return;
+    }
+    setActiveTab('upload');
+  };
+
+  const handleOpenFilter = () => {
+    toast.message('Filters are handled via the chip row for now.');
+  };
 
   return (
-    <div className={`space-y-6 ${showSelectionBar ? 'pb-36 sm:pb-28' : ''}`}>
+    <div className={embedded ? '' : 'space-y-6'}>
       <ConfirmModal
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
@@ -92,205 +225,321 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         />
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <GalleryAlbumPicker
-          albums={albums}
-          selectedAlbumId={selectedAlbumId}
-          loadingAlbums={loadingAlbums}
-          onSelectAlbum={setSelectedAlbumId}
-          emptyDescription="Create an album first so media can be ingested into a target collection."
-          onCreateAlbumClick={() => setCreateAlbumOpen(true)}
-        />
+      <GalleryCmsShell
+        embedded={embedded}
+        header={
+          <GalleryCmsHeader
+            albumName={selectedAlbum?.name || 'Media'}
+            albumCountLabel={albumCountLabel}
+            searchValue={searchValue}
+            onSearchChange={setSearchValue}
+            onOpenFilter={handleOpenFilter}
+            onOpenImport={handleOpenImport}
+            onOpenUpload={handleOpenUpload}
+          />
+        }
+        sidebar={
+          <GalleryAlbumsSidebar
+            albums={albums}
+            selectedAlbumId={selectedAlbumId}
+            loadingAlbums={loadingAlbums}
+            onSelectAlbum={(albumId) => {
+              setSelectedAlbumId(albumId);
+              setAlbumSwitchOpen(false);
+              setActiveTab('media');
+            }}
+            onCreateAlbumClick={() => setCreateAlbumOpen(true)}
+            mobileAlbumName={selectedAlbum?.name}
+            mobileAlbumCountLabel={albumCountLabel}
+            onMobileOpenFilter={handleOpenFilter}
+            onMobileOpenSwitch={() => setAlbumSwitchOpen(true)}
+            onMobileOpenImport={() => setActiveTab('upload')}
+            onMobileFocusSearch={() => {
+              setActiveTab('media');
+              setTimeout(() => {
+                if (typeof document === 'undefined') return;
+                document.getElementById('gallery-media-search')?.focus();
+              }, 40);
+            }}
+          />
+        }
+        mobileTabs={<GalleryMobileTabs activeTab={activeTab} onChange={setActiveTab} />}
+        main={
+          <main className="min-w-0 bg-white dark:bg-slate-900">
+            <section className={`${activeTab !== 'media' ? 'hidden lg:block' : ''}`}>
+              <GalleryMediaToolbar
+                searchValue={searchValue}
+                onSearchChange={setSearchValue}
+                activeChip={activeChip}
+                chips={chips}
+                onChipChange={setActiveChip}
+                onOpenFilter={handleOpenFilter}
+              />
 
-        {selectedAlbum ? (
-          <div className="space-y-6">
-            <GalleryPanelCard
-              title={`Intake for ${selectedAlbum.name}`}
-              description="This page stays scoped to media ingestion only."
-            >
-              <div className="space-y-6">
+              {loadingPhotos ? (
+                <div className="px-4 pb-6 sm:px-5 lg:px-6">
+                  <div className="rounded-[26px] border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-400">
+                    Loading media...
+                  </div>
+                </div>
+              ) : !selectedAlbum ? (
+                <div className="px-4 pb-6 sm:px-5 lg:px-6">
+                  <GalleryEmptyState
+                    title="No album selected"
+                    description="Pick an album from the left rail to open its intake workspace."
+                  />
+                </div>
+              ) : (
+                <GalleryMediaGrid
+                  photos={filteredPhotos}
+                  albumName={selectedAlbum?.name}
+                  selectedPhotoIds={selectedPhotoIds}
+                  togglePhotoSelect={togglePhotoSelect}
+                  selectPhotoRange={selectPhotoRange}
+                  onOpenPreview={(photo) => setPreviewPhoto(photo)}
+                  emptyState={
+                    photos.length === 0 ? (
+                      <GalleryEmptyState
+                        title="No media yet"
+                        description="Upload files or import Google Drive items to populate this album."
+                      />
+                    ) : (
+                      <GalleryEmptyState title="No matches" description="Try clearing search or switching filters." />
+                    )
+                  }
+                />
+              )}
+            </section>
+
+            {activeTab === 'upload' ? (
+              <section className="space-y-4 px-4 py-4 sm:px-5 lg:hidden">
                 <GalleryUploadDropzone
                   uploading={uploadingFiles}
                   uploadProgress={uploadProgress}
                   uploadSummary={uploadSummary}
                   onUploadFiles={uploadFiles}
                   title="Upload media"
-                  description="Drag and drop images or videos here, or choose files from your device."
+                  description="Drag files or choose files from your device."
                   helpText="Batch uploads go straight into the selected album."
                   uploadLabel="Choose files"
+                  buttonTone="primary"
                 />
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+                <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                   <div className="mb-4 space-y-1">
-                    <h3 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
-                      Import from Google Drive
-                    </h3>
-                    <p className="text-sm leading-6 text-slate-500 dark:text-slate-400">
-                      Connect Drive, select one folder, and import its images and videos into the current album.
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Import from Google Drive</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      Connect Drive, pick a folder, and import directly into the active album.
                     </p>
                   </div>
                   <GalleryDriveImportSection controller={controller} selectedAlbum={selectedAlbum} />
                 </div>
-              </div>
-            </GalleryPanelCard>
+              </section>
+            ) : null}
 
-            <GalleryPanelCard
-              title="Selected album media"
-              description="Review the current album's intake list and manage individual items."
-              className={showSelectionBar ? 'pb-28 sm:pb-8' : ''}
-            >
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-                <div className="min-w-0">
-                  {loadingPhotos ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Loading media...</p>
-                  ) : photos.length === 0 ? (
-                    <GalleryEmptyState
-                      title="No media yet"
-                      description="Upload files or drop media into this album to populate it."
-                    />
-                  ) : (
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-2 sm:gap-3 xl:grid-cols-3">
-                      {photos.map((photo) => (
-                        <article
-                          key={photo.id}
-                          data-photo-id={photo.id}
-                          className={`relative overflow-hidden rounded-2xl border bg-slate-50 p-2 dark:bg-slate-950/40 sm:p-4 ${
-                            selectedPhotoIds.includes(photo.id)
-                              ? 'border-sky-500 ring-2 ring-sky-200 dark:border-sky-400 dark:ring-sky-900/40'
-                              : 'border-slate-200 dark:border-slate-700'
-                          }`}
-                          onPointerDown={(event) => {
-                            if (event.pointerType !== 'touch') return;
-                            const target = event.target;
-                            if (target instanceof Element && target.closest('button,input,label,a,video')) {
-                              return;
-                            }
-                            touchSelectStateRef.current = { active: true, lastPhotoId: photo.id };
-                            selectPhotoRange(photo.id, photos.map((item) => item.id), { resetAnchor: true });
-                          }}
-                          onPointerMove={(event) => {
-                            if (event.pointerType !== 'touch' || !touchSelectStateRef.current.active) return;
-                            const target = event.target instanceof Element ? event.target.closest('[data-photo-id]') : null;
-                            const nextPhotoId = Number(target?.getAttribute('data-photo-id'));
-                            if (!nextPhotoId || nextPhotoId === touchSelectStateRef.current.lastPhotoId) return;
-                            touchSelectStateRef.current.lastPhotoId = nextPhotoId;
-                            selectPhotoRange(nextPhotoId, photos.map((item) => item.id));
-                          }}
-                          onPointerUp={() => {
-                            touchSelectStateRef.current = { active: false, lastPhotoId: null };
-                          }}
-                          onPointerCancel={() => {
-                            touchSelectStateRef.current = { active: false, lastPhotoId: null };
-                          }}
-                        >
-                          <button
-                            type="button"
-                            className="block w-full"
-                            onClick={() => setPreviewPhoto(photo)}
-                            aria-label={`View ${photo.caption || `media ${photo.id}`}`}
-                          >
-                            <div className="aspect-square overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-                              <MediaPreview
-                                url={photo.imageUrl}
-                                mimeType={photo.mimeType}
-                                sourceType={photo.sourceType}
-                                sourceId={photo.sourceId}
-                                alt={photo.caption || `Media ${photo.id}`}
-                                className="h-full w-full object-contain"
-                                controls={false}
-                              />
-                            </div>
-                          </button>
-                          <div className="mt-2 space-y-2">
-                            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-200">
-                              <input
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={selectedPhotoIds.includes(photo.id)}
-                                onChange={(event) => {
-                                  togglePhotoSelect(photo.id, { shiftKey: event.shiftKey });
-                                }}
-                                aria-label={`Select media ${photo.caption || photo.id}`}
-                              />
-                              Select
-                              {selectedPhotoIds.includes(photo.id) ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-sky-600 px-2 py-1 text-[10px] font-semibold text-white">
-                                  <Check className="size-3" />
-                                  Selected
-                                </span>
-                              ) : null}
-                            </label>
-                            <p className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100 sm:text-sm">
-                              {photo.caption || 'Untitled media'}
-                            </p>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {selectedPhotoIds.length === 1 ? (
-                  <aside className="order-first self-start xl:order-none xl:sticky xl:top-6">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-                      <GalleryUnclothySection controller={controller} selectedAlbum={selectedAlbum} />
-                    </div>
-                  </aside>
-                ) : null}
-              </div>
-
-              {showSelectionBar ? (
-                <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-4 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] shadow-[0_-10px_30px_-18px_rgba(15,23,42,0.4)] backdrop-blur dark:border-slate-800 dark:bg-slate-950/95">
-                  <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                        {selectedCount} media item{selectedCount === 1 ? '' : 's'} selected
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                        Use delete to remove all checked items at once.
-                      </p>
-                    </div>
-                    <div className="flex w-full gap-2 sm:w-auto sm:flex-wrap">
-                      <Button
+            {activeTab === 'details' ? (
+              <section className="space-y-4 px-4 py-4 sm:px-5 lg:hidden">
+                {selectedPhoto ? (
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                    <div className="mb-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                          Details
+                        </p>
+                        <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-50">
+                          {selectedPhoto.caption || selectedPhoto.originalFilename || `media_${selectedPhoto.id}`}
+                        </p>
+                      </div>
+                      <button
                         type="button"
-                        variant="destructive"
-                        className="h-12 flex-1 sm:h-10 sm:flex-none"
-                        onClick={() => setConfirmDeleteOpen(true)}
-                        disabled={confirmingDelete}
-                      >
-                        <Trash2 className="size-4" />
-                        Delete selected
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-12 flex-1 sm:h-10 sm:flex-none"
                         onClick={clearPhotoSelection}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
                       >
-                        <X className="size-4" />
-                        Clear selection
-                      </Button>
+                        Close
+                      </button>
+                    </div>
+
+                    <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
+                      <div className="aspect-[4/5]">
+                        <MediaPreview
+                          url={selectedPhoto.imageUrl}
+                          mimeType={selectedPhoto.mimeType}
+                          sourceType={selectedPhoto.sourceType}
+                          sourceId={selectedPhoto.sourceId}
+                          alt={selectedPhoto.caption || `media_${selectedPhoto.id}`}
+                          className="h-full w-full object-contain"
+                          controls={false}
+                        />
+                      </div>
+                      <div className="border-t border-slate-200 p-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                        {selectedAlbum?.name}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                        Quick info
+                      </p>
+                      <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-500 dark:text-slate-400">Type</span>
+                          <span className="truncate font-medium text-slate-900 dark:text-slate-50">
+                            {selectedPhoto.mimeType || '—'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-slate-500 dark:text-slate-400">Source</span>
+                          <span className="truncate font-medium text-slate-900 dark:text-slate-50">
+                            {selectedPhoto.sourceType || '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+                      <GalleryUnclothySection
+                        controller={controller}
+                        selectedAlbum={selectedAlbum}
+                        photo={selectedPhoto}
+                        album={selectedAlbum}
+                        showPreview={false}
+                      />
                     </div>
                   </div>
-                </div>
-              ) : null}
-
-              <GalleryMediaViewer
-                open={Boolean(previewPhoto)}
-                photo={previewPhoto}
-                onClose={() => setPreviewPhoto(null)}
-              />
-            </GalleryPanelCard>
-          </div>
-        ) : (
-          <GalleryPanelCard title="Select an album" description="Choose an album to start uploading and adding media.">
-            <GalleryEmptyState
-              title="No album selected"
-              description="Pick an album from the left rail to open its intake workspace."
+                ) : (
+                  <div className="rounded-[28px] border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+                    Select exactly one media item to see details.
+                  </div>
+                )}
+              </section>
+            ) : null}
+          </main>
+        }
+        inspector={
+          <GalleryInspectorPanel photo={selectedPhoto} album={selectedAlbum} onClose={clearPhotoSelection}>
+            <GalleryUnclothySection
+              controller={controller}
+              selectedAlbum={selectedAlbum}
+              photo={selectedPhoto}
+              album={selectedAlbum}
+              showPreview={false}
             />
-          </GalleryPanelCard>
-        )}
-      </div>
+          </GalleryInspectorPanel>
+        }
+        mobileFooterActions={
+          selectedCount > 0 ? (
+            <GalleryMobileStickyActionsBar
+              title={`${selectedCount} selected`}
+              description="Sticky mobile actions keep primary controls reachable."
+              actions={
+                <>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    className="h-11 whitespace-nowrap"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                    disabled={confirmingDelete}
+                  >
+                    <Trash2 className="size-4" />
+                    Delete
+                  </Button>
+                  <Button type="button" variant="outline" className="h-11 whitespace-nowrap" onClick={clearPhotoSelection}>
+                    <X className="size-4" />
+                    Clear
+                  </Button>
+                </>
+              }
+            />
+          ) : null
+        }
+      />
+
+      <GalleryCmsModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        title="Upload media"
+        description={selectedAlbum ? `Uploads go directly into ${selectedAlbum.name}.` : 'Select an album to upload media.'}
+      >
+        <GalleryUploadDropzone
+          uploading={uploadingFiles}
+          uploadProgress={uploadProgress}
+          uploadSummary={uploadSummary}
+          onUploadFiles={uploadFiles}
+          title="Upload media"
+          description="Drag files or choose files from your device."
+          helpText="Batch uploads go straight into the selected album."
+          uploadLabel="Choose files"
+        />
+      </GalleryCmsModal>
+
+      <GalleryCmsModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        title="Import from Google Drive"
+        description={selectedAlbum ? `Import directly into ${selectedAlbum.name}.` : 'Select an album to import media.'}
+      >
+        <GalleryDriveImportSection controller={controller} selectedAlbum={selectedAlbum} />
+      </GalleryCmsModal>
+
+      <GalleryCmsModal
+        open={albumSwitchOpen && isDesktop}
+        onClose={() => setAlbumSwitchOpen(false)}
+        title="Switch album"
+        description="Choose the active album for uploads, imports, and media selection."
+      >
+        {/* Desktop fallback (mobile uses bottom sheet) */}
+        <div className="hidden space-y-2 lg:block">
+          {Array.isArray(albums) && albums.length > 0 ? (
+            albums.map((album) => (
+              <button
+                key={album.id}
+                type="button"
+                className={`w-full rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
+                  album.id === selectedAlbumId
+                    ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-50 dark:bg-slate-50 dark:text-slate-900'
+                    : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50'
+                }`}
+                onClick={() => {
+                  setSelectedAlbumId(album.id);
+                  setAlbumSwitchOpen(false);
+                }}
+              >
+                {album.name}
+              </button>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+              No albums available yet.
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm dark:bg-slate-50 dark:text-slate-900"
+            onClick={() => {
+              setAlbumSwitchOpen(false);
+              setCreateAlbumOpen(true);
+            }}
+          >
+            Create new album
+          </button>
+        </div>
+      </GalleryCmsModal>
+
+      <GalleryAlbumSwitchSheet
+        open={albumSwitchOpen && !isDesktop}
+        onClose={() => setAlbumSwitchOpen(false)}
+        albums={albums}
+        selectedAlbumId={selectedAlbumId}
+        onConfirm={(albumId) => {
+          setSelectedAlbumId(albumId);
+          setAlbumSwitchOpen(false);
+          setActiveTab('media');
+        }}
+        onCreateNew={() => setCreateAlbumOpen(true)}
+      />
+
+      <GalleryMediaViewer open={Boolean(previewPhoto)} photo={previewPhoto} onClose={() => setPreviewPhoto(null)} />
     </div>
   );
 }
