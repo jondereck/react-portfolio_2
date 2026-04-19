@@ -13,6 +13,8 @@ const certificateExtractionSchema = z.object({
   expiresAt: z.string().nullable(),
   credentialId: z.string().nullable(),
   link: z.string().nullable(),
+  qrLink: z.string().nullable(),
+  qrCredentialId: z.string().nullable(),
 });
 
 const certificateExtractionPrompt = [
@@ -29,6 +31,10 @@ const certificateExtractionPrompt = [
   'Return dates as YYYY-MM-DD only when the exact day is present; otherwise return null.',
   'For credentialId, return the visible credential or certificate identifier.',
   'For link, return a visible public verification URL from the document; if none is shown, return null.',
+  'If there is a QR code, decode it if possible.',
+  'If the QR decodes to a URL, return it as qrLink.',
+  'If the QR decodes to an ID or text code, return it as qrCredentialId.',
+  'Do not guess QR contents if you cannot decode it.',
 ].join(' ');
 
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
@@ -69,9 +75,10 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
 
   const isPdf = isPdfAssetUrl(options.assetUrl);
   const pdfPreviewUrl = isPdf ? toCloudinaryPdfPreviewUrl(options.assetUrl) : null;
+  const thumbnailUrl = pdfPreviewUrl || options.assetUrl;
   const assetInput = {
     type: 'input_image',
-    image_url: pdfPreviewUrl || options.assetUrl,
+    image_url: thumbnailUrl,
     detail: 'high',
   };
 
@@ -107,6 +114,8 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
     expiresAt: normalizeDateString(parsed.expiresAt),
     credentialId: normalizeOptionalText(parsed.credentialId),
     link: isSafeHttpUrl(parsed.link) ? parsed.link.trim() : undefined,
+    qrLink: isSafeHttpUrl(parsed.qrLink) ? parsed.qrLink.trim() : undefined,
+    qrCredentialId: normalizeOptionalText(parsed.qrCredentialId),
   };
 
   const warnings = [];
@@ -135,6 +144,17 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
     extractedFields.category = 'General';
   }
 
+  // Prefer QR values when present.
+  if (extractedFields.qrLink) {
+    extractedFields.link = extractedFields.qrLink;
+    if (!extractedFields.qrCredentialId && !extractedFields.credentialId) {
+      extractedFields.qrCredentialId = extractedFields.qrLink;
+    }
+  }
+  if (extractedFields.qrCredentialId) {
+    extractedFields.credentialId = extractedFields.qrCredentialId;
+  }
+
   if (!extractedFields.title) {
     warnings.push('Certificate title could not be extracted confidently.');
   }
@@ -145,5 +165,5 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
     warnings.push('No verification URL was found in the document. The uploaded asset URL will be used as the reference link.');
   }
 
-  return { extractedFields, warnings };
+  return { extractedFields, warnings, thumbnailUrl };
 }

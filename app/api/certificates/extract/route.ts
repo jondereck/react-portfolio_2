@@ -37,6 +37,7 @@ export async function POST(request: Request) {
     const assetUrl = uploaded.secureUrl;
     let extractedFields = {};
     let warnings = [];
+    let thumbnailUrl = assetUrl;
 
     try {
       const extractionResult = await extractCertificateFieldsFromAsset({
@@ -45,12 +46,16 @@ export async function POST(request: Request) {
       });
       extractedFields = extractionResult.extractedFields;
       warnings = extractionResult.warnings;
+      if (typeof extractionResult.thumbnailUrl === 'string' && extractionResult.thumbnailUrl.trim()) {
+        thumbnailUrl = extractionResult.thumbnailUrl.trim();
+      }
     } catch (error) {
       warnings = [error instanceof Error ? error.message : 'Certificate details could not be extracted. You can still fill the form manually.'];
     }
 
     return NextResponse.json({
       assetUrl,
+      thumbnailUrl,
       assetKind: isPdfAssetUrl(assetUrl) ? 'pdf' : 'image',
       extractedFields,
       warnings,

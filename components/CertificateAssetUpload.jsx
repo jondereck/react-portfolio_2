@@ -41,9 +41,13 @@ export default function CertificateAssetUpload({ id = 'certificate-asset-upload'
       );
 
       const extractedFields = result?.extractedFields && typeof result.extractedFields === 'object' ? result.extractedFields : {};
+      const assetUrl = typeof result?.assetUrl === 'string' ? result.assetUrl : '';
+      const thumbnailUrl = typeof result?.thumbnailUrl === 'string' && result.thumbnailUrl.trim() ? result.thumbnailUrl.trim() : assetUrl;
       const nextFields = {
-        image: typeof result?.assetUrl === 'string' ? result.assetUrl : '',
-        link: typeof extractedFields.link === 'string' && extractedFields.link ? extractedFields.link : result?.assetUrl || '',
+        // For PDFs, this will be the converted page-1 JPG; for images, it will be the image URL.
+        image: thumbnailUrl,
+        // Prefer extracted verify link; otherwise fall back to the original uploaded asset (PDF or image).
+        link: typeof extractedFields.link === 'string' && extractedFields.link ? extractedFields.link : assetUrl || '',
       };
 
       for (const key of ['title', 'issuer', 'category', 'issuedAt', 'expiresAt', 'credentialId']) {
