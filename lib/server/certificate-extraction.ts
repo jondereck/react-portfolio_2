@@ -1,7 +1,6 @@
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
-import { isPdfAssetUrl, toCloudinaryPdfPreviewUrl } from '@/lib/certificates';
 import { isSafeHttpUrl } from '@/lib/url-safety';
 import { RequestValidationError } from '@/lib/server/uploads';
 
@@ -73,12 +72,9 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
     );
   }
 
-  const isPdf = isPdfAssetUrl(options.assetUrl);
-  const pdfPreviewUrl = isPdf ? toCloudinaryPdfPreviewUrl(options.assetUrl) : null;
-  const thumbnailUrl = pdfPreviewUrl || options.assetUrl;
   const assetInput = {
     type: 'input_image',
-    image_url: thumbnailUrl,
+    image_url: options.assetUrl,
     detail: 'high',
   };
 
@@ -119,10 +115,6 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
   };
 
   const warnings = [];
-
-  if (isPdf && !pdfPreviewUrl) {
-    warnings.push('PDF preview conversion was unavailable; extraction used the original asset URL.');
-  }
 
   // Date sanity:
   // - If only one date was extracted (and it landed in expiresAt), treat it as issuedAt.
@@ -165,5 +157,5 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
     warnings.push('No verification URL was found in the document. The uploaded asset URL will be used as the reference link.');
   }
 
-  return { extractedFields, warnings, thumbnailUrl };
+  return { extractedFields, warnings };
 }

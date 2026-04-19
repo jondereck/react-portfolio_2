@@ -37,7 +37,7 @@ export const portfolioResources = [
       },
       { name: 'credentialId', label: 'Credential ID', type: 'text', required: false },
       { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
-      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false, default: true },
     ],
   },
   {
@@ -55,7 +55,7 @@ export const portfolioResources = [
       { name: 'category', label: 'Category', type: 'text' },
       { name: 'image', label: 'Skill Image', type: 'image', required: false },
       { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
-      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false, default: true },
     ],
   },
   {
@@ -109,7 +109,7 @@ export const portfolioResources = [
       },
       { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
       { name: 'isFeatured', label: 'Featured', type: 'checkbox', required: false },
-      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false, default: true },
     ],
   },
   {
@@ -145,7 +145,7 @@ export const portfolioResources = [
       },
       { name: 'isCurrent', label: 'Current role', type: 'checkbox', required: false },
       { name: 'sortOrder', label: 'Sort Order', type: 'number', placeholder: '0', required: false },
-      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false },
+      { name: 'isPublished', label: 'Published', type: 'checkbox', required: false, default: true },
     ],
   },
 ];

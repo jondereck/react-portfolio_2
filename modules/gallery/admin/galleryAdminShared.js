@@ -62,11 +62,6 @@ export const galleryPageMeta = {
     title: 'Import',
     description: 'Pull media from Google Drive with duplicate handling and import summaries in one focused page.',
   },
-  settings: {
-    eyebrow: 'Gallery Settings',
-    title: 'Settings',
-    description: 'Edit album metadata, publish state, share-link access, and cover-photo assignment without other gallery tooling.',
-  },
   workspace: {
     eyebrow: 'Advanced Workspace',
     title: 'Workspace',

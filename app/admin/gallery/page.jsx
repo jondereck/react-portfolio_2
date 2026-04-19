@@ -2,7 +2,6 @@ import {
   ArrowUpDown,
   FolderOpen,
   Images,
-  Settings2,
 } from 'lucide-react';
 import Link from 'next/link';
 import AdminOverviewCard from '@/components/admin/shared/AdminOverviewCard';
@@ -35,14 +34,6 @@ const galleryOverviewCards = [
     icon: ArrowUpDown,
     badge: 'Order',
     accent: 'amber',
-  },
-  {
-    title: 'Gallery Settings',
-    description: 'Open the settings page for album metadata, publish state, and cover-photo assignment.',
-    href: buildGalleryRouteHref('settings'),
-    icon: Settings2,
-    badge: 'Config',
-    accent: 'slate',
   },
 ];
 

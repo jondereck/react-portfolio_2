@@ -316,6 +316,7 @@ export async function uploadCertificateAssetFile(file: File, folder: string) {
   try {
     result = await new Promise<{
       secure_url?: string;
+      public_id?: string;
       resource_type?: 'image' | 'video' | 'raw' | 'auto';
       format?: string;
       original_filename?: string;
@@ -346,6 +347,7 @@ export async function uploadCertificateAssetFile(file: File, folder: string) {
 
   return {
     secureUrl: result.secure_url,
+    publicId: result.public_id,
     resourceType: result.resource_type && result.resource_type !== 'auto' ? result.resource_type : 'raw',
     format: result.format,
     originalFilename: result.original_filename,

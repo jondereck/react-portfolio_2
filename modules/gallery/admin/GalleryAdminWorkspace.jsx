@@ -6,7 +6,6 @@ import GalleryAlbumsPanel from '@/modules/gallery/admin/GalleryAlbumsPanel';
 import GalleryArrangePanel from '@/modules/gallery/admin/GalleryArrangePanel';
 import GalleryMediaPanel from '@/modules/gallery/admin/GalleryMediaPanel';
 import GalleryMobileWorkspaceNav from '@/modules/gallery/admin/GalleryMobileWorkspaceNav';
-import GallerySettingsPanel from '@/modules/gallery/admin/GallerySettingsPanel';
 import { useGalleryAdminController } from '@/modules/gallery/admin/useGalleryAdminController';
 import { normalizeGalleryWorkspaceTab } from '@/modules/gallery/admin/workspaceConfig';
 import { GalleryPageHeader } from './galleryAdminShared';
@@ -29,12 +28,6 @@ const workspaceTabCards = [
     label: 'Arrange',
     description: 'Reorder items, batch move selections, and save manual sequencing.',
     accent: 'amber',
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    description: 'Edit album metadata, cover selection, and publish state controls.',
-    accent: 'slate',
   },
 ];
 
@@ -112,8 +105,6 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       <GalleryMediaPanel {...sharedProps} />
     ) : activeTab === 'arrange' ? (
       <GalleryArrangePanel {...sharedProps} />
-    ) : activeTab === 'settings' ? (
-      <GallerySettingsPanel {...sharedProps} />
     ) : (
       <GalleryAlbumsPanel {...sharedProps} />
     );
@@ -123,7 +114,7 @@ export default function GalleryAdminWorkspace({ initialTab = 'albums' }) {
       <GalleryPageHeader
         eyebrow="Advanced Workspace"
         title="Gallery Workspace"
-        description={`Work across albums, media, arrange, and settings from one route. Current section: ${activeTabLabel}.`}
+        description={`Work across albums, media, and arrange from one route. Current section: ${activeTabLabel}.`}
       />
 
       <GalleryMobileWorkspaceNav

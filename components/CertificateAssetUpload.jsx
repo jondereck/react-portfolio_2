@@ -12,6 +12,7 @@ export default function CertificateAssetUpload({ id = 'certificate-asset-upload'
   const inputRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [warnings, setWarnings] = useState([]);
+  const [sourceAssetUrl, setSourceAssetUrl] = useState('');
   const assetUrl = typeof value === 'string' ? value.trim() : '';
   const isPdf = isPdfAssetUrl(assetUrl);
 
@@ -42,12 +43,22 @@ export default function CertificateAssetUpload({ id = 'certificate-asset-upload'
 
       const extractedFields = result?.extractedFields && typeof result.extractedFields === 'object' ? result.extractedFields : {};
       const assetUrl = typeof result?.assetUrl === 'string' ? result.assetUrl : '';
+      const assetOpenUrl =
+        typeof result?.assetOpenUrl === 'string' && result.assetOpenUrl.trim() ? result.assetOpenUrl.trim() : assetUrl;
       const thumbnailUrl = typeof result?.thumbnailUrl === 'string' && result.thumbnailUrl.trim() ? result.thumbnailUrl.trim() : assetUrl;
+      setSourceAssetUrl(assetOpenUrl);
       const nextFields = {
         // For PDFs, this will be the converted page-1 JPG; for images, it will be the image URL.
         image: thumbnailUrl,
-        // Prefer extracted verify link; otherwise fall back to the original uploaded asset (PDF or image).
-        link: typeof extractedFields.link === 'string' && extractedFields.link ? extractedFields.link : assetUrl || '',
+        // Prefer extracted verify link; otherwise:
+        // - for PDFs, use the thumbnail URL (so it opens reliably in-browser)
+        // - for images, use the uploaded asset URL
+        link:
+          typeof extractedFields.link === 'string' && extractedFields.link
+            ? extractedFields.link
+            : result?.assetKind === 'pdf'
+              ? thumbnailUrl || assetOpenUrl || assetUrl || ''
+              : assetOpenUrl || assetUrl || '',
       };
 
       for (const key of ['title', 'issuer', 'category', 'issuedAt', 'expiresAt', 'credentialId']) {
@@ -119,6 +130,15 @@ export default function CertificateAssetUpload({ id = 'certificate-asset-upload'
             </div>
           </div>
         )
+      ) : null}
+
+      {sourceAssetUrl ? (
+        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-950">
+          <span className="text-slate-500 dark:text-slate-400">Original uploaded file:</span>{' '}
+          <a href={sourceAssetUrl} target="_blank" rel="noreferrer" className="text-cyan-600 hover:underline dark:text-cyan-300">
+            Open PDF
+          </a>
+        </div>
       ) : null}
 
       {warnings.length > 0 ? (

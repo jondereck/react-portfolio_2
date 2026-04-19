@@ -10,7 +10,12 @@ import { notifyRealtimeUpdate, revalidatePublicData } from '@/lib/realtime';
 const defaultFormState = (fields) =>
   fields.reduce((state, field) => {
     if (field.type === 'checkbox') {
-      state[field.name] = false;
+      if (typeof field.default !== 'undefined') {
+        state[field.name] = Boolean(field.default);
+        return state;
+      }
+
+      state[field.name] = field.name === 'isPublished';
       return state;
     }
 

@@ -1,10 +1,5 @@
-'use client';
-
-import GallerySettingsPanel from '@/modules/gallery/admin/GallerySettingsPanel';
-import { useGalleryAdminController } from '@/modules/gallery/admin/useGalleryAdminController';
+import { redirect } from 'next/navigation';
 
 export default function GallerySettingsPage() {
-  const controller = useGalleryAdminController();
-
-  return <GallerySettingsPanel controller={controller} />;
+  redirect('/admin/gallery/albums');
 }

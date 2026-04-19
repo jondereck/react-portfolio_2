@@ -2,12 +2,11 @@ export const galleryWorkspaceTabs = [
   { id: 'albums', label: 'Albums' },
   { id: 'media', label: 'Media' },
   { id: 'arrange', label: 'Arrange' },
-  { id: 'settings', label: 'Settings' },
 ];
 
 const galleryWorkspaceLegacyTabs = {
   photos: 'media',
-  details: 'settings',
+  details: 'albums',
   manage: 'albums',
   import: 'media',
 };
