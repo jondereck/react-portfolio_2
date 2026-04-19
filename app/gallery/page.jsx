@@ -9,7 +9,7 @@ import { getVideoPosterUrl, isPhotoVideo } from '@/lib/gallery-media';
 import { useLoadingStore } from '@/store/loading';
 
 const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
-const GALLERY_ADMIN_HOLD_MS = 700;
+const GALLERY_ADMIN_CLICK_WINDOW_MS = 550;
 const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
 
 const fetchJson = async (url) => {
@@ -163,6 +163,9 @@ const getSelectionDirection = (currentIndex, targetIndex, total) => {
   const backwardDistance = (currentIndex - targetIndex + total) % total;
   return forwardDistance <= backwardDistance ? 1 : -1;
 };
+
+const getAlbumActivityTime = (album) =>
+  new Date(album?.activityAt || album?.updatedAt || album?.createdAt || 0).getTime();
 
 function GalleryViewToggle({ currentView, onChange }) {
   return (
@@ -488,7 +491,7 @@ export default function GalleryPage() {
   const router = useRouter();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
-  const galleryAdminHoldTimerRef = useRef(null);
+  const galleryAdminClickStateRef = useRef({ count: 0, timerId: null });
   const [albums, setAlbums] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [currentView, setCurrentView] = useState('cinematic');
@@ -527,7 +530,11 @@ export default function GalleryPage() {
           fetchJson('/api/gallery/albums'),
         ]);
 
-        const publishedAlbums = Array.isArray(albumsPayload) ? albumsPayload.filter((item) => item.isPublished) : [];
+        const publishedAlbums = Array.isArray(albumsPayload)
+          ? albumsPayload
+              .filter((item) => item.isPublished)
+              .sort((left, right) => getAlbumActivityTime(right) - getAlbumActivityTime(left))
+          : [];
         const albumsWithCounts = await attachAlbumMediaCounts(publishedAlbums);
         const resolvedDefaultView = normalizeGalleryView(settingsPayload?.settings?.integrations?.defaultGalleryView);
 
@@ -679,26 +686,37 @@ export default function GalleryPage() {
     setTouchStartX(null);
   };
 
-  const clearGalleryAdminHold = () => {
-    if (galleryAdminHoldTimerRef.current) {
-      window.clearTimeout(galleryAdminHoldTimerRef.current);
-      galleryAdminHoldTimerRef.current = null;
+  const clearGalleryAdminClicks = () => {
+    if (galleryAdminClickStateRef.current.timerId) {
+      window.clearTimeout(galleryAdminClickStateRef.current.timerId);
+      galleryAdminClickStateRef.current.timerId = null;
     }
+    galleryAdminClickStateRef.current.count = 0;
   };
 
-  const startGalleryAdminHold = (event) => {
+  const handleSecureSessionClick = (event) => {
     if ('button' in event && event.button !== 0) {
       return;
     }
 
-    clearGalleryAdminHold();
-    galleryAdminHoldTimerRef.current = window.setTimeout(() => {
-      galleryAdminHoldTimerRef.current = null;
+    const nextCount = galleryAdminClickStateRef.current.count + 1;
+    if (galleryAdminClickStateRef.current.timerId) {
+      window.clearTimeout(galleryAdminClickStateRef.current.timerId);
+    }
+
+    if (nextCount >= 3) {
+      clearGalleryAdminClicks();
       router.push('/admin/gallery');
-    }, GALLERY_ADMIN_HOLD_MS);
+      return;
+    }
+
+    galleryAdminClickStateRef.current.count = nextCount;
+    galleryAdminClickStateRef.current.timerId = window.setTimeout(() => {
+      clearGalleryAdminClicks();
+    }, GALLERY_ADMIN_CLICK_WINDOW_MS);
   };
 
-  useEffect(() => () => clearGalleryAdminHold(), []);
+  useEffect(() => () => clearGalleryAdminClicks(), []);
 
   return (
     <main
@@ -764,13 +782,10 @@ export default function GalleryPage() {
           <p className="text-xs uppercase tracking-[0.32em] text-white/85">Private Gallery</p>
           <button
             type="button"
-            onPointerDown={startGalleryAdminHold}
-            onPointerUp={clearGalleryAdminHold}
-            onPointerLeave={clearGalleryAdminHold}
-            onPointerCancel={clearGalleryAdminHold}
+            onClick={handleSecureSessionClick}
             onContextMenu={(event) => event.preventDefault()}
             className="rounded-full border border-white/30 bg-white/10 px-4 py-1.5 text-[10px] uppercase tracking-[0.2em] text-white/90 backdrop-blur transition hover:bg-white/14"
-            aria-label="Secure session. Long press to open gallery admin."
+            aria-label="Secure session. Triple click to open gallery admin."
           >
             Secure Session
           </button>

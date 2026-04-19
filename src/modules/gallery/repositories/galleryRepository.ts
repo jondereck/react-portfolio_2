@@ -29,6 +29,10 @@ const albumInclude = {
 export type AlbumRecord = Prisma.AlbumGetPayload<{ include: typeof albumInclude }>;
 export type AlbumPhotoRecord = Prisma.AlbumPhotoGetPayload<{ select: typeof photoSelect }>;
 export type AlbumDownloadRecord = Prisma.AlbumGetPayload<{ include: { photos: { select: typeof photoSelect } } }>;
+export type AlbumPhotoActivityRecord = {
+  albumId: number;
+  activityAt: Date | null;
+};
 
 const resolvePhotoOrderBy = (sort: GallerySort): Prisma.AlbumPhotoOrderByWithRelationInput[] => {
   if (sort === 'dateAsc') {
@@ -52,6 +56,34 @@ export class GalleryRepository {
       include: albumInclude,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
+  }
+
+  async getLatestPhotoActivityByAlbumIds(albumIds: number[]): Promise<AlbumPhotoActivityRecord[]> {
+    if (albumIds.length === 0) {
+      return [];
+    }
+
+    const grouped = await prisma.albumPhoto.groupBy({
+      by: ['albumId'],
+      where: {
+        albumId: {
+          in: albumIds,
+        },
+      },
+      _max: {
+        updatedAt: true,
+        createdAt: true,
+        uploadedAt: true,
+        dateTaken: true,
+      },
+    });
+
+    return grouped.map((entry) => ({
+      albumId: entry.albumId,
+      activityAt: [entry._max.updatedAt, entry._max.createdAt, entry._max.uploadedAt, entry._max.dateTaken]
+        .filter((value): value is Date => value instanceof Date)
+        .sort((left, right) => right.getTime() - left.getTime())[0] ?? null,
+    }));
   }
 
   async getAlbumById(id: number, profileId: number) {

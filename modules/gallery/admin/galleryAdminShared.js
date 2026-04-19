@@ -209,6 +209,8 @@ export function GalleryAlbumPicker({
       const rightCount = right._count?.photos ?? 0;
       const leftCreatedAt = new Date(left.createdAt ?? 0).getTime();
       const rightCreatedAt = new Date(right.createdAt ?? 0).getTime();
+      const leftActivityAt = new Date(left.activityAt ?? left.updatedAt ?? left.createdAt ?? 0).getTime();
+      const rightActivityAt = new Date(right.activityAt ?? right.updatedAt ?? right.createdAt ?? 0).getTime();
       const leftName = (left.name ?? '').toLowerCase();
       const rightName = (right.name ?? '').toLowerCase();
 
@@ -224,8 +226,8 @@ export function GalleryAlbumPicker({
           return rightCreatedAt - leftCreatedAt;
         case 'newest':
         default:
-          if (rightCreatedAt !== leftCreatedAt) {
-            return rightCreatedAt - leftCreatedAt;
+          if (rightActivityAt !== leftActivityAt) {
+            return rightActivityAt - leftActivityAt;
           }
           return leftName.localeCompare(rightName);
       }

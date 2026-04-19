@@ -17,6 +17,28 @@ export function isPdfAssetUrl(value: unknown): value is string {
   }
 }
 
+export function toCloudinaryPdfPreviewUrl(assetUrl: string) {
+  try {
+    const parsed = new URL(assetUrl);
+    if (!parsed.hostname.endsWith('res.cloudinary.com')) {
+      return null;
+    }
+
+    // Common Cloudinary URLs: /image/upload/... or /raw/upload/...
+    // Insert a transform to render the first page as JPG.
+    const nextPathname = parsed.pathname.replace('/upload/', '/upload/f_jpg,pg_1/');
+    if (nextPathname === parsed.pathname) {
+      return null;
+    }
+
+    const next = new URL(parsed.toString());
+    next.pathname = nextPathname;
+    return next.toString();
+  } catch {
+    return null;
+  }
+}
+
 function toTimestamp(value: unknown) {
   if (typeof value !== 'string' || !value.trim()) {
     return null;

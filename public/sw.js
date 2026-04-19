@@ -1,5 +1,12 @@
-const CACHE_NAME = 'portfolio-shell-v1';
-const STATIC_ASSETS = ['/', '/manifest.webmanifest', '/logo192.png', '/logo512.png', '/favicon.ico'];
+const CACHE_NAME = 'portfolio-shell-v2';
+const STATIC_ASSETS = [
+  '/',
+  '/manifest.webmanifest',
+  '/app-icon?size=192',
+  '/app-icon?size=512',
+  '/app-splash?w=1242&h=2688',
+  '/favicon.ico',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

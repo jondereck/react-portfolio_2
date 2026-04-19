@@ -56,7 +56,7 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
     <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
       <div className="mx-auto flex h-20 w-full max-w-6xl items-center justify-between">
         {logoImage ? (
-          <img src={logoImage} alt={logoText} className="h-8 w-auto rounded object-contain" />
+          <img src={logoImage} alt={logoText} className="h-12 w-auto rounded object-contain sm:h-14" />
         ) : (
           <h1 className="text-4xl font-signature text-slate-900 dark:text-slate-100">{logoText}</h1>
         )}

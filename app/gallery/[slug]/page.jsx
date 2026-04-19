@@ -164,6 +164,17 @@ const viewerModeStorageKey = "galleryViewerMode";
 const splitMobileSwapStorageKey = "gallerySplitMobileSwapped";
 const authLastVisitedPathStorageKey = "auth:lastVisitedPath";
 const splitPanelTransitionMs = 260;
+const gdrivePreloadConcurrency = 3;
+
+const createDefaultSplitZoomState = () => ({
+  left: { scale: 1, x: 0, y: 0 },
+  right: { scale: 1, x: 0, y: 0 },
+});
+
+const createDefaultSplitPinchState = () => ({
+  left: { distance: 0, scale: 1, centerX: 0, centerY: 0, offsetX: 0, offsetY: 0 },
+  right: { distance: 0, scale: 1, centerX: 0, centerY: 0, offsetX: 0, offsetY: 0 },
+});
 
 const buildGalleryMediaUrl = (albumId, photoId, shareToken = "") => {
   if (!albumId || !photoId) return "";
@@ -217,7 +228,8 @@ const SplitPanelMediaSurface = ({
   hasError,
   onForegroundVideoReady,
   className = "",
-  zoomScale = 1,
+  zoomState = { scale: 1, x: 0, y: 0 },
+  surfaceRef,
   onPinchStart,
   onPinchMove,
   onPinchEnd,
@@ -295,6 +307,7 @@ const SplitPanelMediaSurface = ({
 
   return (
     <div
+      ref={surfaceRef}
       className={`relative min-h-0 h-full overflow-hidden ${className} ${
         hideUI
           ? "rounded-none border border-transparent bg-black"
@@ -304,6 +317,7 @@ const SplitPanelMediaSurface = ({
       onTouchMove={onPinchMove}
       onTouchEnd={onPinchEnd}
       onTouchCancel={onPinchEnd}
+      style={{ touchAction: zoomState?.scale > 1 ? "none" : "pinch-zoom" }}
     >
       {!hideUI ? (
         <span className="absolute left-2 top-2 z-20 rounded-full border border-white/20 bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
@@ -336,7 +350,10 @@ const SplitPanelMediaSurface = ({
               <div
                 className="h-full w-full"
                 style={{
-                  transform: zoomScale > 1 ? `scale(${zoomScale})` : "none",
+                  transform:
+                    zoomState?.scale > 1
+                      ? `translate3d(${zoomState.x}px, ${zoomState.y}px, 0) scale(${zoomState.scale})`
+                      : "none",
                   transformOrigin: "center",
                   transition: "transform 120ms ease-out",
                 }}
@@ -474,7 +491,7 @@ export default function AlbumDetailPage({ params }) {
   const [isSplitMobileSwapped, setIsSplitMobileSwapped] = useState(
     getInitialSplitMobileSwapped,
   );
-  const [splitFullscreenControlsHidden, setSplitFullscreenControlsHidden] =
+  const [fullscreenControlsHidden, setFullscreenControlsHidden] =
     useState(false);
   const [splitPanels, setSplitPanels] = useState({
     left: { ...splitPanelSettingsDefaults },
@@ -490,6 +507,7 @@ export default function AlbumDetailPage({ params }) {
   const activeVideoRef = useRef(null);
   const splitLeftVideoRef = useRef(null);
   const splitRightVideoRef = useRef(null);
+  const splitSurfaceRefs = useRef({ left: null, right: null });
   const touchStartRef = useRef({ x: 0, y: 0, id: null, active: false });
   const zoomSurfaceRef = useRef(null);
   const zoomGestureRef = useRef({
@@ -500,14 +518,18 @@ export default function AlbumDetailPage({ params }) {
     startOffsetY: 0,
     pinchDistance: 0,
     pinchScale: 1,
+    pinchCenterX: 0,
+    pinchCenterY: 0,
+    pinchOffsetX: 0,
+    pinchOffsetY: 0,
   });
   const [imageZoom, setImageZoom] = useState({ scale: 1, x: 0, y: 0 });
   const imageZoomRef = useRef(imageZoom);
-  const [splitZoom, setSplitZoom] = useState({ left: 1, right: 1 });
-  const splitPinchRef = useRef({
-    left: { distance: 0, scale: 1 },
-    right: { distance: 0, scale: 1 },
-  });
+  const [splitZoom, setSplitZoom] = useState(createDefaultSplitZoomState);
+  const splitPinchRef = useRef(createDefaultSplitPinchState());
+  const [preloadedMediaUrls, setPreloadedMediaUrls] = useState({});
+  const preloadedMediaUrlsRef = useRef({});
+  const preloadableGdrivePhotosRef = useRef([]);
   const shareToken = searchParams?.get("share") || "";
 
   useEffect(() => {
@@ -831,15 +853,143 @@ export default function AlbumDetailPage({ params }) {
     imageZoomRef.current = imageZoom;
   }, [imageZoom]);
 
+  useEffect(() => {
+    preloadedMediaUrlsRef.current = preloadedMediaUrls;
+  }, [preloadedMediaUrls]);
+
+  const resolveMediaUrl = useCallback(
+    (item) => {
+      if (!item) return "";
+      return preloadedMediaUrls[item.id] || item.imageUrl || "";
+    },
+    [preloadedMediaUrls],
+  );
+  const preloadableGdrivePhotos = useMemo(
+    () =>
+      photos.filter(
+        (photo) =>
+          photo?.sourceType === "gdrive" &&
+          typeof photo.imageUrl === "string" &&
+          photo.imageUrl.length > 0,
+      ),
+    [photos],
+  );
+  const preloadableGdriveKey = useMemo(
+    () =>
+      preloadableGdrivePhotos
+        .map((photo) => `${photo.id}:${photo.imageUrl}`)
+        .sort()
+        .join("|"),
+    [preloadableGdrivePhotos],
+  );
+
+  useEffect(() => {
+    preloadableGdrivePhotosRef.current = preloadableGdrivePhotos;
+  }, [preloadableGdrivePhotos]);
+
+  const revokePreloadedMediaUrls = useCallback((entries) => {
+    Object.values(entries || {}).forEach((value) => {
+      if (typeof value === "string") {
+        URL.revokeObjectURL(value);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const previousUrls = preloadedMediaUrlsRef.current;
+    if (Object.keys(previousUrls).length > 0) {
+      revokePreloadedMediaUrls(previousUrls);
+      preloadedMediaUrlsRef.current = {};
+      setPreloadedMediaUrls({});
+    }
+
+    if (!album?.id) {
+      return undefined;
+    }
+
+    const preloadablePhotos = preloadableGdrivePhotosRef.current;
+    if (preloadablePhotos.length === 0) {
+      return undefined;
+    }
+
+    const abortController = new AbortController();
+    let disposed = false;
+    let cursor = 0;
+
+    const warmPhoto = async (photo) => {
+      try {
+        const response = await fetch(photo.imageUrl, {
+          cache: "force-cache",
+          signal: abortController.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to preload media ${photo.id}.`);
+        }
+
+        const blob = await response.blob();
+        if (disposed) {
+          return;
+        }
+
+        const objectUrl = URL.createObjectURL(blob);
+        setPreloadedMediaUrls((current) => {
+          if (current[photo.id]) {
+            URL.revokeObjectURL(objectUrl);
+            return current;
+          }
+
+          const next = { ...current, [photo.id]: objectUrl };
+          preloadedMediaUrlsRef.current = next;
+          return next;
+        });
+      } catch (preloadError) {
+        if (abortController.signal.aborted || disposed) {
+          return;
+        }
+        console.warn("[GalleryViewer] Failed to preload imported media", {
+          albumId: album.id,
+          photoId: photo.id,
+          preloadError,
+        });
+      }
+    };
+
+    const workers = Array.from(
+      { length: Math.min(gdrivePreloadConcurrency, preloadablePhotos.length) },
+      async () => {
+        while (!disposed) {
+          const nextIndex = cursor;
+          cursor += 1;
+          const photo = preloadablePhotos[nextIndex];
+          if (!photo) {
+            return;
+          }
+          // Serial inside each worker keeps concurrent fetches bounded.
+          await warmPhoto(photo);
+        }
+      },
+    );
+
+    void Promise.all(workers);
+
+    return () => {
+      disposed = true;
+      abortController.abort();
+      revokePreloadedMediaUrls(preloadedMediaUrlsRef.current);
+      preloadedMediaUrlsRef.current = {};
+    };
+  }, [album?.id, preloadableGdriveKey, revokePreloadedMediaUrls]);
+
   const activeItem = viewerOpen ? filteredPhotos[activeIndex] : null;
   const activeItemIsVideo = activeItem ? isPhotoVideo(activeItem) : false;
+  const activeResolvedSrc = activeItem ? resolveMediaUrl(activeItem) : "";
   const activePlayableSrc = activeItemIsVideo
-    ? getPlayableMediaUrl(activeItem?.imageUrl)
-    : activeItem?.imageUrl || "";
+    ? getPlayableMediaUrl(activeResolvedSrc)
+    : activeResolvedSrc;
   const activeVideoSources = activeItemIsVideo
-    ? Array.from(
-        new Set([activeItem?.imageUrl, activePlayableSrc].filter(Boolean)),
-      )
+    ? Array.from(new Set([activeResolvedSrc, activePlayableSrc].filter(Boolean)))
     : [];
   const activeMediaKey = activeItem
     ? `primary:${activeItem.id}:${activeItemIsVideo ? activeVideoSources.join("|") : activePlayableSrc}`
@@ -853,6 +1003,14 @@ export default function AlbumDetailPage({ params }) {
     const maxOffset = ((scale - 1) * size) / 2;
     return Math.max(-maxOffset, Math.min(maxOffset, value));
   }, []);
+  const clampSplitZoomOffset = useCallback((panelId, value, axis, scale) => {
+    const surface = splitSurfaceRefs.current[panelId];
+    const size =
+      axis === "x" ? surface?.clientWidth || 0 : surface?.clientHeight || 0;
+    if (!size || scale <= 1) return 0;
+    const maxOffset = ((scale - 1) * size) / 2;
+    return Math.max(-maxOffset, Math.min(maxOffset, value));
+  }, []);
   const resetImageZoom = useCallback(() => {
     zoomGestureRef.current = {
       pointerId: null,
@@ -862,6 +1020,10 @@ export default function AlbumDetailPage({ params }) {
       startOffsetY: 0,
       pinchDistance: 0,
       pinchScale: 1,
+      pinchCenterX: 0,
+      pinchCenterY: 0,
+      pinchOffsetX: 0,
+      pinchOffsetY: 0,
     };
     setImageZoom({ scale: 1, x: 0, y: 0 });
   }, []);
@@ -877,6 +1039,23 @@ export default function AlbumDetailPage({ params }) {
       y: clampZoomOffset(nextY, "y", clampedScale),
     });
   }, [clampZoomOffset]);
+  const updateSplitZoom = useCallback(
+    (panelId, nextScale, nextX, nextY) => {
+      const clampedScale = Math.max(1, Math.min(3, nextScale));
+      setSplitZoom((current) => ({
+        ...current,
+        [panelId]:
+          clampedScale <= 1
+            ? { scale: 1, x: 0, y: 0 }
+            : {
+                scale: clampedScale,
+                x: clampSplitZoomOffset(panelId, nextX, "x", clampedScale),
+                y: clampSplitZoomOffset(panelId, nextY, "y", clampedScale),
+              },
+      }));
+    },
+    [clampSplitZoomOffset],
+  );
 
   useEffect(() => {
     if (!viewerOpen) return undefined;
@@ -1043,16 +1222,15 @@ export default function AlbumDetailPage({ params }) {
 
   const getMediaSources = useCallback((item) => {
     if (!item) return { isVideo: false, playableSrc: "", sources: [], key: "" };
+    const resolvedSrc = resolveMediaUrl(item);
     const isVideo = isPhotoVideo(item);
-    const playableSrc = isVideo
-      ? getPlayableMediaUrl(item.imageUrl)
-      : item.imageUrl;
+    const playableSrc = isVideo ? getPlayableMediaUrl(resolvedSrc) : resolvedSrc;
     const sources = isVideo
-      ? Array.from(new Set([item.imageUrl, playableSrc].filter(Boolean)))
+      ? Array.from(new Set([resolvedSrc, playableSrc].filter(Boolean)))
       : [];
     const key = `${item.id}:${isVideo ? sources.join("|") : playableSrc}`;
     return { isVideo, playableSrc, sources, key };
-  }, []);
+  }, [resolveMediaUrl]);
 
   const leftSplitMedia = getMediaSources(leftSplitItem);
   const rightSplitMedia = getMediaSources(rightSplitItem);
@@ -1064,29 +1242,26 @@ export default function AlbumDetailPage({ params }) {
   useEffect(() => {
     // Reset split zoom whenever panel content changes or split mode toggles.
     if (!viewerOpen || viewerMode !== "split") {
-      setSplitZoom({ left: 1, right: 1 });
-      splitPinchRef.current = {
-        left: { distance: 0, scale: 1 },
-        right: { distance: 0, scale: 1 },
-      };
+      setSplitZoom(createDefaultSplitZoomState());
+      splitPinchRef.current = createDefaultSplitPinchState();
       return;
     }
-    setSplitZoom({ left: 1, right: 1 });
-    splitPinchRef.current = {
-      left: { distance: 0, scale: 1 },
-      right: { distance: 0, scale: 1 },
-    };
+    setSplitZoom(createDefaultSplitZoomState());
+    splitPinchRef.current = createDefaultSplitPinchState();
   }, [viewerOpen, viewerMode, leftSplitItem?.id, rightSplitItem?.id]);
 
   useEffect(() => {
-    if (!viewerOpen || !hideUI || !showSplitMode) {
-      setSplitFullscreenControlsHidden(false);
+    if (
+      !viewerOpen ||
+      !hideUI ||
+      (viewerMode !== "split" && viewerMode !== "slideshow")
+    ) {
+      setFullscreenControlsHidden(false);
     }
-  }, [viewerOpen, hideUI, showSplitMode]);
+  }, [viewerOpen, hideUI, viewerMode]);
 
   const buildSplitPinchHandlers = useCallback(
     (panelId) => {
-      const clampScale = (value) => Math.max(1, Math.min(3, value));
       const getTouches = (event) => {
         const touches = event.touches;
         if (!touches || touches.length !== 2) return null;
@@ -1099,9 +1274,16 @@ export default function AlbumDetailPage({ params }) {
           if (!touches) return;
           const [a, b] = touches;
           const distance = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+          const centerX = (a.clientX + b.clientX) / 2;
+          const centerY = (a.clientY + b.clientY) / 2;
+          const currentZoom = splitZoom[panelId] || { scale: 1, x: 0, y: 0 };
           splitPinchRef.current[panelId] = {
             distance,
-            scale: splitZoom[panelId] || 1,
+            scale: currentZoom.scale || 1,
+            centerX,
+            centerY,
+            offsetX: currentZoom.x || 0,
+            offsetY: currentZoom.y || 0,
           };
           event.preventDefault();
           event.stopPropagation();
@@ -1111,20 +1293,32 @@ export default function AlbumDetailPage({ params }) {
           if (!touches) return;
           const [a, b] = touches;
           const distance = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+          const centerX = (a.clientX + b.clientX) / 2;
+          const centerY = (a.clientY + b.clientY) / 2;
           const state = splitPinchRef.current[panelId];
           if (!state?.distance) return;
-          const next = clampScale(state.scale * (distance / state.distance));
-          setSplitZoom((current) => ({ ...current, [panelId]: next }));
+          const nextScale = state.scale * (distance / state.distance);
+          const nextX = state.offsetX + (centerX - state.centerX);
+          const nextY = state.offsetY + (centerY - state.centerY);
+          updateSplitZoom(panelId, nextScale, nextX, nextY);
           event.preventDefault();
           event.stopPropagation();
         },
         onPinchEnd: (event) => {
           if (event.touches?.length >= 2) return;
-          splitPinchRef.current[panelId] = { distance: 0, scale: splitZoom[panelId] || 1 };
+          const currentZoom = splitZoom[panelId] || { scale: 1, x: 0, y: 0 };
+          splitPinchRef.current[panelId] = {
+            distance: 0,
+            scale: currentZoom.scale || 1,
+            centerX: 0,
+            centerY: 0,
+            offsetX: currentZoom.x || 0,
+            offsetY: currentZoom.y || 0,
+          };
         },
       };
     },
-    [splitZoom],
+    [splitZoom, updateSplitZoom],
   );
 
   const leftSplitPinchHandlers = useMemo(
@@ -1377,17 +1571,23 @@ export default function AlbumDetailPage({ params }) {
     const deltaX = touch.clientX - start.x;
     const deltaY = touch.clientY - start.y;
 
-    // Split fullscreen: swipe down hides controls, swipe up shows.
-    if (viewerOpen && hideUI && showSplitMode) {
+    if (
+      viewerOpen &&
+      hideUI &&
+      (showSplitMode || viewerMode === "slideshow")
+    ) {
       if (Math.abs(deltaY) >= 45 && Math.abs(deltaY) > Math.abs(deltaX)) {
-        setSplitFullscreenControlsHidden(deltaY > 0);
+        setFullscreenControlsHidden(deltaY > 0);
         return;
       }
+    }
+
+    // Split fullscreen: swipe horizontally switches the left panel item.
+    if (viewerOpen && hideUI && showSplitMode) {
       if (Math.abs(deltaX) >= 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
         moveSplitPanel("left", deltaX < 0 ? "next" : "prev");
         return;
       }
-      return;
     }
 
     if (Math.abs(deltaX) < 35 || Math.abs(deltaX) < Math.abs(deltaY)) return;
@@ -1399,6 +1599,7 @@ export default function AlbumDetailPage({ params }) {
   };
 
   const handleImagePointerDown = useCallback((event) => {
+    if (event.pointerType === "touch") return;
     if (imageZoom.scale <= 1) return;
     zoomGestureRef.current = {
       ...zoomGestureRef.current,
@@ -1431,20 +1632,26 @@ export default function AlbumDetailPage({ params }) {
   const handleImageTouchStart = useCallback((event) => {
     if (event.touches.length === 2) {
       const [firstTouch, secondTouch] = event.touches;
+      const centerX = (firstTouch.clientX + secondTouch.clientX) / 2;
+      const centerY = (firstTouch.clientY + secondTouch.clientY) / 2;
       zoomGestureRef.current.pinchDistance = Math.hypot(
         secondTouch.clientX - firstTouch.clientX,
         secondTouch.clientY - firstTouch.clientY,
       );
       zoomGestureRef.current.pinchScale = imageZoom.scale;
-      event.stopPropagation();
-    } else if (imageZoom.scale > 1) {
+      zoomGestureRef.current.pinchCenterX = centerX;
+      zoomGestureRef.current.pinchCenterY = centerY;
+      zoomGestureRef.current.pinchOffsetX = imageZoom.x;
+      zoomGestureRef.current.pinchOffsetY = imageZoom.y;
       event.stopPropagation();
     }
-  }, [imageZoom.scale]);
+  }, [imageZoom.scale, imageZoom.x, imageZoom.y]);
 
   const handleImageTouchMove = useCallback((event) => {
     if (event.touches.length !== 2) return;
     const [firstTouch, secondTouch] = event.touches;
+    const centerX = (firstTouch.clientX + secondTouch.clientX) / 2;
+    const centerY = (firstTouch.clientY + secondTouch.clientY) / 2;
     const distance = Math.hypot(
       secondTouch.clientX - firstTouch.clientX,
       secondTouch.clientY - firstTouch.clientY,
@@ -1455,18 +1662,25 @@ export default function AlbumDetailPage({ params }) {
     const nextScale =
       zoomGestureRef.current.pinchScale *
       (distance / zoomGestureRef.current.pinchDistance);
-    updateImageZoom(nextScale, imageZoom.x, imageZoom.y);
-  }, [imageZoom.x, imageZoom.y, updateImageZoom]);
+    const nextX =
+      zoomGestureRef.current.pinchOffsetX +
+      (centerX - zoomGestureRef.current.pinchCenterX);
+    const nextY =
+      zoomGestureRef.current.pinchOffsetY +
+      (centerY - zoomGestureRef.current.pinchCenterY);
+    updateImageZoom(nextScale, nextX, nextY);
+  }, [updateImageZoom]);
 
   const handleImageTouchEnd = useCallback((event) => {
     if (event.touches.length < 2) {
       zoomGestureRef.current.pinchDistance = 0;
       zoomGestureRef.current.pinchScale = imageZoom.scale;
+      zoomGestureRef.current.pinchCenterX = 0;
+      zoomGestureRef.current.pinchCenterY = 0;
+      zoomGestureRef.current.pinchOffsetX = imageZoom.x;
+      zoomGestureRef.current.pinchOffsetY = imageZoom.y;
     }
-    if (imageZoom.scale > 1) {
-      event.stopPropagation();
-    }
-  }, [imageZoom.scale]);
+  }, [imageZoom.scale, imageZoom.x, imageZoom.y]);
 
   const albumCover =
     album?.coverPhoto?.imageUrl ||
@@ -1777,6 +1991,9 @@ export default function AlbumDetailPage({ params }) {
                     panelId="left"
                     hideUI={hideUI}
                     label="Left Panel"
+                    surfaceRef={(node) => {
+                      splitSurfaceRefs.current.left = node;
+                    }}
                     className={
                       isSplitMobileSwapped
                         ? "order-2 lg:order-1"
@@ -1785,7 +2002,7 @@ export default function AlbumDetailPage({ params }) {
                     item={leftSplitItem}
                     media={leftSplitMedia}
                     assignVideoRef={splitLeftVideoRef}
-                    zoomScale={splitZoom.left}
+                    zoomState={splitZoom.left}
                     onPinchStart={leftSplitPinchHandlers.onPinchStart}
                     onPinchMove={leftSplitPinchHandlers.onPinchMove}
                     onPinchEnd={leftSplitPinchHandlers.onPinchEnd}
@@ -1817,6 +2034,9 @@ export default function AlbumDetailPage({ params }) {
                     panelId="right"
                     hideUI={hideUI}
                     label="Right Panel"
+                    surfaceRef={(node) => {
+                      splitSurfaceRefs.current.right = node;
+                    }}
                     className={
                       isSplitMobileSwapped
                         ? "order-1 lg:order-2"
@@ -1825,7 +2045,7 @@ export default function AlbumDetailPage({ params }) {
                     item={rightSplitItem}
                     media={rightSplitMedia}
                     assignVideoRef={splitRightVideoRef}
-                    zoomScale={splitZoom.right}
+                    zoomState={splitZoom.right}
                     onPinchStart={rightSplitPinchHandlers.onPinchStart}
                     onPinchMove={rightSplitPinchHandlers.onPinchMove}
                     onPinchEnd={rightSplitPinchHandlers.onPinchEnd}
@@ -1918,11 +2138,12 @@ export default function AlbumDetailPage({ params }) {
                   onTouchStart={handleImageTouchStart}
                   onTouchMove={handleImageTouchMove}
                   onTouchEnd={handleImageTouchEnd}
+                  onTouchCancel={handleImageTouchEnd}
                   style={{ touchAction: imageZoom.scale > 1 ? "none" : "pinch-zoom" }}
                 >
                   <img
                     key={activeMediaKey}
-                    src={activeItem.imageUrl}
+                    src={activeResolvedSrc}
                     alt={activeItem.caption || `Photo ${activeItem.id}`}
                     className="max-h-full max-w-full object-contain transition-transform duration-150 ease-out"
                     style={{
@@ -1952,7 +2173,7 @@ export default function AlbumDetailPage({ params }) {
               ) : null}
               {showSplitMode && hideUI ? (
                 <>
-                  {!splitFullscreenControlsHidden ? (
+                  {!fullscreenControlsHidden ? (
                     <div className="pointer-events-none absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2">
                       <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/20 bg-black/35 p-1.5 backdrop-blur-md">
                         <button
@@ -2081,7 +2302,11 @@ export default function AlbumDetailPage({ params }) {
               ) : viewerMode !== "split" ? (
                 <div
                   className={`absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/45 p-1.5 backdrop-blur transition-all duration-300 ${
-                    hideUI ? "opacity-95" : "pointer-events-none opacity-0"
+                    hideUI
+                      ? viewerMode === "slideshow" && fullscreenControlsHidden
+                        ? "pointer-events-none opacity-0"
+                        : "opacity-95"
+                      : "pointer-events-none opacity-0"
                   }`}
                 >
                   <button
@@ -2112,7 +2337,9 @@ export default function AlbumDetailPage({ params }) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setHideUI(false)}
+                    onClick={() => {
+                      void handleShowUI();
+                    }}
                     aria-label="Show viewer interface"
                     className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
                   >

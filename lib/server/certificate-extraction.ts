@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import { zodTextFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
-import { isPdfAssetUrl } from '@/lib/certificates';
+import { isPdfAssetUrl, toCloudinaryPdfPreviewUrl } from '@/lib/certificates';
 import { isSafeHttpUrl } from '@/lib/url-safety';
 import { RequestValidationError } from '@/lib/server/uploads';
 
@@ -18,12 +18,15 @@ const certificateExtractionSchema = z.object({
 const certificateExtractionPrompt = [
   'Extract certificate metadata from the provided certificate image or PDF.',
   'Return only fields you can infer directly from the document or an explicit verification URL shown in the document.',
-  'Do not hallucinate or invent values.',
-  'Use null when a value is missing or uncertain.',
+  'Do not hallucinate or invent values that are not supported by the document.',
+  'Use null when a value is missing.',
   'For title, use the certificate/course/program name.',
   'For issuer, use the organization that issued the certificate.',
-  'For category, use a short category like Frontend, Backend, Cloud, Data, Design, Security, or similar only if the document clearly suggests one.',
-  'For issuedAt and expiresAt, return YYYY-MM-DD only when the exact day is present on the document; otherwise return null.',
+  'For category, choose exactly one best category from: Frontend, Backend, Fullstack, Cloud, Data, Design, Security, DevOps, AI/ML, Mobile, General.',
+  'For dates: extract all visible dates and interpret them.',
+  'If only one date exists, treat it as issuedAt (not expiresAt).',
+  'If there are two dates (issued and expiry/valid until), map earlier date to issuedAt and later date to expiresAt.',
+  'Return dates as YYYY-MM-DD only when the exact day is present; otherwise return null.',
   'For credentialId, return the visible credential or certificate identifier.',
   'For link, return a visible public verification URL from the document; if none is shown, return null.',
 ].join(' ');
@@ -49,8 +52,9 @@ function normalizeDateString(value: string | null | undefined) {
     return undefined;
   }
 
+  // The admin form's date fields expect YYYY-MM-DD (it serializes to ISO on submit).
   const timestamp = Date.parse(`${normalized}T00:00:00.000Z`);
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : undefined;
+  return Number.isFinite(timestamp) ? normalized : undefined;
 }
 
 export async function extractCertificateFieldsFromAsset(options: { assetUrl: string; filename: string }) {
@@ -63,17 +67,13 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
     );
   }
 
-  const assetInput = isPdfAssetUrl(options.assetUrl)
-    ? {
-        type: 'input_file',
-        file_url: options.assetUrl,
-        filename: options.filename || 'certificate.pdf',
-      }
-    : {
-        type: 'input_image',
-        image_url: options.assetUrl,
-        detail: 'high',
-      };
+  const isPdf = isPdfAssetUrl(options.assetUrl);
+  const pdfPreviewUrl = isPdf ? toCloudinaryPdfPreviewUrl(options.assetUrl) : null;
+  const assetInput = {
+    type: 'input_image',
+    image_url: pdfPreviewUrl || options.assetUrl,
+    detail: 'high',
+  };
 
   const response = await openai.responses.parse({
     model: process.env.OPENAI_CERTIFICATE_EXTRACTION_MODEL || 'gpt-4o-mini',
@@ -111,14 +111,35 @@ export async function extractCertificateFieldsFromAsset(options: { assetUrl: str
 
   const warnings = [];
 
+  if (isPdf && !pdfPreviewUrl) {
+    warnings.push('PDF preview conversion was unavailable; extraction used the original asset URL.');
+  }
+
+  // Date sanity:
+  // - If only one date was extracted (and it landed in expiresAt), treat it as issuedAt.
+  // - If both exist but reversed, swap.
+  if (!extractedFields.issuedAt && extractedFields.expiresAt) {
+    extractedFields.issuedAt = extractedFields.expiresAt;
+    extractedFields.expiresAt = undefined;
+  } else if (extractedFields.issuedAt && extractedFields.expiresAt) {
+    const issuedTs = Date.parse(`${extractedFields.issuedAt}T00:00:00.000Z`);
+    const expiresTs = Date.parse(`${extractedFields.expiresAt}T00:00:00.000Z`);
+    if (Number.isFinite(issuedTs) && Number.isFinite(expiresTs) && expiresTs < issuedTs) {
+      const tmp = extractedFields.issuedAt;
+      extractedFields.issuedAt = extractedFields.expiresAt;
+      extractedFields.expiresAt = tmp;
+    }
+  }
+
+  if (!extractedFields.category) {
+    extractedFields.category = 'General';
+  }
+
   if (!extractedFields.title) {
     warnings.push('Certificate title could not be extracted confidently.');
   }
   if (!extractedFields.issuer) {
     warnings.push('Certificate issuer could not be extracted confidently.');
-  }
-  if (!extractedFields.category) {
-    warnings.push('Certificate category could not be extracted confidently.');
   }
   if (!extractedFields.link) {
     warnings.push('No verification URL was found in the document. The uploaded asset URL will be used as the reference link.');

@@ -52,6 +52,10 @@ export default function CertificateAssetUpload({ id = 'certificate-asset-upload'
         }
       }
 
+      if (!nextFields.category) {
+        nextFields.category = 'General';
+      }
+
       onApply(nextFields);
       const nextWarnings = Array.isArray(result?.warnings) ? result.warnings.map((item) => String(item)).filter(Boolean) : [];
       setWarnings(nextWarnings);

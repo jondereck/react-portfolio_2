@@ -15,6 +15,7 @@ import type {
 import {
   GalleryRepository,
   photoSelect as albumPhotoSelect,
+  type AlbumRecord,
   type AlbumPhotoRecord,
 } from '@/src/modules/gallery/repositories/galleryRepository';
 import { GoogleDriveAdapter } from '@/src/modules/gallery/adapters/googleDriveAdapter';
@@ -78,8 +79,59 @@ export class GalleryService {
     );
   }
 
-  listAlbums(profileId: number, canViewDrafts: boolean) {
-    return this.repo.listAlbums(profileId, !canViewDrafts);
+  private resolveAlbumActivityAt(
+    album: Pick<AlbumRecord, 'createdAt' | 'updatedAt'>,
+    photoActivityAt: Date | null = null,
+  ) {
+    const candidates = [photoActivityAt, album.updatedAt, album.createdAt].filter(
+      (value): value is Date => value instanceof Date,
+    );
+    if (candidates.length === 0) {
+      return null;
+    }
+
+    return new Date(Math.max(...candidates.map((value) => value.getTime())));
+  }
+
+  private async attachAlbumActivity<T extends AlbumRecord>(albums: T[]) {
+    if (albums.length === 0) {
+      return [];
+    }
+
+    const latestPhotoActivity = await this.repo.getLatestPhotoActivityByAlbumIds(albums.map((album) => album.id));
+    const activityMap = new Map(latestPhotoActivity.map((entry) => [entry.albumId, entry.activityAt]));
+
+    return albums
+      .map((album) => ({
+        ...album,
+        activityAt: this.resolveAlbumActivityAt(album, activityMap.get(album.id) ?? null),
+      }))
+      .sort((left, right) => {
+        const leftTime = left.activityAt instanceof Date ? left.activityAt.getTime() : 0;
+        const rightTime = right.activityAt instanceof Date ? right.activityAt.getTime() : 0;
+        if (rightTime !== leftTime) {
+          return rightTime - leftTime;
+        }
+
+        return right.id - left.id;
+      });
+  }
+
+  private async attachSingleAlbumActivity<T extends AlbumRecord | null>(album: T) {
+    if (!album) {
+      return null;
+    }
+
+    const [activity] = await this.repo.getLatestPhotoActivityByAlbumIds([album.id]);
+    return {
+      ...album,
+      activityAt: this.resolveAlbumActivityAt(album, activity?.activityAt ?? null),
+    };
+  }
+
+  async listAlbums(profileId: number, canViewDrafts: boolean) {
+    const albums = await this.repo.listAlbums(profileId, !canViewDrafts);
+    return this.attachAlbumActivity(albums);
   }
 
   private sortPhotosByManualArrangement(photos: AlbumPhotoRecord[]) {
@@ -106,16 +158,17 @@ export class GalleryService {
       return null;
     }
 
-    return album;
+    return this.attachSingleAlbumActivity(album);
   }
 
   async getAlbumBySlug(slug: string, profileId: number, canViewDrafts: boolean) {
-    return this.repo.getAlbumBySlug(slug, profileId, !canViewDrafts);
+    const album = await this.repo.getAlbumBySlug(slug, profileId, !canViewDrafts);
+    return this.attachSingleAlbumActivity(album);
   }
 
-  createAlbum(profileId: number, input: AlbumCreateInput) {
+  async createAlbum(profileId: number, input: AlbumCreateInput) {
     const shareLinkEnabled = input.shareLinkEnabled ?? false;
-    return this.repo.createAlbum({
+    const album = await this.repo.createAlbum({
       profileId,
       name: input.name,
       slug: input.slug,
@@ -124,6 +177,7 @@ export class GalleryService {
       shareLinkEnabled,
       shareToken: shareLinkEnabled ? randomUUID().replace(/-/g, '') : null,
     });
+    return this.attachSingleAlbumActivity(album);
   }
 
   async updateAlbum(albumId: number, input: AlbumUpdateInput) {
@@ -148,14 +202,16 @@ export class GalleryService {
       }
     }
 
-    return this.repo.updateAlbum(albumId, {
+    const updated = await this.repo.updateAlbum(albumId, {
       ...input,
       ...(shareToken !== undefined ? { shareToken } : {}),
     });
+    return this.attachSingleAlbumActivity(updated);
   }
 
   async getAlbumByShareToken(shareToken: string) {
-    return this.repo.getAlbumByShareToken(shareToken);
+    const album = await this.repo.getAlbumByShareToken(shareToken);
+    return this.attachSingleAlbumActivity(album);
   }
 
   deleteAlbum(albumId: number) {
