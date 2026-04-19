@@ -7,6 +7,25 @@ import AdminSectionHeader from '@/components/admin/shared/AdminSectionHeader';
 
 const cardStyles = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900';
 
+const newestFirst = (items) => {
+  const list = Array.isArray(items) ? [...items] : [];
+
+  list.sort((left, right) => {
+    const leftDate = Date.parse(left?.createdAt ?? left?.updatedAt ?? '');
+    const rightDate = Date.parse(right?.createdAt ?? right?.updatedAt ?? '');
+    const leftTime = Number.isFinite(leftDate) ? leftDate : -1;
+    const rightTime = Number.isFinite(rightDate) ? rightDate : -1;
+
+    if (leftTime !== rightTime) {
+      return rightTime - leftTime;
+    }
+
+    return Number(right?.id ?? 0) - Number(left?.id ?? 0);
+  });
+
+  return list;
+};
+
 export default function PortfolioResourceSection({ resource }) {
   const { title, key, fields, listColumns } = resource;
   const {
@@ -50,6 +69,8 @@ export default function PortfolioResourceSection({ resource }) {
       clearFieldError(key);
     }
   };
+
+  const displayItems = ['certificates', 'portfolio', 'skills', 'experience'].includes(key) ? newestFirst(items) : items;
 
   return (
     <section className={cardStyles}>
@@ -98,7 +119,7 @@ export default function PortfolioResourceSection({ resource }) {
         <DataTable
           title={title}
           listColumns={listColumns}
-          items={items}
+          items={displayItems}
           loading={loading}
           deletingId={deletingId}
           onEdit={openEdit}
