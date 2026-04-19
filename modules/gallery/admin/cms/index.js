@@ -3,6 +3,7 @@ export { default as GalleryCmsHeader } from './GalleryCmsHeader';
 export { default as GalleryCmsModal } from './GalleryCmsModal';
 export { default as GalleryAlbumSwitchSheet } from './GalleryAlbumSwitchSheet';
 export { default as GalleryAlbumsSidebar } from './GalleryAlbumsSidebar';
+export { default as GalleryAlbumInspectorPanel } from './GalleryAlbumInspectorPanel';
 export { default as GalleryMobileTabs } from './GalleryMobileTabs';
 export { default as GalleryMobileStickyActionsBar } from './GalleryMobileStickyActionsBar';
 export { default as GalleryMediaToolbar } from './GalleryMediaToolbar';
