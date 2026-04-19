@@ -70,6 +70,19 @@ export const driveImportSchema = z.object({
   limit: z.number().int().min(1).max(200).optional().default(50),
 });
 
+export const unclothyCreateTaskSchema = z.object({
+  albumId: z.number().int().positive(),
+  sourcePhotoId: z.number().int().positive(),
+  settings: z.record(z.unknown()).default({}),
+  confirmedAdultConsent: z.literal(true),
+});
+
+export const unclothyIngestTaskSchema = z.object({
+  albumId: z.number().int().positive(),
+  sourcePhotoId: z.number().int().positive(),
+  confirmedAdultConsent: z.literal(true),
+});
+
 export type GallerySort = z.infer<typeof gallerySortSchema>;
 export type AlbumCreateInput = z.infer<typeof albumCreateSchema>;
 export type AlbumUpdateInput = z.infer<typeof albumUpdateSchema>;
@@ -77,3 +90,5 @@ export type PhotoCreateInput = z.infer<typeof photoCreateSchema>;
 export type ReorderPhotosInput = z.infer<typeof reorderPhotosSchema>;
 export type MovePhotosInput = z.infer<typeof movePhotosSchema>;
 export type DriveImportInput = z.infer<typeof driveImportSchema>;
+export type UnclothyCreateTaskInput = z.infer<typeof unclothyCreateTaskSchema>;
+export type UnclothyIngestTaskInput = z.infer<typeof unclothyIngestTaskSchema>;

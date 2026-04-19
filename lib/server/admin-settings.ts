@@ -10,7 +10,7 @@ type AdminSettingsSnapshot = {
 };
 
 type IntegrationStatus = {
-  key: 'database' | 'cloudinary' | 'resend' | 'googleDrive';
+  key: 'database' | 'cloudinary' | 'resend' | 'googleDrive' | 'unclothy';
   label: string;
   configured: boolean;
   state: 'connected' | 'warning' | 'disabled';
@@ -212,6 +212,19 @@ export async function getAdminSettingsDashboardData() {
     description: resendConfigured
       ? `Contact form email is configured for ${settings.integrations.contactRecipientEmail}.`
       : 'RESEND_API_KEY is missing. Contact submissions cannot be delivered.',
+  });
+
+  const unclothyConfigured = Boolean(process.env.UNCLOTHY_API_KEY) && Boolean(process.env.UNCLOTHY_API_BASE_URL);
+  statuses.push({
+    key: 'unclothy',
+    label: 'Unclothy',
+    configured: settings.integrations.unclothyEnabled && unclothyConfigured,
+    state: !settings.integrations.unclothyEnabled ? 'disabled' : unclothyConfigured ? 'connected' : 'warning',
+    description: settings.integrations.unclothyEnabled
+      ? unclothyConfigured
+        ? 'Unclothy integration is enabled globally. It is available to admins in Gallery → Media.'
+        : 'Unclothy integration is enabled globally, but UNCLOTHY_API_KEY / UNCLOTHY_API_BASE_URL are missing.'
+      : 'Unclothy integration is disabled by admin settings.',
   });
 
   statuses.push({

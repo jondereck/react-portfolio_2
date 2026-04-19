@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import AdminSidebar from '@/components/admin/navigation/AdminSidebar';
 import AdminTopbar from '@/components/admin/layout/AdminTopbar';
 import { useLoadingStore } from '@/store/loading';
+import UnclothyTaskNotifier from '@/components/admin/layout/UnclothyTaskNotifier';
 
 const adminLastVisitedPathStorageKey = 'admin:lastVisitedPath';
 const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
@@ -42,6 +43,7 @@ export default function AdminShell({ children }) {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 text-slate-900 md:p-6 dark:bg-slate-950 dark:text-slate-50">
+      <UnclothyTaskNotifier />
       <div className="mx-auto max-w-[1640px] space-y-6">
         <AdminTopbar onLogout={handleLogout} isLoggingOut={isLoggingOut} />
         <div className="flex flex-col gap-6 lg:flex-row">

@@ -17,6 +17,7 @@ const emptyState = {
   contactSenderEmail: '',
   cloudinaryFolder: '',
   googleDriveImportEnabled: true,
+  unclothyEnabled: false,
   defaultGalleryView: 'cinematic',
 };
 
@@ -38,6 +39,7 @@ export default function IntegrationsSettingsSection() {
       contactSenderEmail: data.settings.integrations.contactSenderEmail ?? '',
       cloudinaryFolder: data.settings.integrations.cloudinaryFolder ?? '',
       googleDriveImportEnabled: data.settings.integrations.googleDriveImportEnabled !== false,
+      unclothyEnabled: data.settings.integrations.unclothyEnabled === true,
       defaultGalleryView: data.settings.integrations.defaultGalleryView === 'compact' ? 'compact' : 'cinematic',
     });
     setFormError('');
@@ -76,6 +78,7 @@ export default function IntegrationsSettingsSection() {
               contactSenderEmail: integrations.contactSenderEmail.trim(),
               cloudinaryFolder: integrations.cloudinaryFolder.trim(),
               googleDriveImportEnabled: integrations.googleDriveImportEnabled,
+              unclothyEnabled: integrations.unclothyEnabled,
               defaultGalleryView: integrations.defaultGalleryView,
             },
           }),
@@ -188,6 +191,26 @@ export default function IntegrationsSettingsSection() {
                 <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
                   This is the global master switch only. Individual admins connect their own Google Drive account from the gallery import workflow.
                 </p>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="space-y-3">
+                <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <span>Enable Unclothy integration</span>
+                  <input
+                    type="checkbox"
+                    checked={integrations.unclothyEnabled}
+                    onChange={(event) => {
+                      setIntegrations((previous) => ({ ...previous, unclothyEnabled: event.target.checked }));
+                      clearField('unclothyEnabled');
+                    }}
+                  />
+                </label>
+                <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  Enables the admin-only Unclothy workflow inside Gallery → Media. The API key stays server-side only.
+                </p>
+                <FieldErrorText error={getFieldError(fieldErrors, 'integrations.unclothyEnabled')} />
               </div>
             </div>
 
