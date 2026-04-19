@@ -15,21 +15,10 @@ export default function GalleryMediaToolbar({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">Media library</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Compact grid, cleaner cards, and less vertical scrolling on mobile.
-          </p>
+
         </div>
 
-        <div className="flex items-center gap-2 lg:hidden">
-          <button
-            type="button"
-            onClick={onOpenFilter}
-            className="inline-flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            Filter
-          </button>
-        </div>
+
       </div>
 
       <div className="mt-4 lg:hidden">

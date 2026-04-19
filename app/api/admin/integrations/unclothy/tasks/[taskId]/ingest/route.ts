@@ -150,7 +150,7 @@ export async function POST(request: Request, context: RouteContext) {
     const sourceLabel = downloadPayload.photo.caption || `media ${downloadPayload.photo.id}`;
     const filename = `unclothy-${taskId}.${extension}`;
     const caption = `Unclothy - ${sourceLabel} - ${formatCaptionTimestamp()}`;
-    const file = new File([outputBytes], filename, { type: mimeType });
+    const file = new File([new Uint8Array(outputBytes)], filename, { type: mimeType });
 
     const created = await galleryService.addUploadedAlbumPhoto(parsed.albumId, {
       file,
@@ -183,4 +183,3 @@ export async function POST(request: Request, context: RouteContext) {
     return toErrorResponse(error, 'Unable to ingest Unclothy result.');
   }
 }
-

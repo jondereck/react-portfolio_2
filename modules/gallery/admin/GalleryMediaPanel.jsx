@@ -104,6 +104,11 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
   const selectedPhoto =
     selectedPhotoIds.length === 1 ? photos.find((photo) => photo.id === selectedPhotoIds[0]) ?? null : null;
+  const firstSelectedPhoto = useMemo(() => {
+    const firstId = selectedPhotoIds[0];
+    if (!firstId) return null;
+    return photos.find((photo) => photo.id === firstId) ?? null;
+  }, [photos, selectedPhotoIds]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -188,6 +193,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         title={`Delete ${selectedCount} selected media item${selectedCount === 1 ? '' : 's'}?`}
         description="This action cannot be undone."
         confirmLabel={selectedCount === 1 ? 'Delete item' : `Delete ${selectedCount} items`}
+        cancelLabel="Keep item"
         loading={confirmingDelete}
         destructive
         onConfirm={async () => {
@@ -199,7 +205,34 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
             setConfirmingDelete(false);
           }
         }}
-      />
+      >
+        {selectedCount === 1 && firstSelectedPhoto ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+              Selected item
+            </p>
+            <div className="mt-2 flex items-center gap-3">
+              <div className="h-12 w-12 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-800">
+                <MediaPreview
+                  url={firstSelectedPhoto.imageUrl}
+                  mimeType={firstSelectedPhoto.mimeType}
+                  sourceType={firstSelectedPhoto.sourceType}
+                  sourceId={firstSelectedPhoto.sourceId}
+                  alt={firstSelectedPhoto.caption || firstSelectedPhoto.originalFilename || `media_${firstSelectedPhoto.id}`}
+                  className="h-full w-full object-cover"
+                  controls={false}
+                />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-50">
+                  {firstSelectedPhoto.originalFilename || firstSelectedPhoto.caption || `media_${firstSelectedPhoto.id}`}
+                </p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedAlbum?.name}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </ConfirmModal>
 
       <GalleryCreateAlbumModal
         open={createAlbumOpen}
@@ -325,15 +358,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   buttonTone="primary"
                 />
 
-                <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                  <div className="mb-4 space-y-1">
-                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Import from Google Drive</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      Connect Drive, pick a folder, and import directly into the active album.
-                    </p>
-                  </div>
-                  <GalleryDriveImportSection controller={controller} selectedAlbum={selectedAlbum} />
-                </div>
+                <GalleryDriveImportSection controller={controller} selectedAlbum={selectedAlbum} variant="compact" />
               </section>
             ) : null}
 
