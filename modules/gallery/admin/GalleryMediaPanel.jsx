@@ -194,6 +194,9 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         description="This action cannot be undone."
         confirmLabel={selectedCount === 1 ? 'Delete item' : `Delete ${selectedCount} items`}
         cancelLabel="Keep item"
+        acknowledgementLabel="I understand this will permanently remove the selected item from the album."
+        acknowledgementRequired={false}
+        acknowledgementDefaultChecked
         loading={confirmingDelete}
         destructive
         onConfirm={async () => {
