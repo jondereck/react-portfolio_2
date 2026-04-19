@@ -4,6 +4,7 @@ import { getCloudinaryFolderPath } from '@/lib/server/admin-settings';
 
 export const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
 export const MAX_VIDEO_FILE_SIZE = 120 * 1024 * 1024;
+export const MAX_DOCUMENT_FILE_SIZE = 20 * 1024 * 1024;
 export const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 export const ALLOWED_VIDEO_MIME_TYPES = new Set([
   'video/mp4',
@@ -11,7 +12,9 @@ export const ALLOWED_VIDEO_MIME_TYPES = new Set([
   'video/webm',
   'video/x-matroska',
 ]);
+export const ALLOWED_DOCUMENT_MIME_TYPES = new Set(['application/pdf']);
 export const ALLOWED_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'mkv']);
+export const ALLOWED_DOCUMENT_EXTENSIONS = new Set(['pdf']);
 
 export class RequestValidationError extends Error {
   status: number;
@@ -96,6 +99,47 @@ export function validateMediaFile(file: File, fieldName = 'imageFile') {
     `${fieldName} must be a supported image or video format.`,
     400,
     { [fieldName]: ['Unsupported media type.'] },
+    'UNSUPPORTED_MEDIA_TYPE',
+  );
+}
+
+export function validateCertificateAssetFile(file: File, fieldName = 'assetFile') {
+  const normalizedType = (file.type || '').toLowerCase();
+  const extension = (file.name.split('.').pop() || '').toLowerCase();
+
+  if (ALLOWED_IMAGE_MIME_TYPES.has(normalizedType)) {
+    validateImageFile(file, fieldName);
+    return;
+  }
+
+  const isPdfByMime = ALLOWED_DOCUMENT_MIME_TYPES.has(normalizedType);
+  const isPdfByExtension = ALLOWED_DOCUMENT_EXTENSIONS.has(extension);
+
+  if (isPdfByMime || (!normalizedType && isPdfByExtension)) {
+    if (!isPdfByExtension) {
+      throw new RequestValidationError(
+        `${fieldName} document format is not allowed. Use PDF.`,
+        400,
+        { [fieldName]: ['Unsupported document extension.'] },
+        'UNSUPPORTED_MEDIA_TYPE',
+      );
+    }
+
+    if (file.size > MAX_DOCUMENT_FILE_SIZE) {
+      throw new RequestValidationError(
+        `${fieldName} must be 20MB or smaller.`,
+        413,
+        { [fieldName]: ['File is too large.'] },
+        'DOCUMENT_TOO_LARGE',
+      );
+    }
+    return;
+  }
+
+  throw new RequestValidationError(
+    `${fieldName} must be a supported image or PDF document.`,
+    400,
+    { [fieldName]: ['Unsupported file type.'] },
     'UNSUPPORTED_MEDIA_TYPE',
   );
 }
@@ -194,6 +238,10 @@ function isSupportedImageBuffer(buffer: Buffer): boolean {
   return false;
 }
 
+function isSupportedPdfBuffer(buffer: Buffer): boolean {
+  return buffer.length >= 5 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46 && buffer[4] === 0x2d;
+}
+
 export async function uploadImageFile(file: File, folder: string) {
   validateImageFile(file);
   configureCloudinary();
@@ -233,6 +281,75 @@ export async function uploadImageFile(file: File, folder: string) {
   }
 
   return result.secure_url;
+}
+
+export async function uploadCertificateAssetFile(file: File, folder: string) {
+  validateCertificateAssetFile(file);
+  configureCloudinary();
+  const resolvedFolder = await resolveCloudinaryFolder(folder);
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const normalizedType = (file.type || '').toLowerCase();
+  const extension = (file.name.split('.').pop() || '').toLowerCase();
+  const isImage = ALLOWED_IMAGE_MIME_TYPES.has(normalizedType);
+  const isPdf = ALLOWED_DOCUMENT_MIME_TYPES.has(normalizedType) || (!normalizedType && ALLOWED_DOCUMENT_EXTENSIONS.has(extension));
+
+  if (isImage && !isSupportedImageBuffer(buffer)) {
+    throw new RequestValidationError(
+      'Uploaded content does not match a supported image format.',
+      400,
+      { assetFile: ['Invalid image content.'] },
+      'INVALID_IMAGE_CONTENT',
+    );
+  }
+
+  if (isPdf && !isSupportedPdfBuffer(buffer)) {
+    throw new RequestValidationError(
+      'Uploaded content does not match a PDF document.',
+      400,
+      { assetFile: ['Invalid PDF content.'] },
+      'INVALID_DOCUMENT_CONTENT',
+    );
+  }
+
+  let result;
+  try {
+    result = await new Promise<{
+      secure_url?: string;
+      resource_type?: 'image' | 'video' | 'raw' | 'auto';
+      format?: string;
+      original_filename?: string;
+    }>((resolve, reject) => {
+      cloudinary.uploader
+        .upload_stream({ folder: resolvedFolder, resource_type: 'auto' }, (error, uploadResult) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve(uploadResult ?? {});
+        })
+        .end(buffer);
+    });
+  } catch (error) {
+    throw new RequestValidationError(
+      error instanceof Error && error.message ? `Certificate asset upload failed: ${error.message}` : 'Certificate asset upload failed.',
+      502,
+      undefined,
+      'CERTIFICATE_ASSET_UPLOAD_FAILED',
+    );
+  }
+
+  if (!result.secure_url) {
+    throw new RequestValidationError('Certificate asset upload failed.', 502, undefined, 'CERTIFICATE_ASSET_UPLOAD_FAILED');
+  }
+
+  return {
+    secureUrl: result.secure_url,
+    resourceType: result.resource_type && result.resource_type !== 'auto' ? result.resource_type : 'raw',
+    format: result.format,
+    originalFilename: result.original_filename,
+  };
 }
 
 export type PreparedMediaUpload = {

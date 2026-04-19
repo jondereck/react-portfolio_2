@@ -5,6 +5,8 @@ import SectionContainer from './SectionContainer';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Dialog, DialogContent } from './ui/dialog';
 import useSWR from 'swr';
+import { FileText } from 'lucide-react';
+import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl } from '@/lib/certificates';
 import { isSafeHttpUrl } from '@/lib/url-safety';
 
 const EMPTY_ITEMS = [];
@@ -33,6 +35,7 @@ const Certificates = ({ profileSlug = null }) => {
   const itemsPerPage = 6;
   const { data, error } = useSWR(withProfile('/api/certificates', profileSlug), fetcher);
   const items = Array.isArray(data) ? data : EMPTY_ITEMS;
+  const sortedItems = useMemo(() => [...items].sort(compareCertificatesByIssuedAtDesc), [items]);
 
   const categories = useMemo(() => {
     const unique = new Set(items.map((item) => item.category));
@@ -41,10 +44,10 @@ const Certificates = ({ profileSlug = null }) => {
 
   const filteredCertificates = useMemo(() => {
     if (activeCategory === 'All') {
-      return items;
+      return sortedItems;
     }
-    return items.filter((item) => item.category === activeCategory);
-  }, [activeCategory, items]);
+    return sortedItems.filter((item) => item.category === activeCategory);
+  }, [activeCategory, sortedItems]);
   const totalPages = Math.ceil(filteredCertificates.length / itemsPerPage);
   const paginatedData = filteredCertificates.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
@@ -86,12 +89,25 @@ const Certificates = ({ profileSlug = null }) => {
             whileHover={{ y: -6 }}
             className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
           >
-            <button type="button" className="w-full" onClick={() => setSelectedImage(item.image)}>
-              <img src={item.image} alt={`${item.title} certificate`} className="h-48 w-full object-cover" />
-            </button>
+            {isPdfAssetUrl(item.image) ? (
+              <div className="flex h-48 w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
+                <div className="text-center">
+                  <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/80 text-rose-600 shadow-sm dark:bg-slate-950/70 dark:text-rose-300">
+                    <FileText className="h-7 w-7" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-100">PDF Certificate</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Open from the Verify link</p>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className="w-full" onClick={() => setSelectedImage(item.image)}>
+                <img src={item.image} alt={`${item.title} certificate`} className="h-48 w-full object-cover" />
+              </button>
+            )}
             <div className="space-y-2 p-4">
               <p className="text-sm font-semibold">{item.title}</p>
               <p className="text-xs text-slate-500">{item.issuer}</p>
+              {item.issuedAt ? <p className="text-xs text-slate-500">Issued {new Date(item.issuedAt).toLocaleDateString()}</p> : null}
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{item.category}</span>
                 <a

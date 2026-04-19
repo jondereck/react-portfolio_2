@@ -40,6 +40,17 @@ export default function PortfolioResourceSection({ resource }) {
     clearFieldError(fieldName);
   };
 
+  const patchFields = (patch) => {
+    if (!patch || typeof patch !== 'object') {
+      return;
+    }
+
+    setFormState((previous) => ({ ...previous, ...patch }));
+    for (const key of Object.keys(patch)) {
+      clearFieldError(key);
+    }
+  };
+
   return (
     <section className={cardStyles}>
       <AdminSectionHeader
@@ -73,6 +84,7 @@ export default function PortfolioResourceSection({ resource }) {
               open={dialogOpen}
               onOpenChange={setDialogOpen}
               onChange={updateField}
+              onPatch={patchFields}
               onSubmit={handleSubmit}
               onReset={resetForm}
               error={error}

@@ -11,7 +11,12 @@ export const portfolioResources = [
     fields: [
       { name: 'title', label: 'Title', type: 'text' },
       { name: 'issuer', label: 'Issuer', type: 'text' },
-      { name: 'image', label: 'Certificate Image', type: 'image' },
+      {
+        name: 'image',
+        label: 'Certificate File',
+        type: 'image',
+        helperText: 'Upload a certificate image or PDF. The form will auto-fill with extracted details after upload.',
+      },
       { name: 'link', label: 'Reference Link', type: 'url' },
       { name: 'category', label: 'Category', type: 'text' },
       {

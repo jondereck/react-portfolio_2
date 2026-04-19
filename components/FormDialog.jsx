@@ -2,9 +2,10 @@
 
 import FieldErrorText from '@/components/forms/FieldErrorText';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import CertificateAssetUpload from '@/components/CertificateAssetUpload';
 import ImageUpload from '@/components/ImageUpload';
 
-function FieldInput({ resourceKey, field, value, onChange, fieldError }) {
+function FieldInput({ resourceKey, field, value, onChange, onPatch, fieldError }) {
   const hasError = Boolean(fieldError);
   const inputClassName = `h-10 rounded-md border bg-white px-3 text-sm dark:bg-slate-950 ${
     hasError ? 'border-rose-400 focus:border-rose-500 dark:border-rose-500' : 'border-slate-300 dark:border-slate-700'
@@ -91,6 +92,25 @@ function FieldInput({ resourceKey, field, value, onChange, fieldError }) {
   const colSpan = field.type === 'textarea' ? 'md:col-span-2' : '';
 
   if (field.type === 'image') {
+    if (resourceKey === 'certificates' && field.name === 'image') {
+      return (
+        <div
+          className={`md:col-span-2 rounded-xl border bg-slate-50 p-4 dark:bg-slate-900/50 ${
+            hasError ? 'border-rose-300 dark:border-rose-500/40' : 'border-slate-200 dark:border-slate-800'
+          }`}
+        >
+          <CertificateAssetUpload
+            id={`${resourceKey}-${field.name}`}
+            label={field.label}
+            value={typeof value === 'string' ? value : ''}
+            onApply={(patch) => onPatch?.(patch)}
+          />
+          <FieldErrorText error={fieldError} />
+          {field.helperText ? <span className="mt-2 block text-xs text-slate-500">{field.helperText}</span> : null}
+        </div>
+      );
+    }
+
     return (
       <div
         className={`md:col-span-2 rounded-xl border bg-slate-50 p-4 dark:bg-slate-900/50 ${
@@ -153,6 +173,7 @@ export default function FormDialog({
   open,
   onOpenChange,
   onChange,
+  onPatch,
   onSubmit,
   onReset,
   error = '',
@@ -178,6 +199,7 @@ export default function FormDialog({
                       field={field}
                       value={formState[field.name]}
                       onChange={(value) => onChange(field.name, value)}
+                      onPatch={onPatch}
                       fieldError={fieldErrors[field.name]?.[0]}
                     />
                   ))}
