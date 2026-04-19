@@ -176,6 +176,7 @@ export class GalleryService {
       isPublished: input.isPublished ?? true,
       shareLinkEnabled,
       shareToken: shareLinkEnabled ? randomUUID().replace(/-/g, '') : null,
+      profileLinks: input.profileLinks,
     });
     return this.attachSingleAlbumActivity(album);
   }

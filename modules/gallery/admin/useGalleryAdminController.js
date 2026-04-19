@@ -57,6 +57,7 @@ export function useGalleryAdminController() {
     description: '',
     isPublished: true,
     shareLinkEnabled: false,
+    profileLinks: [],
   });
   const [detailsDirty, setDetailsDirty] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
@@ -186,7 +187,14 @@ export function useGalleryAdminController() {
 
   useEffect(() => {
     if (!selectedAlbum) {
-      setDetailsForm({ name: '', slug: '', description: '', isPublished: true, shareLinkEnabled: false });
+      setDetailsForm({
+        name: '',
+        slug: '',
+        description: '',
+        isPublished: true,
+        shareLinkEnabled: false,
+        profileLinks: [],
+      });
       setDetailsDirty(false);
       return;
     }
@@ -197,6 +205,7 @@ export function useGalleryAdminController() {
       description: selectedAlbum.description ?? '',
       isPublished: Boolean(selectedAlbum.isPublished),
       shareLinkEnabled: Boolean(selectedAlbum.shareLinkEnabled),
+      profileLinks: Array.isArray(selectedAlbum.profileLinks) ? selectedAlbum.profileLinks : [],
     });
     setDetailsDirty(false);
   }, [selectedAlbum]);
@@ -282,12 +291,52 @@ export function useGalleryAdminController() {
     event.preventDefault();
     if (!selectedAlbumId) return;
 
+    const normalizeProfileLinks = (links) => {
+      if (!Array.isArray(links)) return [];
+
+      return links
+        .map((entry) => ({
+          platform: String(entry?.platform ?? '').trim() || 'other',
+          url: String(entry?.url ?? '').trim(),
+        }))
+        .filter((entry) => entry.url.length > 0);
+    };
+
+    const isValidHttpUrl = (value) => {
+      if (typeof value !== 'string') return false;
+      const trimmed = value.trim();
+      if (!/^https?:\/\//i.test(trimmed)) return false;
+
+      try {
+        // eslint-disable-next-line no-new
+        new URL(trimmed);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    const normalizedProfileLinks = normalizeProfileLinks(detailsForm.profileLinks);
+    if (normalizedProfileLinks.some((entry) => !isValidHttpUrl(entry.url))) {
+      toast.error('Each profile link must be a valid http/https URL (or remove the row).');
+      return;
+    }
+
+    if (normalizedProfileLinks.length > 12) {
+      toast.error('Only 12 profile links are allowed per album.');
+      return;
+    }
+
     setSavingDetails(true);
     try {
+      const payload = {
+        ...detailsForm,
+        profileLinks: normalizedProfileLinks,
+      };
       const updated = await fetchJson(`/api/gallery/albums/${selectedAlbumId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(detailsForm),
+        body: JSON.stringify(payload),
       });
 
       setAlbums((previous) =>

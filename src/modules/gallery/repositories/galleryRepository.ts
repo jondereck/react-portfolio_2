@@ -122,6 +122,7 @@ export class GalleryRepository {
     isPublished: boolean;
     shareLinkEnabled?: boolean;
     shareToken?: string | null;
+    profileLinks?: Prisma.InputJsonValue;
   }) {
     return prisma.album.create({
       data: {
@@ -132,6 +133,7 @@ export class GalleryRepository {
         isPublished: data.isPublished,
         shareLinkEnabled: data.shareLinkEnabled ?? false,
         shareToken: data.shareToken ?? null,
+        ...(data.profileLinks !== undefined ? { profileLinks: data.profileLinks } : {}),
       },
       include: albumInclude,
     });
@@ -147,6 +149,7 @@ export class GalleryRepository {
       coverPhotoId?: number | null;
       shareLinkEnabled?: boolean;
       shareToken?: string | null;
+      profileLinks?: Prisma.InputJsonValue;
     },
   ) {
     return prisma.album.update({
@@ -159,6 +162,7 @@ export class GalleryRepository {
         ...(data.coverPhotoId !== undefined ? { coverPhotoId: data.coverPhotoId } : {}),
         ...(data.shareLinkEnabled !== undefined ? { shareLinkEnabled: data.shareLinkEnabled } : {}),
         ...(data.shareToken !== undefined ? { shareToken: data.shareToken } : {}),
+        ...(data.profileLinks !== undefined ? { profileLinks: data.profileLinks } : {}),
       },
       include: albumInclude,
     });

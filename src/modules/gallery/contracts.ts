@@ -2,6 +2,29 @@ import { z } from 'zod';
 
 export const gallerySortSchema = z.enum(['custom', 'dateAsc', 'dateDesc']).default('custom');
 
+const profileLinkPlatformSchema = z.enum([
+  'instagram',
+  'facebook',
+  'tiktok',
+  'youtube',
+  'x',
+  'linkedin',
+  'website',
+  'other',
+]);
+
+const profileLinkSchema = z.object({
+  platform: profileLinkPlatformSchema,
+  url: z
+    .string()
+    .trim()
+    .url()
+    .max(500)
+    .refine((value) => /^https?:\/\//i.test(value), { message: 'Only http/https URLs are allowed.' }),
+});
+
+const profileLinksSchema = z.array(profileLinkSchema).max(12);
+
 export const albumCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   slug: z
@@ -13,6 +36,7 @@ export const albumCreateSchema = z.object({
   description: z.string().trim().max(1000).optional(),
   isPublished: z.boolean().optional().default(true),
   shareLinkEnabled: z.boolean().optional(),
+  profileLinks: profileLinksSchema.optional(),
 });
 
 export const albumUpdateSchema = albumCreateSchema.partial().extend({

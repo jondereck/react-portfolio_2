@@ -212,6 +212,31 @@ const normalizeGalleryAlbum = (album, shareToken = "") => {
   };
 };
 
+const platformLabelMap = {
+  instagram: "Instagram",
+  facebook: "Facebook",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  x: "X",
+  linkedin: "LinkedIn",
+  website: "Website",
+  other: "Link",
+};
+
+const isValidHttpUrl = (value) => {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!/^https?:\/\//i.test(trimmed)) return false;
+
+  try {
+    // eslint-disable-next-line no-new
+    new URL(trimmed);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 const SplitPanelMediaSurface = ({
   panelId,
   hideUI,
@@ -1688,6 +1713,18 @@ export default function AlbumDetailPage({ params }) {
   const albumCoverIsVideo = isPhotoVideo(album?.coverPhoto, albumCover);
   const totalPhotos = photos.length;
   const totalVideos = photos.filter((item) => isPhotoVideo(item)).length;
+  const profileLinks = useMemo(() => {
+    const links = album?.profileLinks;
+    if (!Array.isArray(links)) return [];
+
+    return links
+      .map((entry) => {
+        const platform = typeof entry?.platform === "string" ? entry.platform : "other";
+        const url = typeof entry?.url === "string" ? entry.url.trim() : "";
+        return { platform, url };
+      })
+      .filter((entry) => entry.url && isValidHttpUrl(entry.url));
+  }, [album?.profileLinks]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.95),_rgba(2,6,23,1)_45%)] px-4 py-6 sm:px-6 md:py-10">
@@ -1731,6 +1768,21 @@ export default function AlbumDetailPage({ params }) {
                 {photos?.length ?? 0} items
                 {album?.description ? ` · ${album.description}` : ""}
               </p>
+              {profileLinks.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {profileLinks.map((entry, index) => (
+                    <a
+                      key={`${entry.platform}-${index}`}
+                      href={entry.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-white/90 transition hover:bg-white/15"
+                    >
+                      {platformLabelMap[entry.platform] || "Link"}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
             </div>
             <div className="rounded-full border border-white/30 bg-white/10 px-4 py-2 text-xs uppercase tracking-[0.15em] text-slate-100 backdrop-blur">
               Collection

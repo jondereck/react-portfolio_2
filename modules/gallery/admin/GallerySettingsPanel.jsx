@@ -10,6 +10,7 @@ import {
   GalleryPageHeader,
   GalleryPanelCard,
   buttonStyles,
+  ghostButtonStyles,
   inputStyles,
 } from './galleryAdminShared';
 import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
@@ -17,6 +18,19 @@ import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
 export default function GallerySettingsPanel({ controller, embedded = false }) {
   const [siteOrigin, setSiteOrigin] = useState('');
   const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
+  const platformOptions = useMemo(
+    () => [
+      { value: 'instagram', label: 'Instagram' },
+      { value: 'facebook', label: 'Facebook' },
+      { value: 'tiktok', label: 'TikTok' },
+      { value: 'youtube', label: 'YouTube' },
+      { value: 'x', label: 'X' },
+      { value: 'linkedin', label: 'LinkedIn' },
+      { value: 'website', label: 'Website' },
+      { value: 'other', label: 'Other' },
+    ],
+    [],
+  );
   const {
     albums,
     selectedAlbum,
@@ -56,6 +70,22 @@ export default function GallerySettingsPanel({ controller, embedded = false }) {
       toast.success('Share link copied');
     } catch {
       toast.error('Unable to copy share link');
+    }
+  };
+
+  const profileLinks = Array.isArray(detailsForm?.profileLinks) ? detailsForm.profileLinks : [];
+
+  const isValidHttpUrl = (value) => {
+    if (typeof value !== 'string') return false;
+    const trimmed = value.trim();
+    if (!/^https?:\/\//i.test(trimmed)) return false;
+
+    try {
+      // eslint-disable-next-line no-new
+      new URL(trimmed);
+      return true;
+    } catch {
+      return false;
     }
   };
 
@@ -204,6 +234,120 @@ export default function GallerySettingsPanel({ controller, embedded = false }) {
                         <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400">
                           Disabled
                         </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Profile links</p>
+                        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                          Add social/profile links associated with this album.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className={ghostButtonStyles}
+                        disabled={profileLinks.length >= 12}
+                        onClick={() => {
+                          if (profileLinks.length >= 12) return;
+                          setDetailsForm((previous) => ({
+                            ...previous,
+                            profileLinks: [...profileLinks, { platform: 'instagram', url: '' }],
+                          }));
+                          setDetailsDirty(true);
+                        }}
+                      >
+                        Add link
+                      </button>
+                    </div>
+
+                    {profileLinks.length === 0 ? (
+                      <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">No links saved.</p>
+                    ) : (
+                      <div className="mt-3 space-y-3">
+                        {profileLinks.map((link, index) => {
+                          const urlValue = typeof link?.url === 'string' ? link.url : '';
+                          const hasUrl = urlValue.trim().length > 0;
+                          const urlValid = !hasUrl || isValidHttpUrl(urlValue);
+
+                          return (
+                            <div
+                              key={`${link?.platform ?? 'link'}-${index}`}
+                              className="rounded-lg border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-950"
+                            >
+                              <div className="grid gap-2 sm:grid-cols-[170px_minmax(0,1fr)_auto] sm:items-start">
+                                <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                  Platform
+                                  <select
+                                    className={inputStyles}
+                                    value={link?.platform ?? 'instagram'}
+                                    onChange={(event) => {
+                                      const nextPlatform = event.target.value;
+                                      setDetailsForm((previous) => ({
+                                        ...previous,
+                                        profileLinks: profileLinks.map((entry, entryIndex) =>
+                                          entryIndex === index ? { ...entry, platform: nextPlatform } : entry,
+                                        ),
+                                      }));
+                                      setDetailsDirty(true);
+                                    }}
+                                  >
+                                    {platformOptions.map((option) => (
+                                      <option key={option.value} value={option.value}>
+                                        {option.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+
+                                <label className="space-y-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                  URL
+                                  <input
+                                    className={`${inputStyles} ${urlValid ? '' : 'border-rose-400 focus:border-rose-500'}`}
+                                    value={urlValue}
+                                    onChange={(event) => {
+                                      const nextUrl = event.target.value;
+                                      setDetailsForm((previous) => ({
+                                        ...previous,
+                                        profileLinks: profileLinks.map((entry, entryIndex) =>
+                                          entryIndex === index ? { ...entry, url: nextUrl } : entry,
+                                        ),
+                                      }));
+                                      setDetailsDirty(true);
+                                    }}
+                                    placeholder="https://instagram.com/..."
+                                  />
+                                  {!urlValid ? (
+                                    <p className="text-[11px] font-medium normal-case tracking-normal text-rose-600">
+                                      Use a valid http/https URL.
+                                    </p>
+                                  ) : null}
+                                </label>
+
+                                <div className="flex justify-end sm:pt-6">
+                                  <button
+                                    type="button"
+                                    className={ghostButtonStyles}
+                                    onClick={() => {
+                                      setDetailsForm((previous) => ({
+                                        ...previous,
+                                        profileLinks: profileLinks.filter((_, entryIndex) => entryIndex !== index),
+                                      }));
+                                      setDetailsDirty(true);
+                                    }}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {profileLinks.length}/12 links saved.
+                        </p>
                       </div>
                     )}
                   </div>

@@ -243,6 +243,7 @@ model Album {
   isPublished  Boolean     @default(true)
   shareLinkEnabled Boolean @default(false)
   shareToken   String?     @unique
+  profileLinks Json?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   profile      Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
