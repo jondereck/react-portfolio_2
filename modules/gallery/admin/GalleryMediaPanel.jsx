@@ -21,6 +21,7 @@ import {
   GalleryCmsShell,
   GalleryInspectorPanel,
   GalleryMediaGrid,
+  GalleryMediaFilterModal,
   GalleryMediaToolbar,
   GalleryMobileTabs,
   GallerySelectionActionsPopup,
@@ -39,12 +40,6 @@ function getPhotoSearchText(photo) {
     .join(' ');
 }
 
-function getSortTime(photo) {
-  const candidate = photo?.uploadedAt || photo?.createdAt || photo?.updatedAt;
-  const date = candidate ? new Date(candidate) : null;
-  return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
-}
-
 export default function GalleryMediaPanel({ controller, embedded = false }) {
   const {
     albums,
@@ -53,6 +48,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     photos,
     loadingAlbums,
     loadingPhotos,
+    sortMode,
+    setSortMode,
     uploadingFiles,
     uploadProgress,
     uploadSummary,
@@ -83,6 +80,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [importOpen, setImportOpen] = useState(false);
   const [albumSwitchOpen, setAlbumSwitchOpen] = useState(false);
   const [movePickerOpen, setMovePickerOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('media');
   const [searchValue, setSearchValue] = useState('');
   const [activeChip, setActiveChip] = useState('all');
@@ -120,6 +118,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       { id: 'images', label: 'Images' },
       { id: 'videos', label: 'Videos' },
       { id: 'recent', label: 'Recent' },
+      { id: 'manual', label: 'Manual' },
       { id: 'selected', label: `Selected${selectedCount ? ` (${selectedCount})` : ''}` },
     ],
     [selectedCount],
@@ -183,12 +182,25 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       next = next.filter((photo) => getPhotoSearchText(photo).includes(query));
     }
 
-    if (activeChip === 'recent') {
-      next = [...next].sort((a, b) => getSortTime(b) - getSortTime(a));
-    }
-
     return next;
   }, [activeChip, photos, searchValue, selectedPhotoIds]);
+
+  const handleChipChange = (chipId) => {
+    setActiveChip(chipId);
+
+    if (chipId === 'manual') {
+      if (typeof setSortMode === 'function' && sortMode !== 'custom') {
+        setSortMode('custom');
+      }
+      return;
+    }
+
+    if (chipId === 'recent') {
+      if (typeof setSortMode === 'function' && sortMode !== 'dateDesc') {
+        setSortMode('dateDesc');
+      }
+    }
+  };
 
   const handleOpenUpload = () => {
     if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches) {
@@ -207,7 +219,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   };
 
   const handleOpenFilter = () => {
-    toast.message('Filters are handled via the chip row for now.');
+    setFilterOpen(true);
   };
 
   const openTask = (task) => {
@@ -398,7 +410,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                 onSearchChange={setSearchValue}
                 activeChip={activeChip}
                 chips={chips}
-                onChipChange={setActiveChip}
+                onChipChange={handleChipChange}
                 onOpenFilter={handleOpenFilter}
               />
 
@@ -605,6 +617,24 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           uploadLabel="Choose files"
         />
       </GalleryCmsModal>
+
+      <GalleryMediaFilterModal
+        open={filterOpen}
+        sortMode={sortMode}
+        onClose={() => setFilterOpen(false)}
+        onApplySort={(nextSort) => {
+          if (typeof setSortMode === 'function') {
+            setSortMode(nextSort);
+          }
+
+          setActiveChip((current) => {
+            if (current !== 'recent' && current !== 'manual') return current;
+            if (nextSort === 'custom') return 'manual';
+            if (nextSort === 'dateDesc') return 'recent';
+            return 'all';
+          });
+        }}
+      />
 
       <GalleryCmsModal
         open={importOpen}

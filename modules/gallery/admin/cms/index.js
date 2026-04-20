@@ -11,3 +11,4 @@ export { default as GalleryMediaGrid } from './GalleryMediaGrid';
 export { default as GalleryInspectorPanel } from './GalleryInspectorPanel';
 export { default as GallerySelectionActionsPopup } from './GallerySelectionActionsPopup';
 export { default as GalleryAlbumMovePicker } from './GalleryAlbumMovePicker';
+export { default as GalleryMediaFilterModal } from './GalleryMediaFilterModal';

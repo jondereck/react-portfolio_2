@@ -13,9 +13,18 @@ export default function GalleryMediaToolbar({
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6 lg:py-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
+        <div className="flex items-center justify-between gap-3 sm:block">
           <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">Media library</h2>
-
+          {onOpenFilter ? (
+            <button
+              type="button"
+              onClick={onOpenFilter}
+              className="inline-flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 sm:hidden"
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Filter
+            </button>
+          ) : null}
         </div>
 
 
