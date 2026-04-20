@@ -162,7 +162,7 @@ export default function AdminAccountClient() {
                 This is managed globally in security settings.
               </p>
               <Link
-                href="/admin/settings#security"
+                href="/admin/security"
                 className="mt-3 inline-flex h-9 items-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 Open Security Settings

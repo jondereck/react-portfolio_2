@@ -22,8 +22,8 @@ const adminOverviewCards = [
     accent: 'sky',
   },
   {
-    title: 'System Settings',
-    description: 'Manage global site settings plus navigation, integrations, and security configuration.',
+    title: 'Site Settings',
+    description: 'Manage global site settings, navigation, integrations, and security configuration.',
     href: '/admin/settings',
     icon: Settings2,
     badge: 'Core',

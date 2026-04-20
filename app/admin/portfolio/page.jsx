@@ -1,6 +1,7 @@
 import {
   Award,
   BriefcaseBusiness,
+  Briefcase,
   House,
   Layers3,
   Sparkles,
@@ -8,6 +9,14 @@ import {
 import AdminOverviewCard from '@/components/admin/shared/AdminOverviewCard';
 
 const portfolioOverviewCards = [
+  {
+    title: 'Manage Homepage',
+    description: 'Edit hero and about homepage sections without leaving the admin surface.',
+    href: '/admin/portfolio/homepage',
+    icon: House,
+    badge: 'Homepage',
+    accent: 'rose',
+  },
   {
     title: 'Manage Projects',
     description: 'Create and edit portfolio projects with narrative, tech stack, links, and publishing controls.',
@@ -33,12 +42,12 @@ const portfolioOverviewCards = [
     accent: 'amber',
   },
   {
-    title: 'Manage Homepage',
-    description: 'Edit hero and about homepage sections without leaving the admin surface.',
-    href: '/admin/portfolio/homepage',
-    icon: House,
-    badge: 'Homepage',
-    accent: 'rose',
+    title: 'Manage Experience',
+    description: 'Maintain experience entries shown in the public portfolio experience section.',
+    href: '/admin/portfolio/experience',
+    icon: Briefcase,
+    badge: 'Experience',
+    accent: 'slate',
   },
   {
     title: 'Full Portfolio Workspace',

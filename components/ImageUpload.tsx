@@ -18,11 +18,19 @@ type ImageUploadProps = {
   value: string;
   onChange: (url: string) => void;
   className?: string;
+  cropAspectRatio?: number;
 };
 const dropzoneBaseStyles =
   'group flex min-h-32 cursor-pointer items-center justify-center rounded-md border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm transition dark:border-slate-700 dark:bg-slate-950';
 
-export default function ImageUpload({ id = 'image-upload', label = 'Image', value, onChange, className }: ImageUploadProps) {
+export default function ImageUpload({
+  id = 'image-upload',
+  label = 'Image',
+  value,
+  onChange,
+  className,
+  cropAspectRatio,
+}: ImageUploadProps) {
   const [uploadError, setUploadError] = useState('');
   const [isDragActive, setIsDragActive] = useState(false);
   const uploadToastIdRef = useRef<string | number | null>(null);
@@ -88,14 +96,21 @@ export default function ImageUpload({ id = 'image-upload', label = 'Image', valu
     openWidgetRef.current?.();
   };
 
+  const widgetOptions: any = {
+    cropping: true,
+    croppingShowDimensions: true,
+    multiple: false,
+    folder,
+  };
+
+  if (typeof cropAspectRatio === 'number' && Number.isFinite(cropAspectRatio) && cropAspectRatio > 0) {
+    widgetOptions.croppingAspectRatio = cropAspectRatio;
+  }
+
   const widgetProps: any = {
     uploadPreset: uploadPreset ?? '',
     options: {
-      cropping: true,
-      croppingAspectRatio: 1,
-      croppingShowDimensions: true,
-      multiple: false,
-      folder,
+      ...widgetOptions,
     },
     onEvent: (event: string) => {
       if (event === 'queues-start') {

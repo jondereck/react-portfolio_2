@@ -15,7 +15,7 @@ const clampSize = (value: string | null, fallback: number) => {
     return fallback;
   }
 
-  return Math.max(96, Math.min(1024, parsed));
+  return Math.max(32, Math.min(1024, parsed));
 };
 
 export async function GET(request: Request) {

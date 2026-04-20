@@ -16,11 +16,11 @@ export const adminNavigationSections = [
     title: 'Site Management',
     items: [
       { label: 'My Account', href: '/admin/account', iconKey: 'user' },
-      { label: 'Settings', href: '/admin/settings', iconKey: 'settings' },
+      { label: 'Site Settings', href: '/admin/settings', iconKey: 'settings' },
       { label: 'Users', href: '/admin/users', iconKey: 'users' },
-      { label: 'Navigation', href: '/admin/settings#navigation', iconKey: 'map' },
-      { label: 'Integrations', href: '/admin/settings#integrations', iconKey: 'plug' },
-      { label: 'Security', href: '/admin/settings#security', iconKey: 'shield' },
+      { label: 'Navigation', href: '/admin/navigation', iconKey: 'map' },
+      { label: 'Integrations', href: '/admin/integrations', iconKey: 'plug' },
+      { label: 'Security', href: '/admin/security', iconKey: 'shield' },
     ],
   },
   {

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Link as ScrollLink } from 'react-scroll';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
 import { isSafeHttpUrl } from '@/lib/url-safety';
@@ -26,6 +27,7 @@ const normalizeLinks = (config) => {
 
 const NavBar = ({ darkMode, onToggleDark, config }) => {
   const [nav, setNav] = useState(false);
+  const pathname = usePathname();
   const logoText = typeof config?.logoText === 'string' && config.logoText.trim().length > 0 ? config.logoText : 'Jon';
   const logoImage = isSafeHttpUrl(config?.logoImage) ? config.logoImage : '';
   const links = normalizeLinks(config);
@@ -53,12 +55,32 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
   };
 
   return (
-    <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85">
+    <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85 sm:px-6 lg:px-8">
       <div className="mx-auto flex h-20 w-full max-w-6xl items-center justify-between">
-        {logoImage ? (
-          <img src={logoImage} alt={logoText} className="h-12 w-auto rounded object-contain sm:h-14" />
+        {pathname === '/' ? (
+          <ScrollLink to="home" smooth duration={500} onClick={() => setNav(false)} className="flex cursor-pointer items-center">
+            {logoImage ? (
+              <img
+                src={logoImage}
+                alt={logoText}
+                className="h-16 w-auto rounded object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)] dark:drop-shadow-[0_2px_6px_rgba(255,255,255,0.22)] sm:h-20"
+              />
+            ) : (
+              <h1 className="text-4xl font-signature text-slate-900 dark:text-slate-100">{logoText}</h1>
+            )}
+          </ScrollLink>
         ) : (
-          <h1 className="text-4xl font-signature text-slate-900 dark:text-slate-100">{logoText}</h1>
+          <Link href="/" onClick={() => setNav(false)} className="flex cursor-pointer items-center">
+            {logoImage ? (
+              <img
+                src={logoImage}
+                alt={logoText}
+                className="h-16 w-auto rounded object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)] dark:drop-shadow-[0_2px_6px_rgba(255,255,255,0.22)] sm:h-20"
+              />
+            ) : (
+              <h1 className="text-4xl font-signature text-slate-900 dark:text-slate-100">{logoText}</h1>
+            )}
+          </Link>
         )}
 
         <nav className="hidden md:block">

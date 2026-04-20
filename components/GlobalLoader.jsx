@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import UniversalLoader from '@/components/UniversalLoader';
 import { useLoadingStore } from '@/store/loading';
 
 export default function GlobalLoader({
@@ -12,23 +14,24 @@ export default function GlobalLoader({
   const visible = forceVisible || loading;
   const activeMessage = forcedMessage || message || 'Loading';
 
-  if (!visible) {
-    return null;
-  }
+  const [theme, setTheme] = useState('dark');
 
-  return (
-    <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
-      aria-live="polite"
-      aria-busy="true"
-      role="status"
-    >
-      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/10 p-6 text-center shadow-2xl backdrop-blur">
-        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-white/20 border-t-cyan-300" />
-        <p className="mt-4 text-lg font-semibold text-white">Loading</p>
-        <p className="mt-2 text-sm text-white/75">{activeMessage}</p>
-        <p className="mt-4 text-xs uppercase tracking-[0.22em] text-white/45">{hint}</p>
-      </div>
-    </div>
-  );
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const html = document.documentElement;
+    const update = () => setTheme(html.classList.contains('dark') ? 'dark' : 'light');
+    update();
+
+    const observer = new MutationObserver(update);
+    observer.observe(html, { attributes: true, attributeFilter: ['class'] });
+
+    return () => observer.disconnect();
+  }, []);
+
+  if (!visible) return null;
+
+  return <UniversalLoader isVisible={visible} brand="Welcome" theme={theme} message={activeMessage} hint={hint} />;
 }

@@ -16,6 +16,7 @@ const pageTitles = {
   '/admin/portfolio/skills': 'Skills Administration',
   '/admin/portfolio/certificates': 'Certificates Administration',
   '/admin/portfolio/homepage': 'Homepage Administration',
+  '/admin/portfolio/experience': 'Experience Administration',
   '/admin/gallery': 'Gallery Administration',
   '/admin/gallery/workspace': 'Gallery Workspace',
   '/admin/gallery/manage': 'Album Management',
@@ -24,7 +25,10 @@ const pageTitles = {
   '/admin/gallery/arrange': 'Media Arrangement',
   '/admin/gallery/import': 'Media Import',
   '/admin/account': 'My Account',
-  '/admin/settings': 'System Settings',
+  '/admin/settings': 'Site Settings',
+  '/admin/navigation': 'Navigation Settings',
+  '/admin/integrations': 'Integrations',
+  '/admin/security': 'Security & Access',
   '/admin/users': 'User Management',
 };
 
