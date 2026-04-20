@@ -287,6 +287,77 @@ export default function GalleryUnclothySection({
   const basicFields = useMemo(() => ['generationMode', 'bodyType'], []);
   const advancedFields = useMemo(() => ['age', 'breastsSize', 'assSize', 'pussy'], []);
 
+  const quickInfoStatusLabel = active
+    ? phaseLabel || 'Queued'
+    : !status.enabled
+      ? 'Disabled'
+      : !status.configured
+        ? 'Needs setup'
+        : 'Ready';
+
+  const quickInfoBadgeTone = active?.phase === 'error'
+    ? 'error'
+    : active?.phase === 'done'
+      ? 'done'
+      : active
+        ? 'active'
+        : !status.enabled || !status.configured
+          ? 'warn'
+          : 'ready';
+
+  const quickInfoBadgeClassName =
+    quickInfoBadgeTone === 'error'
+      ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-200'
+      : quickInfoBadgeTone === 'done'
+        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200'
+        : quickInfoBadgeTone === 'warn'
+          ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200'
+          : quickInfoBadgeTone === 'ready'
+            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200'
+            : 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-200';
+
+  const quickInfoDotClassName =
+    quickInfoBadgeTone === 'error'
+      ? 'bg-rose-500'
+      : quickInfoBadgeTone === 'done'
+        ? 'bg-emerald-500'
+        : quickInfoBadgeTone === 'warn'
+          ? 'bg-amber-500'
+          : quickInfoBadgeTone === 'ready'
+            ? 'bg-emerald-500'
+            : 'bg-sky-500';
+
+  const quickInfoStep =
+    active?.phase === 'creating'
+      ? 1
+      : active?.phase === 'processing'
+        ? 2
+        : active?.phase === 'ingesting'
+          ? 3
+          : active?.phase === 'done'
+            ? 4
+            : null;
+  const quickInfoTotalSteps = 4;
+  const quickInfoStepDetail =
+    active?.phase === 'creating'
+      ? 'Creating request'
+      : active?.phase === 'processing'
+        ? 'Preparing media'
+        : active?.phase === 'ingesting'
+          ? 'Saving result'
+          : active?.phase === 'done'
+            ? 'Complete'
+            : active?.phase === 'error'
+              ? 'Failed'
+              : 'Queued';
+
+  const quickInfoEta =
+    active?.phase === 'processing'
+      ? 'Usually takes less than a minute'
+      : active?.phase === 'creating' || active?.phase === 'ingesting'
+        ? 'Usually takes a few seconds'
+        : 'Ready to generate';
+
   const handleEnqueue = () => {
     if (!canEnqueue) {
       toast.error(selectionProblem || 'Complete all required fields first.');
@@ -361,6 +432,106 @@ export default function GalleryUnclothySection({
         </div>
       ) : null}
 
+      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quick info</p>
+            <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-50">
+              {active ? 'Processing status' : 'Integration status'}
+            </h3>
+          </div>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${quickInfoBadgeClassName}`}>
+            <span className={`h-2 w-2 rounded-full ${quickInfoDotClassName}`} />
+            {quickInfoStatusLabel}
+          </span>
+        </div>
+
+        {selectionProblem ? (
+          <p className="mt-3 text-sm text-amber-700 dark:text-amber-200">{selectionProblem}</p>
+        ) : null}
+
+        {active ? (
+          <div className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/30">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">{active.statusText || 'Working\u2026'}</p>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {quickInfoStep
+                    ? `Step ${quickInfoStep} of ${quickInfoTotalSteps} \u2022 ${quickInfoStepDetail}`
+                    : quickInfoStepDetail}
+                  {active.providerStatus ? <span className="ml-1.5">({active.providerStatus})</span> : null}
+                </p>
+              </div>
+              <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{percent}%</span>
+            </div>
+
+            <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+              <div
+                className="h-full rounded-full bg-sky-500 transition-[width] duration-500"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+
+            <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+              <span>{quickInfoEta}</span>
+              <span>{isActiveForSelection ? 'Active' : 'Background'}</span>
+            </div>
+          </div>
+        ) : queue.length > 0 ? (
+          <div className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-200">
+            {queue.length} task(s) queued.
+          </div>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Status</p>
+            <p className="mt-1 font-semibold text-slate-900 dark:text-slate-50">{quickInfoStatusLabel}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Credits</p>
+            <p className="mt-1 flex items-baseline gap-1 font-semibold text-slate-900 dark:text-slate-50 whitespace-nowrap">
+              <span className="tabular-nums">{status.credits ?? '\u2014'}</span>
+              {typeof status.credits === 'number' ? (
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">remaining</span>
+              ) : null}
+            </p>
+          </div>
+        </div>
+
+        {active?.phase === 'error' ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className={ghostButtonStyles} onClick={stopTrackingActive}>
+              Dismiss
+            </button>
+            <button
+              type="button"
+              className={ghostButtonStyles}
+              disabled={!canEnqueue || disableInputs}
+              onClick={() => {
+                stopTrackingActive();
+                handleEnqueue();
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+
+        {status.warnings.length > 0 ? (
+          <div className="mt-3 space-y-1 text-xs text-amber-700 dark:text-amber-200">
+            {status.warnings.map((warning) => (
+              <p key={warning}>{warning}</p>
+            ))}
+          </div>
+        ) : null}
+
+        {autoRefreshedAt ? (
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Album refreshed after background save.</p>
+        ) : null}
+      </div>
+
+      {false ? (
       <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quick info</p>
         <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
@@ -440,6 +611,7 @@ export default function GalleryUnclothySection({
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Album refreshed after background save.</p>
         ) : null}
       </div>
+      ) : null}
 
       <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Basic settings</p>
