@@ -60,34 +60,7 @@ export default function GalleryAlbumsSidebar({
             </button>
           </div>
 
-          {showMobileChips ? (
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              <button
-                type="button"
-                onClick={onMobileFocusSearch}
-                className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-2xl bg-white px-3 text-sm font-medium ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-50 dark:ring-slate-800"
-              >
-                <Search className="h-4 w-4" />
-                Search
-              </button>
-              <button
-                type="button"
-                onClick={onMobileOpenFilter}
-                className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-2xl bg-white px-3 text-sm font-medium ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-50 dark:ring-slate-800"
-              >
-                <SlidersHorizontal className="h-4 w-4" />
-                Filter
-              </button>
-              <button
-                type="button"
-                onClick={onMobileOpenImport}
-                className="inline-flex h-10 items-center gap-2 whitespace-nowrap rounded-2xl bg-white px-3 text-sm font-medium ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-50 dark:ring-slate-800"
-              >
-                <FolderOpen className="h-4 w-4" />
-                Import
-              </button>
-            </div>
-          ) : null}
+
         </div>
       </section>
 

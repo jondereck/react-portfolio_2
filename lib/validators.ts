@@ -169,6 +169,15 @@ export const integrationsSettingsSchema = z.object({
   ),
   googleDriveImportEnabled: z.boolean().optional().default(true),
   unclothyEnabled: z.boolean().optional().default(false),
+  unclothyAlbumDefaults: z
+    .record(
+      z.object({
+        settings: z.record(z.unknown()).optional().default({}),
+        updatedAt: z.number().optional(),
+      }),
+    )
+    .optional()
+    .default({}),
   defaultGalleryView: z.enum(['cinematic', 'compact']).optional().default('cinematic'),
 });
 

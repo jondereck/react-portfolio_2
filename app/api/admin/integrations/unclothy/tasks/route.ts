@@ -6,10 +6,105 @@ import { getAdminSettings, logAdminAuditEvent } from '@/lib/server/admin-setting
 import { RequestValidationError } from '@/lib/server/uploads';
 import { toErrorResponse } from '@/lib/server/api-responses';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
-import { createUnclothyTask } from '@/lib/server/unclothy';
+import { createUnclothyTask, getUnclothyTaskSettings } from '@/lib/server/unclothy';
 import { unclothyCreateTaskSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 import { isSafeHttpUrl } from '@/lib/url-safety';
+
+function compareEnumKey(value: unknown) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function isAutomaticAgeOption(value: unknown) {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'automatic' || normalized === 'auto';
+}
+
+function normalizeEnumOptions(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map(String).map((option) => option.trim()).filter(Boolean);
+  }
+
+  if (value && typeof value === 'object') {
+    const candidate = (value as Record<string, unknown>).options;
+    if (Array.isArray(candidate)) {
+      return candidate.map(String).map((option) => option.trim()).filter(Boolean);
+    }
+  }
+
+  return null;
+}
+
+function resolveEnumValue(value: unknown, options: string[]) {
+  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+    return null;
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  const direct = options.find((option) => option === raw);
+  if (direct) {
+    return direct;
+  }
+
+  const lower = raw.toLowerCase();
+  const caseInsensitive = options.find((option) => option.toLowerCase() === lower);
+  if (caseInsensitive) {
+    return caseInsensitive;
+  }
+
+  if (isAutomaticAgeOption(lower)) {
+    return options.find((option) => isAutomaticAgeOption(option)) ?? null;
+  }
+
+  if (lower === '18') {
+    return options.find((option) => option.toLowerCase().includes('18')) ?? null;
+  }
+
+  return null;
+}
+
+async function loadProviderEnumAllowlist() {
+  try {
+    const settingsEnums = await getUnclothyTaskSettings();
+    const allowlist: Array<{ providerKey: string; options: string[] }> = [];
+    const normalizedToProviderKey = new Map<string, string>();
+
+    if (settingsEnums && typeof settingsEnums === 'object') {
+      for (const [providerKey, providerValue] of Object.entries(settingsEnums as Record<string, unknown>)) {
+        const options = normalizeEnumOptions(providerValue);
+        if (!options || options.length === 0) {
+          continue;
+        }
+
+        allowlist.push({ providerKey, options });
+        const normalizedKey = compareEnumKey(providerKey);
+        if (normalizedKey && !normalizedToProviderKey.has(normalizedKey)) {
+          normalizedToProviderKey.set(normalizedKey, providerKey);
+        }
+      }
+    }
+
+    return { allowlist, normalizedToProviderKey };
+  } catch (error) {
+    throw new RequestValidationError(
+      'Unable to validate Unclothy settings right now. Try again later.',
+      503,
+      undefined,
+      'UNCLOTHY_SETTINGS_ENUMS_UNAVAILABLE',
+      {
+        cause: error instanceof Error ? error.message : String(error),
+      },
+    );
+  }
+}
 
 function isExplicitAdultAge(value: unknown) {
   if (typeof value !== 'string') return false;
@@ -62,6 +157,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unclothy integration is disabled.' }, { status: 403 });
     }
 
+    const { allowlist, normalizedToProviderKey } = await loadProviderEnumAllowlist();
+    const providerEnums = new Map<string, string[]>();
+    for (const entry of allowlist) {
+      providerEnums.set(entry.providerKey, entry.options);
+    }
+
     const album = await galleryService.getAlbumById(parsed.albumId, profile.id, true);
     if (!album) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -77,23 +178,62 @@ export async function POST(request: Request) {
       throw new RequestValidationError('Selected media must be an image.', 400, undefined, 'UNSUPPORTED_MEDIA_TYPE');
     }
 
+    const rawSettings = parsed.settings ?? {};
+    const sanitizedSettings: Record<string, unknown> = {};
+    const fieldErrors: Record<string, string[]> = {};
+
+    for (const [rawKey, rawValue] of Object.entries(rawSettings)) {
+      const normalizedKey = compareEnumKey(rawKey);
+      const providerKey = normalizedKey ? normalizedToProviderKey.get(normalizedKey) : null;
+
+      if (!providerKey) {
+        continue;
+      }
+
+      if (normalizedKey === 'penis' || compareEnumKey(providerKey) === 'penis') {
+        continue;
+      }
+
+      const options = providerEnums.get(providerKey) ?? [];
+      const resolved = resolveEnumValue(rawValue, options);
+      if (!resolved) {
+        const message = options.length > 0 ? `Must be one of: ${options.join(', ')}.` : 'Invalid value.';
+        fieldErrors[`settings.${rawKey}`] = [message];
+        continue;
+      }
+
+      sanitizedSettings[providerKey] = resolved;
+    }
+
+    if (Object.keys(fieldErrors).length > 0) {
+      const firstKey = Object.keys(fieldErrors)[0];
+      const firstMessage = fieldErrors[firstKey]?.[0] || 'Invalid settings.';
+      throw new RequestValidationError(`Invalid Unclothy settings. ${firstMessage}`, 400, fieldErrors, 'UNCLOTHY_INVALID_SETTINGS_ENUM');
+    }
+
     const nextSettings = {
-      ...(parsed.settings ?? {}),
+      ...sanitizedSettings,
       gender: 'female',
     } as Record<string, unknown>;
-    delete (nextSettings as any).penis;
 
-    const requestedAge = (nextSettings as any).age;
-    if (typeof requestedAge === 'string' && requestedAge.trim() && !isExplicitAdultAge(requestedAge)) {
+    const ageProviderKey = normalizedToProviderKey.get(compareEnumKey('age')) || 'age';
+    const requestedAge = (nextSettings as any)[ageProviderKey];
+    const normalizedRequestedAge = typeof requestedAge === 'string' ? requestedAge.trim() : '';
+    if (normalizedRequestedAge && !isAutomaticAgeOption(normalizedRequestedAge) && !isExplicitAdultAge(normalizedRequestedAge)) {
       throw new RequestValidationError(
-        'Age must be an explicit adult (18+) option. "automatic" is not allowed.',
+        'Age must be "automatic" or an explicit adult (18+) option.',
         400,
-        { settings: ['Age must be an explicit adult (18+) option.'] },
-        'UNCLOTHY_AGE_NOT_ALLOWED',
+        { settings: ['Age must be "automatic" or an explicit adult (18+) option.'] },
+        'UNCLOTHY_AGE_INVALID',
       );
     }
-    if (!requestedAge) {
-      (nextSettings as any).age = '18';
+
+    if (!normalizedRequestedAge) {
+      const providerAgeKey = normalizedToProviderKey.get(compareEnumKey('age'));
+      const ageOptions = providerAgeKey ? providerEnums.get(providerAgeKey) ?? [] : [];
+      const automatic = ageOptions.find((option) => isAutomaticAgeOption(option));
+      const adult = ageOptions.find((option) => isExplicitAdultAge(option)) || ageOptions.find((option) => option.toLowerCase().includes('18'));
+      (nextSettings as any)[ageProviderKey] = automatic || adult || '18';
     }
 
     const { buffer } = await fetchSourceImageBytes(photo.imageUrl);

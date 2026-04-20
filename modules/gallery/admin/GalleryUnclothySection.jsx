@@ -13,6 +13,7 @@ const defaultSettings = {
   breastsSize: 'small',
   assSize: 'small',
   pussy: 'shaved',
+  age: 'automatic',
 };
 
 const fallbackEnumOptions = {
@@ -21,6 +22,7 @@ const fallbackEnumOptions = {
   breastsSize: ['small', 'medium', 'large'],
   assSize: ['small', 'medium', 'large'],
   pussy: ['shaved', 'hairy'],
+  age: ['automatic', '18'],
 };
 
 function normalizeEnumOptions(value) {
@@ -59,6 +61,21 @@ function isProbablyImage(photo) {
   return inferImageFromUrl(photo.imageUrl);
 }
 
+function isAutomaticAgeOption(value) {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'automatic' || normalized === 'auto';
+}
+
+function isExplicitAdultAgeOption(value) {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || isAutomaticAgeOption(normalized)) {
+    return false;
+  }
+  return normalized.includes('18') || normalized.includes('adult') || normalized.includes('mature');
+}
+
 export default function GalleryUnclothySection({
   controller,
   selectedAlbum,
@@ -95,6 +112,7 @@ export default function GalleryUnclothySection({
   const enqueue = useUnclothyTasksStore((state) => state.enqueue);
   const clearQueue = useUnclothyTasksStore((state) => state.clearQueue);
   const startRunner = useUnclothyTasksStore((state) => state.startRunner);
+  const stopTrackingActive = useUnclothyTasksStore((state) => state.stopTrackingActive);
   const lastCompletedAt = useUnclothyTasksStore((state) => state.lastCompletedAt);
   const lastCompletedAlbumId = useUnclothyTasksStore((state) => state.lastCompletedAlbumId);
   const lastCompletedAtRef = useRef(lastCompletedAt);
@@ -159,12 +177,74 @@ export default function GalleryUnclothySection({
     (key) => {
       const fromProvider = enumOptionsByKey[key];
       if (Array.isArray(fromProvider) && fromProvider.length > 0) {
+        if (key === 'age') {
+          const allowed = fromProvider.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
+          return allowed.length > 0 ? allowed : fallbackEnumOptions.age;
+        }
         return fromProvider;
       }
+
+      if (key === 'age') {
+        const fallback = fallbackEnumOptions.age || [];
+        const allowed = fallback.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
+        return allowed.length > 0 ? allowed : fallback;
+      }
+
       return fallbackEnumOptions[key] || [];
     },
     [enumOptionsByKey],
   );
+
+  const normalizeSettings = useCallback(
+    (candidate) => {
+      const merged = {
+        ...defaultSettings,
+        ...(candidate && typeof candidate === 'object' ? candidate : {}),
+      };
+
+      const normalized = { ...merged };
+      for (const key of Object.keys(defaultSettings)) {
+        const options = getOptions(key);
+        if (!Array.isArray(options) || options.length === 0) {
+          continue;
+        }
+
+        const value = String(normalized[key] ?? '').trim();
+        if (!value || !options.includes(value)) {
+          normalized[key] = options[0];
+        }
+      }
+
+      return normalized;
+    },
+    [getOptions],
+  );
+
+  useEffect(() => {
+    if (!selectedAlbumId) {
+      return;
+    }
+
+    setSettings(defaultSettings);
+    setConfirmed(false);
+
+    const controllerAbort = new AbortController();
+    fetchJson(`/api/admin/integrations/unclothy/album-defaults?albumId=${encodeURIComponent(selectedAlbumId)}`, {
+      method: 'GET',
+      signal: controllerAbort.signal,
+    })
+      .then((data) => {
+        if (!data?.settings) {
+          return;
+        }
+        setSettings(normalizeSettings(data.settings));
+      })
+      .catch(() => {
+        // ignore
+      });
+
+    return () => controllerAbort.abort();
+  }, [normalizeSettings, selectedAlbumId]);
 
   const selectionProblem = useMemo(() => {
     if (!selectedAlbumId) return 'Select an album first.';
@@ -205,7 +285,7 @@ export default function GalleryUnclothySection({
   const disableInputs = Boolean(active && active.phase === 'ingesting' && isActiveForSelection);
 
   const basicFields = useMemo(() => ['generationMode', 'bodyType'], []);
-  const advancedFields = useMemo(() => ['breastsSize', 'assSize', 'pussy'], []);
+  const advancedFields = useMemo(() => ['age', 'breastsSize', 'assSize', 'pussy'], []);
 
   const handleEnqueue = () => {
     if (!canEnqueue) {
@@ -213,12 +293,24 @@ export default function GalleryUnclothySection({
       return;
     }
 
+    try {
+      void fetchJson('/api/admin/integrations/unclothy/album-defaults', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          albumId: selectedAlbumId,
+          settings,
+        }),
+      });
+    } catch {
+      // ignore
+    }
+
     enqueue({
       albumId: selectedAlbumId,
       sourcePhotoId: selectedPhotoId,
       settingsSnapshot: {
         ...settings,
-        age: '18',
       },
     });
     startRunner();
@@ -234,7 +326,17 @@ export default function GalleryUnclothySection({
           </p>
         </div>
 
-        <button type="button" className={ghostButtonStyles} onClick={loadStatus} disabled={status.loading}>
+        <button
+          type="button"
+          className={ghostButtonStyles}
+          onClick={() => {
+            if (active?.phase === 'error') {
+              stopTrackingActive();
+            }
+            loadStatus();
+          }}
+          disabled={status.loading}
+        >
           {status.loading ? 'Refreshing…' : 'Refresh'}
         </button>
       </div>
@@ -307,6 +409,25 @@ export default function GalleryUnclothySection({
           <p className="mt-4 text-sm text-slate-700 dark:text-slate-200">{queue.length} task(s) queued.</p>
         ) : null}
 
+        {active?.phase === 'error' ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className={ghostButtonStyles} onClick={stopTrackingActive}>
+              Dismiss
+            </button>
+            <button
+              type="button"
+              className={ghostButtonStyles}
+              disabled={!canEnqueue || disableInputs}
+              onClick={() => {
+                stopTrackingActive();
+                handleEnqueue();
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+
         {status.warnings.length > 0 ? (
           <div className="mt-3 space-y-1 text-xs text-amber-700 dark:text-amber-200">
             {status.warnings.map((warning) => (
@@ -356,7 +477,9 @@ export default function GalleryUnclothySection({
             const options = getOptions(key);
             const value = settings[key] ?? '';
             const label =
-              key === 'breastsSize'
+              key === 'age'
+                ? 'Age'
+                : key === 'breastsSize'
                 ? 'Breast size'
                 : key === 'assSize'
                   ? 'Ass size'

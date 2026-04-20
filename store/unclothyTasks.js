@@ -114,6 +114,13 @@ export function stopTrackingActive() {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+function isProviderFailedStatus(value) {
+  if (typeof value !== 'string') return false;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  return normalized.includes('fail') || normalized.includes('error');
+}
+
 function nextStatusText(phase, tick) {
   if (phase === 'creating') return 'Creating task…';
   if (phase === 'ingesting') return 'Saving to album…';
@@ -213,6 +220,10 @@ async function runnerLoop() {
         const isComplete = Boolean(payload?.isComplete);
         setActive({ providerStatus });
 
+        if (isProviderFailedStatus(providerStatus)) {
+          throw new Error(`Unclothy failed (${providerStatus}).`);
+        }
+
         if (isComplete) {
           setActive({ phase: 'ingesting', percent: 92, statusText: nextStatusText('ingesting', statusTick) });
         } else {
@@ -233,6 +244,26 @@ async function runnerLoop() {
         );
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
+          const errorCode = payload?.errorCode || payload?.code;
+          const isNotReady =
+            response.status === 409 && (errorCode === 'UNCLOTHY_NOT_READY' || /not\s+completed/i.test(payload?.error || ''));
+
+          if (isNotReady) {
+            const retries = Number.isFinite(active.ingestRetries) ? active.ingestRetries : 0;
+            if (retries >= 8) {
+              throw new Error(payload?.error || payload?.message || `Ingest failed (${response.status}).`);
+            }
+
+            setActive({
+              phase: 'processing',
+              ingestRetries: retries + 1,
+              percent: Math.max(75, Math.min(90, active.percent ?? 85)),
+              statusText: 'Finalizing outputâ€¦',
+            });
+            await sleep(Math.min(5000, 1200 + retries * 400));
+            continue;
+          }
+
           throw new Error(payload?.error || payload?.message || `Ingest failed (${response.status}).`);
         }
 

@@ -160,6 +160,37 @@ export async function POST(request: Request, context: RouteContext) {
       },
     });
 
+    let responsePayload = created;
+
+    try {
+      const listing = await galleryService.listAlbumPhotos(parsed.albumId, profile.id, 'custom', true);
+      const photos = Array.isArray(listing?.photos) ? listing.photos : null;
+
+      if (photos && photos.length > 0) {
+        let orderedIds = photos.map((photo) => photo.id).filter((id) => Number.isInteger(id) && id > 0);
+
+        if (!orderedIds.includes(created.id)) {
+          orderedIds = [...orderedIds, created.id];
+        }
+
+        orderedIds = orderedIds.filter((id) => id !== created.id);
+        const sourceIndex = orderedIds.indexOf(parsed.sourcePhotoId);
+        if (sourceIndex >= 0) {
+          orderedIds.splice(sourceIndex + 1, 0, created.id);
+
+          if (new Set(orderedIds).size === orderedIds.length) {
+            const reordered = await galleryService.reorderAlbumPhotos(parsed.albumId, orderedIds);
+            const updated = Array.isArray(reordered) ? reordered.find((photo) => photo.id === created.id) : null;
+            if (updated) {
+              responsePayload = updated;
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore ordering errors; ingest succeeded and will still return the created record.
+    }
+
     await logAdminAuditEvent({
       actorUserId: actor.user.id,
       targetProfileId: profile.id,
@@ -174,7 +205,7 @@ export async function POST(request: Request, context: RouteContext) {
       },
     });
 
-    return NextResponse.json(created, { status: 201 });
+    return NextResponse.json(responsePayload, { status: 201 });
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) {

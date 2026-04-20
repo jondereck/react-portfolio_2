@@ -115,10 +115,6 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     const isDesktop = window.matchMedia?.('(min-width: 1024px)')?.matches;
     if (isDesktop) return;
 
-    if (activeTab === 'media' && selectedPhotoIds.length === 1) {
-      setActiveTab('details');
-    }
-
     if (activeTab === 'details' && selectedPhotoIds.length !== 1) {
       setActiveTab('media');
     }
@@ -370,7 +366,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                 {selectedPhoto ? (
                   <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                     <div className="mb-4 flex items-center justify-between">
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
                           Details
                         </p>
@@ -381,7 +377,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                       <button
                         type="button"
                         onClick={clearPhotoSelection}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                        className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
                       >
                         Close
                       </button>
