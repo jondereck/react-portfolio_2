@@ -17,12 +17,12 @@ const defaultSettings = {
 };
 
 const fallbackEnumOptions = {
-  generationMode: ['naked', 'lingerie', 'bikini'],
+  generationMode: ['naked', 'lingerie', 'bikini', 'latex', 'bondage'],
   bodyType: ['skinny', 'average', 'athletic', 'curvy'],
   breastsSize: ['small', 'medium', 'large'],
   assSize: ['small', 'medium', 'large'],
-  pussy: ['shaved', 'hairy'],
-  age: ['automatic', '18'],
+  pussy: ['shaved', 'normal', 'hairy'],
+  age: ['automatic', '18', '25', '35', '45'],
 };
 
 function normalizeEnumOptions(value) {
@@ -81,7 +81,36 @@ function isExplicitAdultAgeOption(value) {
   if (!normalized || isAutomaticAgeOption(normalized)) {
     return false;
   }
-  return normalized.includes('18') || normalized.includes('adult') || normalized.includes('mature');
+
+  const asNumber = Number.parseInt(normalized, 10);
+  if (Number.isFinite(asNumber)) {
+    return asNumber >= 18;
+  }
+
+  return normalized.includes('adult') || normalized.includes('mature');
+}
+
+function humanizeEnumOption(key, option) {
+  const raw = String(option ?? '').trim();
+  if (!raw) return '';
+  const normalized = raw.toLowerCase();
+
+  if (key === 'generationMode') {
+    if (normalized === 'bikini') return 'Swimsuit';
+    if (normalized === 'lingerie') return 'Underwire';
+  }
+
+  if (key === 'bodyType') {
+    if (normalized === 'average') return 'Fit';
+    if (normalized === 'athletic') return 'Muscular';
+  }
+
+  if (key === 'age') {
+    if (isAutomaticAgeOption(normalized)) return 'Automatic';
+    return raw;
+  }
+
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 export default function GalleryUnclothySection({
@@ -217,11 +246,21 @@ export default function GalleryUnclothySection({
       const providerKey = providerKeyByUiKey[key] || key;
       const fromProvider = enumOptionsByKey[providerKey];
       if (Array.isArray(fromProvider) && fromProvider.length > 0) {
+        const merged = [...fromProvider];
+        const extras = fallbackEnumOptions[key];
+        if (Array.isArray(extras) && extras.length > 0) {
+          for (const option of extras) {
+            if (option && !merged.includes(option)) {
+              merged.push(option);
+            }
+          }
+        }
+
         if (key === 'age') {
-          const allowed = fromProvider.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
+          const allowed = merged.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
           return allowed.length > 0 ? allowed : fallbackEnumOptions.age;
         }
-        return fromProvider;
+        return merged;
       }
 
       if (key === 'age') {
@@ -739,7 +778,7 @@ export default function GalleryUnclothySection({
                 >
                   {options.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {humanizeEnumOption(key, option)}
                     </option>
                   ))}
                 </select>
@@ -781,7 +820,7 @@ export default function GalleryUnclothySection({
                 >
                   {options.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {humanizeEnumOption(key, option)}
                     </option>
                   ))}
                 </select>
