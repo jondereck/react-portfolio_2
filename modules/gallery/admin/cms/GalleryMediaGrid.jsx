@@ -20,6 +20,7 @@ export default function GalleryMediaGrid({
   emptyState,
 }) {
   const orderedIds = useMemo(() => (Array.isArray(photos) ? photos.map((photo) => photo.id) : []), [photos]);
+  const selectedCount = Array.isArray(selectedPhotoIds) ? selectedPhotoIds.length : 0;
   const [touchSelecting, setTouchSelecting] = useState(false);
   const touchSelectStateRef = useRef({
     mode: 'idle',
@@ -39,7 +40,7 @@ export default function GalleryMediaGrid({
 
   return (
     <div
-      className="grid grid-cols-2 gap-3 px-4 pb-6 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 lg:px-6"
+      className={`grid grid-cols-2 gap-3 px-4 pb-6 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 lg:px-6 ${selectedCount > 0 ? 'pb-32 lg:pb-28' : ''}`}
       style={{ touchAction: touchSelecting ? 'none' : 'pan-y' }}
       onPointerMove={(event) => {
         if (event.pointerType !== 'touch') return;

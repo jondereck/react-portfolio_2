@@ -12,6 +12,7 @@ import GalleryUnclothySection from './GalleryUnclothySection';
 import GalleryUploadDropzone from './GalleryUploadDropzone';
 import { GalleryEmptyState, GalleryPageHeader } from './galleryAdminShared';
 import {
+  GalleryAlbumMovePicker,
   GalleryAlbumsSidebar,
   GalleryAlbumSwitchSheet,
   GalleryCmsHeader,
@@ -20,8 +21,8 @@ import {
   GalleryInspectorPanel,
   GalleryMediaGrid,
   GalleryMediaToolbar,
-  GalleryMobileStickyActionsBar,
   GalleryMobileTabs,
+  GallerySelectionActionsPopup,
 } from './cms';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 
@@ -58,6 +59,10 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     createAlbumRecord,
     loadAlbums,
     deleteSelectedPhotos,
+    moveSelectedPhotos,
+    moveTargetAlbumId,
+    setMoveTargetAlbumId,
+    movingPhotos,
     selectedPhotoIds,
     togglePhotoSelect,
     selectPhotoRange,
@@ -70,9 +75,11 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
+  const [createMoveAlbumOpen, setCreateMoveAlbumOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [albumSwitchOpen, setAlbumSwitchOpen] = useState(false);
+  const [movePickerOpen, setMovePickerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('media');
   const [searchValue, setSearchValue] = useState('');
   const [activeChip, setActiveChip] = useState('all');
@@ -134,6 +141,12 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
               : null;
     return typeof count === 'number' ? `${count} items` : null;
   }, [selectedAlbum]);
+
+  const moveTargetAlbumName = useMemo(() => {
+    if (!moveTargetAlbumId) return null;
+    const match = Array.isArray(albums) ? albums.find((album) => album.id === moveTargetAlbumId) : null;
+    return match?.name ?? null;
+  }, [albums, moveTargetAlbumId]);
 
   const filteredPhotos = useMemo(() => {
     const list = Array.isArray(photos) ? photos : [];
@@ -245,6 +258,25 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
           await loadAlbums();
           setSelectedAlbumId(created.id);
+          return created;
+        }}
+      />
+
+      <GalleryCreateAlbumModal
+        open={createMoveAlbumOpen}
+        onOpenChange={setCreateMoveAlbumOpen}
+        loading={savingAlbum}
+        title="Create album for move"
+        description="Create a destination album without leaving the current media workflow. The new album will be selected as the move target."
+        confirmLabel="Create album"
+        onCreate={async (albumData) => {
+          const created = await createAlbumRecord(albumData);
+          if (!created) {
+            return null;
+          }
+
+          await loadAlbums();
+          setMoveTargetAlbumId(created.id);
           return created;
         }}
       />
@@ -451,31 +483,23 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           </GalleryInspectorPanel>
         }
         mobileFooterActions={
-          selectedCount > 0 ? (
-            <GalleryMobileStickyActionsBar
-              title={`${selectedCount} selected`}
-              description="Sticky mobile actions keep primary controls reachable."
-              actions={
-                <>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    className="h-11 whitespace-nowrap"
-                    onClick={() => setConfirmDeleteOpen(true)}
-                    disabled={confirmingDelete}
-                  >
-                    <Trash2 className="size-4" />
-                    Delete
-                  </Button>
-                  <Button type="button" variant="outline" className="h-11 whitespace-nowrap" onClick={clearPhotoSelection}>
-                    <X className="size-4" />
-                    Clear
-                  </Button>
-                </>
-              }
-            />
-          ) : null
+          null
         }
+      />
+
+      <GallerySelectionActionsPopup
+        open={selectedCount > 0}
+        selectedCount={selectedCount}
+        disabled={confirmingDelete || movingPhotos}
+        targetAlbumName={moveTargetAlbumName}
+        onPickAlbum={() => setMovePickerOpen(true)}
+        onMove={() => {
+          if (!moveTargetAlbumId || moveTargetAlbumId === selectedAlbumId) return;
+          void moveSelectedPhotos();
+        }}
+        onCreateAlbum={() => setCreateMoveAlbumOpen(true)}
+        onDelete={() => setConfirmDeleteOpen(true)}
+        onClear={clearPhotoSelection}
       />
 
       <GalleryCmsModal
@@ -549,6 +573,22 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           </button>
         </div>
       </GalleryCmsModal>
+
+      <GalleryAlbumMovePicker
+        open={movePickerOpen}
+        onClose={() => setMovePickerOpen(false)}
+        albums={albums}
+        excludedAlbumId={selectedAlbumId}
+        selectedAlbumId={moveTargetAlbumId}
+        onConfirm={(albumId) => {
+          setMoveTargetAlbumId(albumId);
+          setMovePickerOpen(false);
+        }}
+        onCreateNew={() => {
+          setMovePickerOpen(false);
+          setCreateMoveAlbumOpen(true);
+        }}
+      />
 
       <GalleryAlbumSwitchSheet
         open={albumSwitchOpen && !isDesktop}
