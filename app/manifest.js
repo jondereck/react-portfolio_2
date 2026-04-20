@@ -12,20 +12,20 @@ export default function manifest() {
     categories: ['portfolio', 'productivity', 'business'],
     icons: [
       {
-        src: '/app-icon?size=192',
+        src: '/logo192.png',
         sizes: '192x192',
         type: 'image/png',
       },
       {
-        src: '/app-icon?size=512',
+        src: '/logo512.png',
         sizes: '512x512',
         type: 'image/png',
       },
       {
-        src: '/app-icon?size=512&maskable=1',
+        src: '/logo512.png',
         sizes: '512x512',
         type: 'image/png',
-        purpose: 'maskable',
+        purpose: 'any maskable',
       },
     ],
   };

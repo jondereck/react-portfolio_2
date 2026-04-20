@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { Images, Info, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import ConfirmModal from '@/components/ConfirmModal';
@@ -9,6 +9,7 @@ import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
 import GalleryDriveImportSection from './GalleryDriveImportSection';
 import GalleryMediaViewer from './GalleryMediaViewer';
 import GalleryUnclothySection from './GalleryUnclothySection';
+import GalleryUnclothyTasksPanel from './GalleryUnclothyTasksPanel';
 import GalleryUploadDropzone from './GalleryUploadDropzone';
 import { GalleryEmptyState, GalleryPageHeader } from './galleryAdminShared';
 import {
@@ -25,6 +26,7 @@ import {
   GallerySelectionActionsPopup,
 } from './cms';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
+import { useUnclothyTasksStore } from '@/store/unclothyTasks';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
@@ -72,6 +74,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
   const selectedCount = selectedPhotoIds.length;
   const [previewPhoto, setPreviewPhoto] = useState(null);
+  const [previewOpenGenerate, setPreviewOpenGenerate] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
@@ -84,6 +87,15 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [searchValue, setSearchValue] = useState('');
   const [activeChip, setActiveChip] = useState('all');
   const [isDesktop, setIsDesktop] = useState(false);
+  const [pendingPreviewTask, setPendingPreviewTask] = useState(null);
+
+  const unclothyQueue = useUnclothyTasksStore((state) => state.queue);
+  const unclothyActive = useUnclothyTasksStore((state) => state.active);
+  const startUnclothyRunner = useUnclothyTasksStore((state) => state.startRunner);
+  const clearUnclothyQueue = useUnclothyTasksStore((state) => state.clearQueue);
+  const cancelUnclothyActive = useUnclothyTasksStore((state) => state.cancelActive);
+  const retryUnclothyActive = useUnclothyTasksStore((state) => state.retryActive);
+  const dismissUnclothyActive = useUnclothyTasksStore((state) => state.stopTrackingActive);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined;
@@ -97,6 +109,10 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     mediaQuery.addListener(update);
     return () => mediaQuery.removeListener(update);
   }, []);
+
+  useEffect(() => {
+    startUnclothyRunner?.();
+  }, [startUnclothyRunner]);
 
   const chips = useMemo(
     () => [
@@ -117,15 +133,15 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     return photos.find((photo) => photo.id === firstId) ?? null;
   }, [photos, selectedPhotoIds]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const isDesktop = window.matchMedia?.('(min-width: 1024px)')?.matches;
-    if (isDesktop) return;
-
-    if (activeTab === 'details' && selectedPhotoIds.length !== 1) {
-      setActiveTab('media');
-    }
-  }, [activeTab, selectedPhotoIds.length]);
+  const detailsBadge = (unclothyActive ? 1 : 0) + (Array.isArray(unclothyQueue) ? unclothyQueue.length : 0);
+  const mobileTabs = useMemo(
+    () => [
+      { id: 'media', label: 'Media', icon: Images },
+      { id: 'upload', label: 'Upload', icon: Upload },
+      { id: 'details', label: 'Details', icon: Info, badge: detailsBadge },
+    ],
+    [detailsBadge],
+  );
 
   const albumCountLabel = useMemo(() => {
     if (!selectedAlbum) return null;
@@ -193,6 +209,52 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const handleOpenFilter = () => {
     toast.message('Filters are handled via the chip row for now.');
   };
+
+  const openTask = (task) => {
+    const albumId = task?.albumId ?? null;
+    const photoId = task?.sourcePhotoId ?? null;
+
+    if (!albumId || !photoId) {
+      toast.error('Task is missing an album or image reference.');
+      return;
+    }
+
+    setPendingPreviewTask({ albumId, photoId });
+
+    if (albumId !== selectedAlbumId) {
+      setSelectedAlbumId(albumId);
+      return;
+    }
+
+    const found = photos.find((photo) => photo.id === photoId) ?? null;
+    if (found) {
+      setPreviewPhoto(found);
+      setPreviewOpenGenerate(false);
+      setPendingPreviewTask(null);
+      return;
+    }
+
+    toast.error('Media not found in the current album.');
+    setPendingPreviewTask(null);
+  };
+
+  useEffect(() => {
+    if (!pendingPreviewTask) return;
+    if (!pendingPreviewTask.albumId || !pendingPreviewTask.photoId) return;
+    if (pendingPreviewTask.albumId !== selectedAlbumId) return;
+    if (loadingPhotos) return;
+
+    const found = photos.find((photo) => photo.id === pendingPreviewTask.photoId) ?? null;
+    if (found) {
+      setPreviewPhoto(found);
+      setPreviewOpenGenerate(false);
+      setPendingPreviewTask(null);
+      return;
+    }
+
+    toast.error('Media not found for that task.');
+    setPendingPreviewTask(null);
+  }, [loadingPhotos, pendingPreviewTask, photos, selectedAlbumId]);
 
   return (
     <div className={embedded ? '' : 'space-y-6'}>
@@ -327,7 +389,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
             }}
           />
         }
-        mobileTabs={<GalleryMobileTabs activeTab={activeTab} onChange={setActiveTab} />}
+        mobileTabs={<GalleryMobileTabs activeTab={activeTab} onChange={setActiveTab} tabs={mobileTabs} />}
         main={
           <main className="min-w-0 bg-white dark:bg-slate-900">
             <section className={`${activeTab !== 'media' ? 'hidden lg:block' : ''}`}>
@@ -406,13 +468,39 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                           {selectedPhoto.caption || selectedPhoto.originalFilename || `media_${selectedPhoto.id}`}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={clearPhotoSelection}
-                        className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
-                      >
-                        Close
-                      </button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {!isVideoMime(selectedPhoto?.mimeType) ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPreviewPhoto(selectedPhoto);
+                              setPreviewOpenGenerate(true);
+                            }}
+                            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                          >
+                            Generate
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPreviewPhoto(selectedPhoto);
+                            setPreviewOpenGenerate(false);
+                          }}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                        >
+                          Preview
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearPhotoSelection();
+                          }}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                        >
+                          Close
+                        </button>
+                      </div>
                     </div>
 
                     <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
@@ -452,21 +540,19 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-[22px] border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-                      <GalleryUnclothySection
-                        controller={controller}
-                        selectedAlbum={selectedAlbum}
-                        photo={selectedPhoto}
-                        album={selectedAlbum}
-                        showPreview={false}
-                      />
-                    </div>
                   </div>
-                ) : (
-                  <div className="rounded-[28px] border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-                    Select exactly one media item to see details.
-                  </div>
-                )}
+                ) : null}
+
+                <GalleryUnclothyTasksPanel
+                  active={unclothyActive}
+                  queue={unclothyQueue}
+                  onOpenTask={openTask}
+                  onCancelActive={cancelUnclothyActive}
+                  onRetryActive={retryUnclothyActive}
+                  onDismissActive={dismissUnclothyActive}
+                  onClearQueue={clearUnclothyQueue}
+                  hideWhenEmpty={Boolean(selectedPhoto)}
+                />
               </section>
             ) : null}
           </main>
@@ -488,7 +574,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       />
 
       <GallerySelectionActionsPopup
-        open={selectedCount > 0}
+        open={selectedCount > 0 && (isDesktop || activeTab !== 'details')}
         selectedCount={selectedCount}
         disabled={confirmingDelete || movingPhotos}
         targetAlbumName={moveTargetAlbumName}
@@ -603,7 +689,18 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         onCreateNew={() => setCreateAlbumOpen(true)}
       />
 
-      <GalleryMediaViewer open={Boolean(previewPhoto)} photo={previewPhoto} onClose={() => setPreviewPhoto(null)} />
+      <GalleryMediaViewer
+        open={Boolean(previewPhoto)}
+        photo={previewPhoto}
+        onClose={() => {
+          setPreviewPhoto(null);
+          setPreviewOpenGenerate(false);
+        }}
+        controller={controller}
+        album={selectedAlbum}
+        openGenerate={previewOpenGenerate}
+        onGenerateOpened={() => setPreviewOpenGenerate(false)}
+      />
     </div>
   );
 }

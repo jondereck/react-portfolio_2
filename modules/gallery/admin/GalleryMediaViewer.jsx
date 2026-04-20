@@ -1,12 +1,48 @@
 'use client';
 
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment } from 'react';
-import { X } from 'lucide-react';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { Sparkles, X } from 'lucide-react';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
+import GalleryUnclothySection from './GalleryUnclothySection';
 
-export default function GalleryMediaViewer({ open, photo, onClose }) {
+function isVideoMime(mimeType) {
+  return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
+}
+
+export default function GalleryMediaViewer({ open, photo, onClose, controller, album, openGenerate = false, onGenerateOpened }) {
   const title = photo?.caption || 'Untitled media';
+  const canGenerate = Boolean(photo) && !isVideoMime(photo?.mimeType) && Boolean(controller) && Boolean(album);
+  const [generateOpen, setGenerateOpen] = useState(false);
+  const generateSheetRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) {
+      setGenerateOpen(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!generateOpen) return;
+    const el = generateSheetRef.current;
+    if (!el) return;
+    // Always reset to the top so the header is visible on open.
+    requestAnimationFrame(() => {
+      try {
+        el.scrollTop = 0;
+      } catch {
+        // ignore
+      }
+    });
+  }, [generateOpen, photo?.id]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!openGenerate) return;
+    if (!canGenerate) return;
+    setGenerateOpen(true);
+    onGenerateOpened?.();
+  }, [canGenerate, onGenerateOpened, open, openGenerate]);
 
   return (
     <Transition show={open} as={Fragment}>
@@ -68,15 +104,82 @@ export default function GalleryMediaViewer({ open, photo, onClose }) {
                 </div>
 
                 <div className="border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:hidden">
-                  <button
-                    type="button"
-                    className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                    onClick={onClose}
-                  >
-                    <X className="mr-2 size-4" />
-                    Close Preview
-                  </button>
+                  {canGenerate ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        onClick={() => setGenerateOpen(true)}
+                      >
+                        <Sparkles className="mr-2 size-4" />
+                        Generate
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        onClick={onClose}
+                      >
+                        <X className="mr-2 size-4" />
+                        Close
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                      onClick={onClose}
+                    >
+                      <X className="mr-2 size-4" />
+                      Close Preview
+                    </button>
+                  )}
                 </div>
+
+                {generateOpen ? (
+                  <div className="sm:hidden">
+                    <button
+                      type="button"
+                      className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm"
+                      aria-label="Close generate panel"
+                      onClick={() => setGenerateOpen(false)}
+                    />
+                    <div
+                      ref={generateSheetRef}
+                      className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-[28px] border border-slate-200 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+                      style={{ WebkitOverflowScrolling: 'touch' }}
+                      role="region"
+                      aria-label="Generate settings"
+                    >
+                      <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-200 dark:bg-slate-700" />
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
+                            Generate
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">Task settings</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                          aria-label="Close generate panel"
+                          onClick={() => setGenerateOpen(false)}
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+
+                      <div className="mt-4">
+                        <GalleryUnclothySection
+                          controller={controller}
+                          selectedAlbum={album}
+                          photo={photo}
+                          album={album}
+                          showPreview={false}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </Dialog.Panel>
             </Transition.Child>
           </div>

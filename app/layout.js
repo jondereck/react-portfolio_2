@@ -15,14 +15,12 @@ export const metadata = {
   },
   icons: {
     icon: [
-      { url: '/app-icon?size=32', sizes: '32x32', type: 'image/png' },
-      { url: '/app-icon?size=48', sizes: '48x48', type: 'image/png' },
-      { url: '/app-icon?size=192', sizes: '192x192', type: 'image/png' },
-      { url: '/app-icon?size=512', sizes: '512x512', type: 'image/png' },
       { url: '/favicon.ico', sizes: 'any' },
+      { url: '/logo192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/logo512.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [{ url: '/app-icon?size=180', sizes: '180x180', type: 'image/png' }],
-    shortcut: [{ url: '/app-icon?size=32', type: 'image/png' }],
+    apple: [{ url: '/logo192.png', sizes: '192x192', type: 'image/png' }],
+    shortcut: [{ url: '/logo192.png', type: 'image/png' }],
   },
 };
 

@@ -2,8 +2,8 @@ const CACHE_NAME = 'portfolio-shell-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
-  '/app-icon?size=192',
-  '/app-icon?size=512',
+  '/logo192.png',
+  '/logo512.png',
   '/app-splash?w=1242&h=2688',
   '/favicon.ico',
 ];
