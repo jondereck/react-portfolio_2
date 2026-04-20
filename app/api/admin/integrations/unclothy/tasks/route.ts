@@ -10,6 +10,7 @@ import { createUnclothyTask, getUnclothyTaskSettings } from '@/lib/server/unclot
 import { unclothyCreateTaskSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 import { isSafeHttpUrl } from '@/lib/url-safety';
+import { getGoogleDriveAccessTokenForUserOrAny } from '@/lib/auth/google-drive';
 
 function compareEnumKey(value: unknown) {
   return String(value ?? '')
@@ -139,6 +140,85 @@ async function fetchSourceImageBytes(imageUrl: string) {
   return { buffer, contentType };
 }
 
+async function fetchGoogleDriveImageBytes(sourceId: string, actorUserId: string) {
+  let accessToken: string;
+  try {
+    accessToken = await getGoogleDriveAccessTokenForUserOrAny(actorUserId);
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === 'GOOGLE_DRIVE_NOT_CONNECTED') {
+        throw new RequestValidationError(
+          'Connect Google Drive before generating from imported media.',
+          503,
+          undefined,
+          'GOOGLE_DRIVE_NOT_CONNECTED',
+        );
+      }
+      if (error.message === 'GOOGLE_DRIVE_RECONNECT_REQUIRED') {
+        throw new RequestValidationError(
+          'Google Drive access expired. Reconnect Google Drive and try again.',
+          503,
+          undefined,
+          'GOOGLE_DRIVE_RECONNECT_REQUIRED',
+        );
+      }
+      if (error.message === 'GOOGLE_DRIVE_TOKEN_REFRESH_FAILED') {
+        throw new RequestValidationError(
+          'Unable to refresh Google Drive access. Reconnect Google Drive and try again.',
+          502,
+          undefined,
+          'GOOGLE_DRIVE_TOKEN_REFRESH_FAILED',
+        );
+      }
+      if (error.message === 'GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED') {
+        throw new RequestValidationError(
+          'Google Drive OAuth is not configured.',
+          503,
+          undefined,
+          'GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED',
+        );
+      }
+    }
+
+    throw error;
+  }
+
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceId)}?alt=media&supportsAllDrives=true`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      cache: 'no-store',
+    },
+  );
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new RequestValidationError('Google Drive file not found.', 404, undefined, 'GOOGLE_DRIVE_FILE_NOT_FOUND');
+    }
+    if (response.status === 403) {
+      throw new RequestValidationError('Google Drive file access denied.', 403, undefined, 'GOOGLE_DRIVE_FILE_FORBIDDEN');
+    }
+
+    const message = await response.text().catch(() => '');
+    throw new RequestValidationError(message || 'Unable to load Google Drive media.', 502, undefined, 'GOOGLE_DRIVE_MEDIA_FETCH_FAILED', {
+      upstreamStatus: response.status,
+    });
+  }
+
+  const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!contentType.startsWith('image/')) {
+    throw new RequestValidationError('Selected media must be an image.', 400, undefined, 'UNSUPPORTED_MEDIA_TYPE', {
+      contentType,
+    });
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  return { buffer, contentType };
+}
+
 export async function POST(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 60, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
@@ -181,10 +261,18 @@ export async function POST(request: Request) {
     const rawSettings = parsed.settings ?? {};
     const sanitizedSettings: Record<string, unknown> = {};
     const fieldErrors: Record<string, string[]> = {};
+    const enumAliases = new Map<string, string>([
+      ['breastssize', 'breastsize'],
+      ['chestsize', 'breastsize'],
+    ]);
 
     for (const [rawKey, rawValue] of Object.entries(rawSettings)) {
       const normalizedKey = compareEnumKey(rawKey);
-      const providerKey = normalizedKey ? normalizedToProviderKey.get(normalizedKey) : null;
+      let providerKey = normalizedKey ? normalizedToProviderKey.get(normalizedKey) : null;
+      if (!providerKey && normalizedKey) {
+        const alias = enumAliases.get(normalizedKey);
+        providerKey = alias ? normalizedToProviderKey.get(alias) ?? null : null;
+      }
 
       if (!providerKey) {
         continue;
@@ -236,7 +324,10 @@ export async function POST(request: Request) {
       (nextSettings as any)[ageProviderKey] = automatic || adult || '18';
     }
 
-    const { buffer } = await fetchSourceImageBytes(photo.imageUrl);
+    const { buffer } =
+      photo.sourceType === 'gdrive' && photo.sourceId
+        ? await fetchGoogleDriveImageBytes(String(photo.sourceId), actor.user.id)
+        : await fetchSourceImageBytes(photo.imageUrl);
     const base64 = buffer.toString('base64');
 
     const created = await createUnclothyTask({

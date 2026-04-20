@@ -40,6 +40,13 @@ function normalizeEnumOptions(value) {
   return null;
 }
 
+function compareEnumKey(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
 }
@@ -58,6 +65,7 @@ function inferImageFromUrl(url) {
 function isProbablyImage(photo) {
   if (!photo) return false;
   if (typeof photo.mimeType === 'string' && photo.mimeType.toLowerCase().startsWith('image/')) return true;
+  if (photo.sourceType === 'gdrive' && photo.sourceId) return true;
   return inferImageFromUrl(photo.imageUrl);
 }
 
@@ -176,9 +184,38 @@ export default function GalleryUnclothySection({
     return result;
   }, [status.settingsEnums]);
 
+  const providerKeyByUiKey = useMemo(() => {
+    const normalizedToProviderKey = new Map();
+    for (const providerKey of Object.keys(enumOptionsByKey)) {
+      const normalizedKey = compareEnumKey(providerKey);
+      if (normalizedKey && !normalizedToProviderKey.has(normalizedKey)) {
+        normalizedToProviderKey.set(normalizedKey, providerKey);
+      }
+    }
+
+    const aliases = {
+      breastsSize: ['breastsize', 'chestsize'],
+      assSize: ['asssize', 'hipsize'],
+    };
+
+    const result = {};
+    for (const uiKey of Object.keys(defaultSettings)) {
+      const normalizedCandidates = [compareEnumKey(uiKey), ...(aliases[uiKey] || [])].filter(Boolean);
+      const resolvedProviderKey = normalizedCandidates
+        .map((candidate) => normalizedToProviderKey.get(candidate))
+        .find((value) => typeof value === 'string' && value);
+      if (resolvedProviderKey) {
+        result[uiKey] = resolvedProviderKey;
+      }
+    }
+
+    return result;
+  }, [enumOptionsByKey]);
+
   const getOptions = useCallback(
     (key) => {
-      const fromProvider = enumOptionsByKey[key];
+      const providerKey = providerKeyByUiKey[key] || key;
+      const fromProvider = enumOptionsByKey[providerKey];
       if (Array.isArray(fromProvider) && fromProvider.length > 0) {
         if (key === 'age') {
           const allowed = fromProvider.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
@@ -195,7 +232,7 @@ export default function GalleryUnclothySection({
 
       return fallbackEnumOptions[key] || [];
     },
-    [enumOptionsByKey],
+    [enumOptionsByKey, providerKeyByUiKey],
   );
 
   const normalizeSettings = useCallback(
@@ -207,6 +244,17 @@ export default function GalleryUnclothySection({
 
       const normalized = { ...merged };
       for (const key of Object.keys(defaultSettings)) {
+        const providerKey = providerKeyByUiKey[key];
+        if (
+          candidate &&
+          typeof candidate === 'object' &&
+          providerKey &&
+          normalized[key] === defaultSettings[key] &&
+          candidate[providerKey] != null
+        ) {
+          normalized[key] = candidate[providerKey];
+        }
+
         const options = getOptions(key);
         if (!Array.isArray(options) || options.length === 0) {
           continue;
@@ -220,7 +268,7 @@ export default function GalleryUnclothySection({
 
       return normalized;
     },
-    [getOptions],
+    [getOptions, providerKeyByUiKey],
   );
 
   useEffect(() => {
@@ -372,6 +420,23 @@ export default function GalleryUnclothySection({
         ? 'Usually takes a few seconds'
         : 'Ready to generate';
 
+  const settingsPayload = useMemo(() => {
+    const payload = {};
+    for (const key of Object.keys(defaultSettings)) {
+      const providerKey = providerKeyByUiKey[key] || key;
+      const value = settings[key];
+      if (value == null) {
+        continue;
+      }
+      const normalizedValue = String(value).trim();
+      if (!normalizedValue) {
+        continue;
+      }
+      payload[providerKey] = normalizedValue;
+    }
+    return payload;
+  }, [providerKeyByUiKey, settings]);
+
   const handleEnqueue = () => {
     if (!canEnqueue) {
       toast.error(selectionProblem || 'Complete all required fields first.');
@@ -400,7 +465,7 @@ export default function GalleryUnclothySection({
       albumId: selectedAlbumId,
       sourcePhotoId: selectedPhotoId,
       settingsSnapshot: {
-        ...settings,
+        ...settingsPayload,
       },
     });
     startRunner();
@@ -724,6 +789,16 @@ export default function GalleryUnclothySection({
             );
           })}
         </div>
+      </details>
+
+      <details className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-50">Debug payload</summary>
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          Exact settings payload that will be sent to <span className="font-semibold">/api/admin/integrations/unclothy/tasks</span>.
+        </p>
+        <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-200">
+          {JSON.stringify(settingsPayload, null, 2)}
+        </pre>
       </details>
 
       <label className="flex items-start gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-200">
