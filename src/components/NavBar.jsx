@@ -1,8 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { FaBars, FaTimes } from 'react-icons/fa';
 import { MdNightsStay, MdWbSunny } from 'react-icons/md';
-import Link from 'next/link';
 import { Link as ScrollLink } from 'react-scroll';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
 import { isSafeHttpUrl } from '@/lib/url-safety';
@@ -29,7 +28,32 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
   const logoText = typeof config?.logoText === 'string' && config.logoText.trim().length > 0 ? config.logoText : 'Jon';
   const logoImage = isSafeHttpUrl(config?.logoImage) ? config.logoImage : '';
   const links = normalizeLinks(config);
-  const showAdminButton = config?.navigation?.showAdminButton !== false;
+  const logoTapCountRef = useRef(0);
+  const logoTapStartRef = useRef(0);
+
+  const handleLogoSecretTap = (event) => {
+    if (typeof window === 'undefined') return;
+
+    const now = Date.now();
+    const startedAt = logoTapStartRef.current;
+    const windowMs = 2000;
+
+    if (!startedAt || now - startedAt > windowMs) {
+      logoTapStartRef.current = now;
+      logoTapCountRef.current = 1;
+      return;
+    }
+
+    logoTapCountRef.current += 1;
+
+    if (logoTapCountRef.current >= 7) {
+      logoTapCountRef.current = 0;
+      logoTapStartRef.current = 0;
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      window.location.assign('/admin/login');
+    }
+  };
 
   const renderNavLink = (link, isMobile = false) => {
     const className = isMobile
@@ -55,9 +79,19 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85 sm:px-6 lg:px-8">
       <div className="mx-auto flex h-20 w-full max-w-6xl items-center justify-between">
-        <ScrollLink to="home" smooth duration={500} className="flex cursor-pointer items-center">
+        <ScrollLink
+          to="home"
+          smooth
+          duration={500}
+          onClick={handleLogoSecretTap}
+          className="flex cursor-pointer items-center"
+        >
           {logoImage ? (
-            <img src={logoImage} alt={logoText} className="h-16 w-auto rounded object-contain sm:h-20" />
+            <img
+              src={logoImage}
+              alt={logoText}
+              className="h-16 w-auto rounded object-contain drop-shadow-md sm:h-20 lg:h-24 dark:drop-shadow-lg"
+            />
           ) : (
             <h1 className="text-4xl font-signature text-slate-900 dark:text-slate-100">{logoText}</h1>
           )}
@@ -74,14 +108,6 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
         </nav>
 
         <div className="flex items-center gap-2">
-          {showAdminButton ? (
-            <Link
-              href="/admin/login"
-              className="inline-flex h-9 items-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Admin
-            </Link>
-          ) : null}
           <button
             type="button"
             onClick={onToggleDark}

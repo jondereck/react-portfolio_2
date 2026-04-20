@@ -171,21 +171,6 @@ export default function NavigationSettingsSection() {
         <form onSubmit={submit} className="space-y-4">
           <FormErrorSummary error={formError} fieldErrors={fieldErrors} />
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-            <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-              <span>Show Admin button in the public navbar</span>
-              <input
-                type="checkbox"
-                checked={navigation.showAdminButton}
-                onChange={(event) => {
-                  setNavigation((previous) => ({ ...previous, showAdminButton: event.target.checked }));
-                  setFieldErrors((current) => clearFieldErrors(current, 'navigation.showAdminButton'));
-                }}
-              />
-            </label>
-            <FieldErrorText error={getFieldError(fieldErrors, 'navigation.showAdminButton')} />
-          </div>
-
           <div className="space-y-3">
             {navigation.links.map((link, index) => (
               <div

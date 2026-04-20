@@ -175,6 +175,10 @@ export default function GalleryMediaViewer({ open, photo, onClose, controller, a
                           photo={photo}
                           album={album}
                           showPreview={false}
+                          onEnqueued={() => {
+                            setGenerateOpen(false);
+                            onClose?.();
+                          }}
                         />
                       </div>
                     </div>

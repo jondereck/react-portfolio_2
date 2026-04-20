@@ -82,6 +82,7 @@ export default function GalleryUnclothySection({
   photo: photoProp = null,
   album: albumProp = null,
   showPreview = true,
+  onEnqueued,
 }) {
   const resolvedAlbum = albumProp || selectedAlbum || controller?.selectedAlbum || null;
   const selectedAlbumId = resolvedAlbum?.id ?? controller?.selectedAlbumId ?? null;
@@ -284,18 +285,27 @@ export default function GalleryUnclothySection({
     active.albumId === selectedAlbumId &&
     active.sourcePhotoId === selectedPhotoId;
 
+  const isSelectionQueued = useMemo(() => {
+    if (!selectedAlbumId || !selectedPhotoId) return false;
+    return Array.isArray(queue) && queue.some((task) => task?.albumId === selectedAlbumId && task?.sourcePhotoId === selectedPhotoId);
+  }, [queue, selectedAlbumId, selectedPhotoId]);
+
   const disableInputs = Boolean(active && active.phase === 'ingesting' && isActiveForSelection);
 
   const basicFields = useMemo(() => ['generationMode', 'bodyType'], []);
   const advancedFields = useMemo(() => ['age', 'breastsSize', 'assSize', 'pussy'], []);
 
-  const quickInfoStatusLabel = active
+  const quickInfoStatusLabel = isActiveForSelection
     ? phaseLabel || 'Queued'
-    : !status.enabled
-      ? 'Disabled'
-      : !status.configured
-        ? 'Needs setup'
-        : 'Ready';
+    : isSelectionQueued
+      ? 'Queued'
+      : active
+        ? phaseLabel || 'Queued'
+        : !status.enabled
+          ? 'Disabled'
+          : !status.configured
+            ? 'Needs setup'
+            : 'Ready';
 
   const quickInfoBadgeTone = active?.phase === 'error'
     ? 'error'
@@ -303,9 +313,11 @@ export default function GalleryUnclothySection({
       ? 'done'
       : active
         ? 'active'
-        : !status.enabled || !status.configured
-          ? 'warn'
-          : 'ready';
+        : isSelectionQueued
+          ? 'active'
+          : !status.enabled || !status.configured
+            ? 'warn'
+            : 'ready';
 
   const quickInfoBadgeClassName =
     quickInfoBadgeTone === 'error'
@@ -366,6 +378,11 @@ export default function GalleryUnclothySection({
       return;
     }
 
+    if (isActiveForSelection || isSelectionQueued) {
+      toast.message('Already queued.');
+      return;
+    }
+
     try {
       void fetchJson('/api/admin/integrations/unclothy/album-defaults', {
         method: 'PUT',
@@ -379,7 +396,7 @@ export default function GalleryUnclothySection({
       // ignore
     }
 
-    enqueue({
+    const result = enqueue({
       albumId: selectedAlbumId,
       sourcePhotoId: selectedPhotoId,
       settingsSnapshot: {
@@ -387,6 +404,9 @@ export default function GalleryUnclothySection({
       },
     });
     startRunner();
+    if (result?.added) {
+      onEnqueued?.();
+    }
   };
 
   return (
@@ -723,7 +743,7 @@ export default function GalleryUnclothySection({
       <button
         type="button"
         className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-50 dark:text-slate-900"
-        disabled={!canEnqueue || disableInputs}
+        disabled={!canEnqueue || disableInputs || isSelectionQueued || isActiveForSelection}
         onClick={handleEnqueue}
       >
         {queue.length > 0 || active ? 'Add to queue' : 'Save changes'}

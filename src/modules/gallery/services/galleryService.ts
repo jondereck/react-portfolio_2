@@ -324,11 +324,19 @@ export class GalleryService {
     }
   }
 
-  async addUploadedAlbumPhoto(albumId: number, args: { file: File; input: Omit<PhotoCreateInput, 'imageUrl'> }) {
+  async addUploadedAlbumPhoto(
+    albumId: number,
+    args: { file: File; input: Omit<PhotoCreateInput, 'imageUrl'> },
+    options: { allowDuplicateContent?: boolean } = {},
+  ) {
     const prepared = await prepareMediaUpload(args.file);
-    const existing = await this.repo.findAlbumPhotoByContentHash(albumId, prepared.contentHash);
-    if (existing) {
-      throw this.createDuplicateMediaError(existing);
+    const allowDuplicateContent = options.allowDuplicateContent === true;
+
+    if (!allowDuplicateContent) {
+      const existing = await this.repo.findAlbumPhotoByContentHash(albumId, prepared.contentHash);
+      if (existing) {
+        throw this.createDuplicateMediaError(existing);
+      }
     }
 
     const uploadedMedia = await uploadPreparedMediaFile(prepared, `portfolio/gallery/${albumId}`);
@@ -339,7 +347,7 @@ export class GalleryService {
         ...args.input,
         imageUrl: uploadedMedia.playbackUrl,
         cloudinaryPublicId: uploadedMedia.publicId ?? args.input.cloudinaryPublicId,
-        contentHash: prepared.contentHash,
+        contentHash: allowDuplicateContent ? undefined : prepared.contentHash,
         originalFilename: prepared.originalFilename,
         mimeType: prepared.mimeType,
         fileSizeBytes: prepared.fileSizeBytes,

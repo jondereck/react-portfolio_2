@@ -96,6 +96,16 @@ export function hydrateFromLocalStorage() {
 
 export function enqueue({ albumId, sourcePhotoId, settingsSnapshot }) {
   if (!albumId || !sourcePhotoId) return;
+  hydrateFromLocalStorage();
+
+  const isDuplicateQueued = state.queue.some(
+    (task) => task?.albumId === albumId && task?.sourcePhotoId === sourcePhotoId,
+  );
+  const isDuplicateActive = state.active?.albumId === albumId && state.active?.sourcePhotoId === sourcePhotoId;
+  if (isDuplicateQueued || isDuplicateActive) {
+    return { added: false, reason: 'duplicate' };
+  }
+
   const next = {
     albumId,
     sourcePhotoId,
@@ -104,6 +114,7 @@ export function enqueue({ albumId, sourcePhotoId, settingsSnapshot }) {
   };
   setState({ queue: [...state.queue, next] });
   startRunner();
+  return { added: true };
 }
 
 export function clearQueue() {
