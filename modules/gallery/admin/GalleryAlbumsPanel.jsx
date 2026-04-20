@@ -361,7 +361,7 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
               </section>
             ) : (
               <section
-                className={`space-y-6 px-4 py-4 sm:px-5 lg:block lg:px-6 lg:py-5 ${activeTab !== 'manage' ? 'hidden lg:block' : ''}`}
+                className={`space-y-6 px-4 py-4 pb-24 sm:px-5 lg:block lg:px-6 lg:py-5 lg:pb-5 ${activeTab !== 'manage' ? 'hidden lg:block' : ''}`}
               >
                 <GalleryPanelCard
                   title={selectedAlbum ? `Manage ${selectedAlbum.name}` : 'Current album'}
@@ -617,6 +617,30 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
           </main>
         }
       />
+
+      {activeTab === 'manage' ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur lg:hidden dark:border-slate-800 dark:bg-slate-900/95">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">
+                {selectedAlbum ? selectedAlbum.name : 'Select an album'}
+              </p>
+              <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                {savingDetails ? 'Saving...' : detailsDirty ? 'Unsaved changes' : 'No changes'}
+              </p>
+            </div>
+            <button
+              type="submit"
+              form="gallery-albums-manage-form"
+              disabled={!selectedAlbum || !detailsDirty || savingDetails}
+              className="inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl bg-slate-900 px-4 text-sm font-medium text-white shadow-sm transition disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900"
+            >
+              <Save className="h-4 w-4" />
+              {savingDetails ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
