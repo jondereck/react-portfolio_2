@@ -547,7 +547,30 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                                   </div>
                                 );
                               })}
-                              <p className="text-xs text-slate-500 dark:text-slate-400">{profileLinks.length}/12 links saved.</p>
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <button
+                                  type="button"
+                                  className={ghostButtonStyles}
+                                  onClick={() => {
+                                    setDetailsForm((previous) => {
+                                      const currentLinks = Array.isArray(previous?.profileLinks) ? previous.profileLinks : [];
+                                      if (currentLinks.length >= 12) {
+                                        return previous;
+                                      }
+
+                                      return {
+                                        ...previous,
+                                        profileLinks: [...currentLinks, { platform: 'instagram', label: '', url: '' }],
+                                      };
+                                    });
+                                    setDetailsDirty(true);
+                                  }}
+                                  disabled={profileLinks.length >= 12}
+                                >
+                                  Add link
+                                </button>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{profileLinks.length}/12 links saved.</p>
+                              </div>
                             </div>
                           )}
                         </div>
