@@ -10,12 +10,21 @@ import UnclothyTaskNotifier from '@/components/admin/layout/UnclothyTaskNotifier
 
 const adminLastVisitedPathStorageKey = 'admin:lastVisitedPath';
 const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
+const sidebarCollapsedStorageKey = 'admin:sidebarCollapsed';
 
 export default function AdminShell({ children }) {
   const pathname = usePathname();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem(sidebarCollapsedStorageKey) === '1';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -41,16 +50,36 @@ export default function AdminShell({ children }) {
     }
   };
 
+  const handleToggleSidebar = () => {
+    setSidebarCollapsed((value) => {
+      const next = !value;
+      try {
+        window.localStorage.setItem(sidebarCollapsedStorageKey, next ? '1' : '0');
+      } catch {
+        // ignore persistence errors
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 p-4 text-slate-900 md:p-6 dark:bg-slate-950 dark:text-slate-50">
+    <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       <UnclothyTaskNotifier />
-      <div className="mx-auto max-w-[1640px] space-y-6">
-        <AdminTopbar onLogout={handleLogout} isLoggingOut={isLoggingOut} />
-        <div className="flex flex-col gap-6 lg:flex-row">
-          <div className="hidden lg:block">
-            <AdminSidebar />
+      <div className="flex min-h-screen">
+        <div className="sticky top-0 hidden h-screen lg:block">
+          <AdminSidebar collapsed={sidebarCollapsed} onToggle={handleToggleSidebar} />
+        </div>
+
+        <div className="min-w-0 flex-1 p-4 md:p-6">
+          <div className="mx-auto max-w-[1640px] space-y-6">
+            <AdminTopbar
+              onLogout={handleLogout}
+              isLoggingOut={isLoggingOut}
+              sidebarCollapsed={sidebarCollapsed}
+              onToggleSidebar={handleToggleSidebar}
+            />
+            <main className="min-w-0 flex-1 space-y-6">{children}</main>
           </div>
-          <main className="min-w-0 flex-1 space-y-6">{children}</main>
         </div>
       </div>
     </div>

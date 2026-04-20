@@ -2,34 +2,34 @@ export const adminNavigationSections = [
   {
     title: 'Main',
     items: [
-      { label: 'Dashboard', href: '/admin' },
+      { label: 'Dashboard', href: '/admin', iconKey: 'layoutDashboard' },
     ],
   },
   {
     title: 'Content Management',
     items: [
-      { label: 'Portfolio', href: '/admin/portfolio' },
-      { label: 'Gallery', href: '/admin/gallery' },
+      { label: 'Portfolio', href: '/admin/portfolio', iconKey: 'folderOpen' },
+      { label: 'Gallery', href: '/admin/gallery', iconKey: 'images' },
     ],
   },
   {
     title: 'Site Management',
     items: [
-      { label: 'My Account', href: '/admin/account' },
-      { label: 'Settings', href: '/admin/settings' },
-      { label: 'Users', href: '/admin/users' },
-      { label: 'Navigation', href: '/admin/settings#navigation' },
-      { label: 'Integrations', href: '/admin/settings#integrations' },
-      { label: 'Security', href: '/admin/settings#security' },
+      { label: 'My Account', href: '/admin/account', iconKey: 'user' },
+      { label: 'Settings', href: '/admin/settings', iconKey: 'settings' },
+      { label: 'Users', href: '/admin/users', iconKey: 'users' },
+      { label: 'Navigation', href: '/admin/settings#navigation', iconKey: 'map' },
+      { label: 'Integrations', href: '/admin/settings#integrations', iconKey: 'plug' },
+      { label: 'Security', href: '/admin/settings#security', iconKey: 'shield' },
     ],
   },
   {
     title: 'Future Ready',
     items: [
-      { label: 'Blog (planned)', href: '/admin#future-modules' },
-      { label: 'Testimonials (planned)', href: '/admin#future-modules' },
-      { label: 'Services (planned)', href: '/admin#future-modules' },
-      { label: 'Bookings (planned)', href: '/admin#future-modules' },
+      { label: 'Blog (planned)', href: '/admin#future-modules', iconKey: 'sparkles' },
+      { label: 'Testimonials (planned)', href: '/admin#future-modules', iconKey: 'sparkles' },
+      { label: 'Services (planned)', href: '/admin#future-modules', iconKey: 'sparkles' },
+      { label: 'Bookings (planned)', href: '/admin#future-modules', iconKey: 'sparkles' },
     ],
   },
 ];
