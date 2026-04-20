@@ -427,9 +427,7 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                         </label>
 
                         <div className="flex flex-wrap items-center gap-2">
-                          <button className={buttonStyles} disabled={!detailsDirty || savingDetails}>
-                            {savingDetails ? 'Saving...' : 'Save album'}
-                          </button>
+     
                           <button type="button" className={ghostButtonStyles} onClick={() => setConfirmDeleteOpen(true)}>
                             Delete Album
                           </button>
@@ -448,15 +446,7 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                       </div>
 
                       <div className="space-y-6">
-                        <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-                            Cover photo
-                          </p>
-                          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                            Set cover from the Media intake view by selecting a photo and clicking “Use as cover”.
-                          </p>
-                        </div>
-
+           
                         <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                             Profile links
@@ -476,68 +466,70 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                               Add first link
                             </button>
                           ) : (
-                            <div className="mt-3 space-y-3">
+                            <div className="mt-3 space-y-4">
                               {profileLinks.map((entry, index) => {
                                 const urlValue = entry?.url ?? '';
                                 const urlValid = !urlValue || isValidHttpUrl(urlValue);
                                 return (
                                   <div
                                     key={`${entry.platform}-${index}`}
-                                    className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40 sm:grid-cols-[160px_minmax(0,1fr)_120px]"
+                                    className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40"
                                   >
-                                    <label className="space-y-1">
-                                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                        Platform
-                                      </span>
-                                      <select
-                                        className={inputStyles}
-                                        value={entry.platform}
-                                        onChange={(event) => {
-                                          const nextPlatform = event.target.value;
-                                          setDetailsForm((previous) => ({
-                                            ...previous,
-                                            profileLinks: profileLinks.map((linkEntry, entryIndex) =>
-                                              entryIndex === index ? { ...linkEntry, platform: nextPlatform } : linkEntry,
-                                            ),
-                                          }));
-                                          setDetailsDirty(true);
-                                        }}
-                                      >
-                                        {platformOptions.map((option) => (
-                                          <option key={option.value} value={option.value}>
-                                            {option.label}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      <label className="space-y-1">
+                                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                          Platform
+                                        </span>
+                                        <select
+                                          className={inputStyles}
+                                          value={entry.platform}
+                                          onChange={(event) => {
+                                            const nextPlatform = event.target.value;
+                                            setDetailsForm((previous) => ({
+                                              ...previous,
+                                              profileLinks: profileLinks.map((linkEntry, entryIndex) =>
+                                                entryIndex === index ? { ...linkEntry, platform: nextPlatform } : linkEntry,
+                                              ),
+                                            }));
+                                            setDetailsDirty(true);
+                                          }}
+                                        >
+                                          {platformOptions.map((option) => (
+                                            <option key={option.value} value={option.value}>
+                                              {option.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </label>
 
-                                    <label className="space-y-1">
-                                      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                                        URL
-                                      </span>
-                                      <input
-                                        className={`${inputStyles} ${urlValid ? '' : 'border-rose-400 focus:border-rose-500'}`}
-                                        value={urlValue}
-                                        onChange={(event) => {
-                                          const nextUrl = event.target.value;
-                                          setDetailsForm((previous) => ({
-                                            ...previous,
-                                            profileLinks: profileLinks.map((entryItem, entryIndex) =>
-                                              entryIndex === index ? { ...entryItem, url: nextUrl } : entryItem,
-                                            ),
-                                          }));
-                                          setDetailsDirty(true);
-                                        }}
-                                        placeholder="https://instagram.com/..."
-                                      />
-                                      {!urlValid ? (
-                                        <p className="text-[11px] font-medium normal-case tracking-normal text-rose-600">
-                                          Use a valid http/https URL.
-                                        </p>
-                                      ) : null}
-                                    </label>
+                                      <label className="space-y-1">
+                                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                          URL
+                                        </span>
+                                        <input
+                                          className={`${inputStyles} ${urlValid ? '' : 'border-rose-400 focus:border-rose-500'}`}
+                                          value={urlValue}
+                                          onChange={(event) => {
+                                            const nextUrl = event.target.value;
+                                            setDetailsForm((previous) => ({
+                                              ...previous,
+                                              profileLinks: profileLinks.map((entryItem, entryIndex) =>
+                                                entryIndex === index ? { ...entryItem, url: nextUrl } : entryItem,
+                                              ),
+                                            }));
+                                            setDetailsDirty(true);
+                                          }}
+                                          placeholder="https://instagram.com/..."
+                                        />
+                                        {!urlValid ? (
+                                          <p className="text-[11px] font-medium normal-case tracking-normal text-rose-600">
+                                            Use a valid http/https URL.
+                                          </p>
+                                        ) : null}
+                                      </label>
+                                    </div>
 
-                                    <div className="flex justify-end sm:pt-6">
+                                    <div className="flex justify-end">
                                       <button
                                         type="button"
                                         className={ghostButtonStyles}
@@ -605,4 +597,3 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
     </>
   );
 }
-
