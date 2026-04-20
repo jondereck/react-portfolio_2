@@ -1,9 +1,13 @@
-const CACHE_NAME = 'portfolio-shell-v2';
+const CACHE_NAME = 'portfolio-shell-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
   '/logo192.png',
   '/logo512.png',
+  '/logo512-maskable.png',
+  '/apple-touch-icon.png',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
   '/app-splash?w=1242&h=2688',
   '/favicon.ico',
 ];
