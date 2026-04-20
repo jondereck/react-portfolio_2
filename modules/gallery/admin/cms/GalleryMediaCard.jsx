@@ -55,9 +55,7 @@ export default function GalleryMediaCard({
           {selected ? 'Selected' : 'Select'}
         </button>
 
-        <div className="absolute bottom-2 right-2 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm dark:bg-slate-900/90 dark:text-slate-200">
-          {statusLabel || (isVideo ? 'Video' : 'Ready')}
-        </div>
+
       </div>
 
       <div className="space-y-1 p-3">

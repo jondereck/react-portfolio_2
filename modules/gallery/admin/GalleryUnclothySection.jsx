@@ -627,8 +627,17 @@ export default function GalleryUnclothySection({
       ) : null}
 
       <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Basic settings</p>
-        <div className="mt-4 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Basic settings</p>
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Show the two most-used fields first.</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+            Primary
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
           {basicFields.map((key) => {
             const options = getOptions(key);
             const value = settings[key] ?? '';
@@ -636,9 +645,9 @@ export default function GalleryUnclothySection({
 
             return (
               <label key={key} className="block text-sm font-medium text-slate-900 dark:text-slate-50">
-                <span className="mb-1.5 block">{label}</span>
+                <span className="mb-1.5 block truncate whitespace-nowrap">{label}</span>
                 <select
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-50"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-50"
                   value={String(value)}
                   onChange={(event) => setSettings((previous) => ({ ...previous, [key]: event.target.value }))}
                   disabled={disableInputs}
@@ -657,7 +666,11 @@ export default function GalleryUnclothySection({
 
       <details className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-50">Advanced settings</summary>
-        <div className="mt-4 space-y-4">
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          Keep lower-priority fields collapsed by default.
+        </p>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {advancedFields.map((key) => {
             const options = getOptions(key);
             const value = settings[key] ?? '';
@@ -665,18 +678,18 @@ export default function GalleryUnclothySection({
               key === 'age'
                 ? 'Age'
                 : key === 'breastsSize'
-                ? 'Breast size'
+                ? 'Chest size'
                 : key === 'assSize'
-                  ? 'Ass size'
+                  ? 'Hip size'
                   : key === 'pussy'
-                    ? 'Pussy'
+                    ? 'Hair detail'
                     : key;
 
             return (
               <label key={key} className="block text-sm font-medium text-slate-900 dark:text-slate-50">
                 <span className="mb-1.5 block">{label}</span>
                 <select
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-50"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-50"
                   value={String(value)}
                   onChange={(event) => setSettings((previous) => ({ ...previous, [key]: event.target.value }))}
                   disabled={disableInputs}
@@ -693,21 +706,19 @@ export default function GalleryUnclothySection({
         </div>
       </details>
 
-      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <label className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-200">
-          <input
-            type="checkbox"
-            className="mt-1 h-4 w-4"
-            checked={confirmed}
-            onChange={(event) => setConfirmed(event.target.checked)}
-            disabled={disableInputs}
-          />
-          <span>
-            I confirm this request is for <span className="font-semibold">consensual adult content (18+)</span>. No minors.
-            No non-consensual imagery.
-          </span>
-        </label>
-      </div>
+      <label className="flex items-start gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-200">
+        <input
+          type="checkbox"
+          className="mt-1 h-4 w-4"
+          checked={confirmed}
+          onChange={(event) => setConfirmed(event.target.checked)}
+          disabled={disableInputs}
+        />
+        <span className="leading-6">
+          I confirm this request is for <span className="font-semibold">consensual adult content (18+)</span>. No minors. No non-consensual
+          imagery.
+        </span>
+      </label>
 
       <button
         type="button"
@@ -715,7 +726,7 @@ export default function GalleryUnclothySection({
         disabled={!canEnqueue || disableInputs}
         onClick={handleEnqueue}
       >
-        {queue.length > 0 || active ? 'Add to queue' : 'Generate'}
+        {queue.length > 0 || active ? 'Add to queue' : 'Save changes'}
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
