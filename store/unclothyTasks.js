@@ -7,6 +7,8 @@ const listeners = new Set();
 
 let hydrated = false;
 let running = false;
+let runAbortController = null;
+let activeAbortController = null;
 
 let state = {
   queue: [],
@@ -62,6 +64,8 @@ const getSnapshot = () => ({
   hydrateFromLocalStorage,
   enqueue,
   clearQueue,
+  cancelActive,
+  retryActive,
   stopTrackingActive,
   startRunner,
 });
@@ -108,11 +112,108 @@ export function clearQueue() {
 
 export function stopTrackingActive() {
   // This does NOT cancel the upstream task; it only stops local tracking.
+  try {
+    activeAbortController?.abort();
+  } catch {
+    // ignore
+  }
+  activeAbortController = null;
+
+  try {
+    runAbortController?.abort();
+  } catch {
+    // ignore
+  }
+  runAbortController = null;
   setActive(null);
   running = false;
 }
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export function cancelActive() {
+  try {
+    activeAbortController?.abort();
+  } catch {
+    // ignore
+  }
+  activeAbortController = null;
+
+  try {
+    runAbortController?.abort();
+  } catch {
+    // ignore
+  }
+  runAbortController = null;
+
+  setActive(null);
+  running = false;
+}
+
+export function retryActive() {
+  hydrateFromLocalStorage();
+  const active = state.active;
+  if (!active || active.phase !== 'error') return;
+
+  const failedPhase = typeof active.failedPhase === 'string' ? active.failedPhase : null;
+  const resumePhase = failedPhase && failedPhase !== 'error' ? failedPhase : 'processing';
+
+  // If we never got a task id (failed during creation), we can't resume provider polling.
+  if (!active.taskId) {
+    const { albumId, sourcePhotoId, settingsSnapshot } = active;
+    setActive(null);
+    running = false;
+    enqueue({ albumId, sourcePhotoId, settingsSnapshot });
+    return;
+  }
+
+  if (running) return;
+
+  setActive({
+    phase: resumePhase,
+    percent:
+      resumePhase === 'ingesting'
+        ? Math.max(92, Number.isFinite(active.percent) ? active.percent : 92)
+        : Math.max(15, Number.isFinite(active.percent) ? active.percent : 15),
+    statusText: resumePhase === 'ingesting' ? nextStatusText('ingesting', 0) : 'Processing…',
+    errorMessage: null,
+  });
+
+  running = true;
+  runAbortController = new AbortController();
+  void runnerLoop();
+}
+
+const createAbortError = () => {
+  const error = new Error('Aborted');
+  error.name = 'AbortError';
+  return error;
+};
+
+const sleep = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(createAbortError());
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      if (signal && onAbort) {
+        signal.removeEventListener('abort', onAbort);
+      }
+      resolve();
+    }, ms);
+
+    const onAbort = signal
+      ? () => {
+          clearTimeout(timeoutId);
+          signal.removeEventListener('abort', onAbort);
+          reject(createAbortError());
+        }
+      : null;
+
+    if (signal && onAbort) {
+      signal.addEventListener('abort', onAbort);
+    }
+  });
 
 function isProviderFailedStatus(value) {
   if (typeof value !== 'string') return false;
@@ -142,12 +243,16 @@ async function runnerLoop() {
 
     if (state.active?.phase === 'error') {
       running = false;
+      runAbortController = null;
+      activeAbortController = null;
       return;
     }
 
     if (!state.active) {
       if (state.queue.length === 0) {
         running = false;
+        runAbortController = null;
+        activeAbortController = null;
         return;
       }
 
@@ -174,6 +279,7 @@ async function runnerLoop() {
 
     try {
       if (active.phase === 'creating') {
+        activeAbortController = new AbortController();
         const response = await fetch('/api/admin/integrations/unclothy/tasks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -183,6 +289,7 @@ async function runnerLoop() {
             confirmedAdultConsent: true,
             settings: active.settingsSnapshot ?? {},
           }),
+          signal: activeAbortController.signal,
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -208,8 +315,10 @@ async function runnerLoop() {
           statusText: nextStatusText('processing', statusTick),
         });
 
+        activeAbortController = new AbortController();
         const response = await fetch(`/api/admin/integrations/unclothy/tasks/${encodeURIComponent(active.taskId)}`, {
           method: 'GET',
+          signal: activeAbortController.signal,
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
@@ -227,9 +336,10 @@ async function runnerLoop() {
         if (isComplete) {
           setActive({ phase: 'ingesting', percent: 92, statusText: nextStatusText('ingesting', statusTick) });
         } else {
-          await sleep(Math.min(5000, 1500 + statusTick * 250));
+          await sleep(Math.min(5000, 1500 + statusTick * 250), runAbortController?.signal);
         }
       } else if (active.phase === 'ingesting') {
+        activeAbortController = new AbortController();
         const response = await fetch(
           `/api/admin/integrations/unclothy/tasks/${encodeURIComponent(active.taskId)}/ingest`,
           {
@@ -240,6 +350,7 @@ async function runnerLoop() {
               sourcePhotoId: active.sourcePhotoId,
               confirmedAdultConsent: true,
             }),
+            signal: activeAbortController.signal,
           },
         );
         const payload = await response.json().catch(() => ({}));
@@ -260,7 +371,7 @@ async function runnerLoop() {
               percent: Math.max(75, Math.min(90, active.percent ?? 85)),
               statusText: 'Finalizing outputâ€¦',
             });
-            await sleep(Math.min(5000, 1200 + retries * 400));
+            await sleep(Math.min(5000, 1200 + retries * 400), runAbortController?.signal);
             continue;
           }
 
@@ -272,25 +383,38 @@ async function runnerLoop() {
           lastCompletedAt: Date.now(),
           lastCompletedAlbumId: active.albumId,
         });
-        await sleep(1200);
+        await sleep(1200, runAbortController?.signal);
         setActive(null);
       } else if (active.phase === 'done') {
         setActive(null);
       } else {
-        await sleep(300);
+        await sleep(300, runAbortController?.signal);
       }
     } catch (error) {
+      if (error?.name === 'AbortError') {
+        activeAbortController = null;
+        runAbortController = null;
+        setActive(null);
+        running = false;
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Unclothy task failed.';
-      setActive({ phase: 'error', errorMessage: message, statusText: message });
+      setActive({ phase: 'error', failedPhase: active?.phase ?? null, errorMessage: message, statusText: message });
       running = false;
+      activeAbortController = null;
+      runAbortController = null;
       return;
     }
   }
+
+  runAbortController = null;
+  activeAbortController = null;
 }
 
 export function startRunner() {
   hydrateFromLocalStorage();
   if (running) return;
   running = true;
+  runAbortController = new AbortController();
   void runnerLoop();
 }

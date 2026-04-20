@@ -111,6 +111,8 @@ export default function GalleryUnclothySection({
   const active = useUnclothyTasksStore((state) => state.active);
   const enqueue = useUnclothyTasksStore((state) => state.enqueue);
   const clearQueue = useUnclothyTasksStore((state) => state.clearQueue);
+  const cancelActive = useUnclothyTasksStore((state) => state.cancelActive);
+  const retryActive = useUnclothyTasksStore((state) => state.retryActive);
   const startRunner = useUnclothyTasksStore((state) => state.startRunner);
   const stopTrackingActive = useUnclothyTasksStore((state) => state.stopTrackingActive);
   const lastCompletedAt = useUnclothyTasksStore((state) => state.lastCompletedAt);
@@ -499,6 +501,14 @@ export default function GalleryUnclothySection({
           </div>
         </div>
 
+        {active && active.phase !== 'error' && active.phase !== 'done' ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" className={ghostButtonStyles} onClick={() => cancelActive?.()}>
+              Cancel
+            </button>
+          </div>
+        ) : null}
+
         {active?.phase === 'error' ? (
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className={ghostButtonStyles} onClick={stopTrackingActive}>
@@ -509,12 +519,15 @@ export default function GalleryUnclothySection({
               className={ghostButtonStyles}
               disabled={!canEnqueue || disableInputs}
               onClick={() => {
-                stopTrackingActive();
-                handleEnqueue();
+                retryActive?.();
               }}
             >
               Retry
             </button>
+            <p className="w-full text-xs leading-5 text-slate-500 dark:text-slate-400">
+              Note: Credits are managed by the provider and are typically deducted when a task is created. Retrying the same task won’t create a
+              new request, so it should avoid spending credits again.
+            </p>
           </div>
         ) : null}
 
