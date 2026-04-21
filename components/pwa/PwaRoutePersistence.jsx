@@ -20,9 +20,12 @@ const getNavigationType = () => {
   }
 
   try {
-    const entry = window.performance?.getEntriesByType?.('navigation')?.[0];
-    if (entry && typeof entry.type === 'string') {
-      return entry.type;
+    const perf = window.performance;
+    if (perf && typeof perf.getEntriesByType === 'function') {
+      const entry = perf.getEntriesByType('navigation')?.[0];
+      if (entry && typeof entry.type === 'string') {
+        return entry.type;
+      }
     }
   } catch {
     // Ignore.
