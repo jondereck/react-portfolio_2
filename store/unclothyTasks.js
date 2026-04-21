@@ -241,6 +241,14 @@ function nextStatusText(phase, tick) {
   return messages[tick % messages.length];
 }
 
+function getPayloadResult(payload) {
+  return payload?.result && typeof payload.result === 'object' ? payload.result : {};
+}
+
+function getPayloadMessage(payload, fallback) {
+  return payload?.message || payload?.error || payload?.status_text || fallback;
+}
+
 function bumpPercent(current, { min = 0, max = 100, step = 3 } = {}) {
   const base = Number.isFinite(current) ? current : min;
   return Math.max(min, Math.min(max, base + step));
@@ -304,10 +312,11 @@ async function runnerLoop() {
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(payload?.error || payload?.message || `Create task failed (${response.status}).`);
+          throw new Error(getPayloadMessage(payload, `Create task failed (${response.status}).`));
         }
 
-        const taskId = payload?.taskId;
+        const result = getPayloadResult(payload);
+        const taskId = result?.task_id;
         if (!taskId) {
           throw new Error('Unclothy task id missing from response.');
         }
@@ -333,11 +342,12 @@ async function runnerLoop() {
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          throw new Error(payload?.error || payload?.message || `Task status failed (${response.status}).`);
+          throw new Error(getPayloadMessage(payload, `Task status failed (${response.status}).`));
         }
 
-        const providerStatus = payload?.status || 'Unknown';
-        const isComplete = Boolean(payload?.isComplete);
+        const result = getPayloadResult(payload);
+        const providerStatus = result?.status || 'Unknown';
+        const isComplete = Boolean(result?.is_complete);
         setActive({ providerStatus });
 
         if (isProviderFailedStatus(providerStatus)) {
@@ -366,14 +376,14 @@ async function runnerLoop() {
         );
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
-          const errorCode = payload?.errorCode || payload?.code;
+          const message = getPayloadMessage(payload, '');
           const isNotReady =
-            response.status === 409 && (errorCode === 'UNCLOTHY_NOT_READY' || /not\s+completed/i.test(payload?.error || ''));
+            response.status === 409 && /not\s+(completed|ready)|no\s+output/i.test(message);
 
           if (isNotReady) {
             const retries = Number.isFinite(active.ingestRetries) ? active.ingestRetries : 0;
             if (retries >= 8) {
-              throw new Error(payload?.error || payload?.message || `Ingest failed (${response.status}).`);
+              throw new Error(getPayloadMessage(payload, `Ingest failed (${response.status}).`));
             }
 
             setActive({
@@ -386,7 +396,7 @@ async function runnerLoop() {
             continue;
           }
 
-          throw new Error(payload?.error || payload?.message || `Ingest failed (${response.status}).`);
+          throw new Error(getPayloadMessage(payload, `Ingest failed (${response.status}).`));
         }
 
         setActive({ phase: 'done', percent: 100, statusText: 'Saved.', completedAt: Date.now() });

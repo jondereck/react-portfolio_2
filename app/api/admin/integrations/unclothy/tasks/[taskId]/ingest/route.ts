@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server';
 import { canMutateContent } from '@/lib/auth/roles';
-import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { getAdminSettings, logAdminAuditEvent } from '@/lib/server/admin-settings';
 import { RequestValidationError } from '@/lib/server/uploads';
-import { toErrorResponse } from '@/lib/server/api-responses';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
-import { getUnclothyTask } from '@/lib/server/unclothy';
+import {
+  createUnclothyEnvelope,
+  createUnclothySuccessResponse,
+  getUnclothyTask,
+  toUnclothyErrorResponse,
+} from '@/lib/server/unclothy';
 import { unclothyIngestTaskSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 import { isSafeHttpUrl } from '@/lib/url-safety';
@@ -86,7 +89,14 @@ function mimeToExtension(mimeType: string | null) {
 
 export async function POST(request: Request, context: RouteContext) {
   if (await isRateLimited(request, 'admin-mutation', 60, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return NextResponse.json(
+      createUnclothyEnvelope({
+        success: false,
+        status: 429,
+        message: 'Too many requests. Try again later.',
+      }),
+      { status: 429 },
+    );
   }
 
   try {
@@ -94,22 +104,50 @@ export async function POST(request: Request, context: RouteContext) {
     const parsed = unclothyIngestTaskSchema.parse(body);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Forbidden',
+        }),
+        { status: 403 },
+      );
     }
 
     const settings = await getAdminSettings();
     if (!settings.integrations.unclothyEnabled) {
-      return NextResponse.json({ error: 'Unclothy integration is disabled.' }, { status: 403 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Unclothy integration is disabled.',
+        }),
+        { status: 403 },
+      );
     }
 
     const album = await galleryService.getAlbumById(parsed.albumId, profile.id, true);
     if (!album) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 404,
+          message: 'Album not found.',
+        }),
+        { status: 404 },
+      );
     }
 
     const downloadPayload = await galleryService.getAlbumPhotoDownloadPayload(parsed.albumId, profile.id, parsed.sourcePhotoId, true);
     if (!downloadPayload?.photo) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 404,
+          message: 'Source image not found.',
+        }),
+        { status: 404 },
+      );
     }
 
     const { taskId } = await context.params;
@@ -209,12 +247,8 @@ export async function POST(request: Request, context: RouteContext) {
       },
     });
 
-    return NextResponse.json(responsePayload, { status: 201 });
+    return createUnclothySuccessResponse(responsePayload, 201, 'Unclothy result ingested successfully.');
   } catch (error) {
-    const authError = toAuthErrorResponse(error);
-    if (authError) {
-      return authError;
-    }
-    return toErrorResponse(error, 'Unable to ingest Unclothy result.');
+    return toUnclothyErrorResponse(error, 'Unable to ingest Unclothy result.');
   }
 }

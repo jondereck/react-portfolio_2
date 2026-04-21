@@ -37,7 +37,7 @@ export default function GalleryInspectorPanel({ photo, album, onClose, children 
 
   if (!photo) {
     return (
-      <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-5 lg:block dark:border-slate-800 dark:bg-slate-950/20">
+      <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
         <div className="sticky top-28">
           <div className="flex items-center justify-between">
             <div>
@@ -54,7 +54,7 @@ export default function GalleryInspectorPanel({ photo, album, onClose, children 
             </button>
           </div>
 
-          <div className="mt-4 rounded-[28px] border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             Select one media item to see details.
           </div>
         </div>
@@ -63,7 +63,7 @@ export default function GalleryInspectorPanel({ photo, album, onClose, children 
   }
 
   return (
-    <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-5 lg:block dark:border-slate-800 dark:bg-slate-950/20">
+    <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
       <div className="sticky top-28">
         <div className="flex items-center justify-between">
           <div>
@@ -79,8 +79,8 @@ export default function GalleryInspectorPanel({ photo, album, onClose, children 
           </button>
         </div>
 
-        <div className="mt-4 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="aspect-[4/5] bg-slate-100 dark:bg-slate-950/40">
+        <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="aspect-square bg-slate-100 dark:bg-slate-950/40">
             <MediaPreview
               url={photo.imageUrl}
               mimeType={photo.mimeType}
@@ -91,18 +91,18 @@ export default function GalleryInspectorPanel({ photo, album, onClose, children 
               controls={false}
             />
           </div>
-          <div className="p-4">
+          <div className="p-3">
             <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">{title}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
           </div>
         </div>
 
-        <div className="mt-4 space-y-3">
-          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="mt-3 space-y-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
               Quick info
             </p>
-            <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+            <div className="mt-2 space-y-1.5 text-sm text-slate-700 dark:text-slate-200">
               {quickInfo.map((row) => (
                 <div key={row.label} className="flex items-center justify-between gap-3">
                   <span className="text-slate-500 dark:text-slate-400">{row.label}</span>
@@ -113,7 +113,7 @@ export default function GalleryInspectorPanel({ photo, album, onClose, children 
           </div>
 
           {children ? (
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
               {children}
             </div>
           ) : null}

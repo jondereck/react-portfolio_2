@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { canMutateContent } from '@/lib/auth/roles';
-import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { RequestValidationError } from '@/lib/server/uploads';
-import { toErrorResponse } from '@/lib/server/api-responses';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { getAdminSettings, updateAdminSettings } from '@/lib/server/admin-settings';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
+import { createUnclothyEnvelope, createUnclothySuccessResponse, toUnclothyErrorResponse } from '@/lib/server/unclothy';
 
 function parseAlbumId(value: unknown) {
   const id = Number(value);
@@ -27,12 +26,26 @@ export async function GET(request: Request) {
 
     const { actor, profile } = await resolveManagedProfileFromRequest(request);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Forbidden',
+        }),
+        { status: 403 },
+      );
     }
 
     const album = await galleryService.getAlbumById(albumId, profile.id, true);
     if (!album) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 404,
+          message: 'Album not found.',
+        }),
+        { status: 404 },
+      );
     }
 
     const settings = await getAdminSettings();
@@ -40,23 +53,26 @@ export async function GET(request: Request) {
     const key = makeDefaultsKey(profile.id, albumId);
     const entry = defaults && typeof defaults === 'object' ? (defaults as Record<string, any>)[key] : null;
 
-    return NextResponse.json({
+    return createUnclothySuccessResponse({
       albumId,
       settings: entry?.settings && typeof entry.settings === 'object' ? entry.settings : null,
       updatedAt: typeof entry?.updatedAt === 'number' ? entry.updatedAt : null,
     });
   } catch (error) {
-    const authError = toAuthErrorResponse(error);
-    if (authError) {
-      return authError;
-    }
-    return toErrorResponse(error, 'Unable to load Unclothy album defaults.');
+    return toUnclothyErrorResponse(error, 'Unable to load Unclothy album defaults.');
   }
 }
 
 export async function PUT(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return NextResponse.json(
+      createUnclothyEnvelope({
+        success: false,
+        status: 429,
+        message: 'Too many requests. Try again later.',
+      }),
+      { status: 429 },
+    );
   }
 
   try {
@@ -78,12 +94,26 @@ export async function PUT(request: Request) {
 
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Forbidden',
+        }),
+        { status: 403 },
+      );
     }
 
     const album = await galleryService.getAlbumById(albumId, profile.id, true);
     if (!album) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 404,
+          message: 'Album not found.',
+        }),
+        { status: 404 },
+      );
     }
 
     const current = await getAdminSettings({ fresh: true });
@@ -103,17 +133,12 @@ export async function PUT(request: Request) {
       } as any,
     });
 
-    return NextResponse.json({
+    return createUnclothySuccessResponse({
       albumId,
       settings: incomingSettings,
       updatedAt: nextDefaults[key].updatedAt,
     });
   } catch (error) {
-    const authError = toAuthErrorResponse(error);
-    if (authError) {
-      return authError;
-    }
-    return toErrorResponse(error, 'Unable to save Unclothy album defaults.');
+    return toUnclothyErrorResponse(error, 'Unable to save Unclothy album defaults.');
   }
 }
-

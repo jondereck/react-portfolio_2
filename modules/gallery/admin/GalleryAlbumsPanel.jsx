@@ -256,12 +256,14 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
         }
         mobileTabs={<GalleryMobileTabs activeTab={activeTab} onChange={setActiveTab} tabs={mobileTabs} />}
         inspector={
-          <GalleryAlbumInspectorPanel
-            album={selectedAlbum}
-            photosCount={Array.isArray(photos) ? photos.length : null}
-            shareLink={selectedShareLink}
-            siteOrigin={siteOrigin}
-          />
+          selectedAlbum ? (
+            <GalleryAlbumInspectorPanel
+              album={selectedAlbum}
+              photosCount={Array.isArray(photos) ? photos.length : null}
+              shareLink={selectedShareLink}
+              siteOrigin={siteOrigin}
+            />
+          ) : null
         }
         main={
           <main className="min-w-0 bg-white dark:bg-slate-900">

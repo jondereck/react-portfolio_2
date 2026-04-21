@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { canMutateContent } from '@/lib/auth/roles';
-import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { requireAuthActor } from '@/lib/auth/session';
 import { getAdminSettings } from '@/lib/server/admin-settings';
-import { getUnclothyTask } from '@/lib/server/unclothy';
-import { toErrorResponse } from '@/lib/server/api-responses';
+import {
+  createUnclothyEnvelope,
+  createUnclothySuccessResponse,
+  getUnclothyTask,
+  toUnclothyErrorResponse,
+} from '@/lib/server/unclothy';
 
 type RouteContext = { params: Promise<{ taskId: string }> };
 
@@ -42,12 +45,26 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const actor = await requireAuthActor(request);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Forbidden',
+        }),
+        { status: 403 },
+      );
     }
 
     const settings = await getAdminSettings();
     if (!settings.integrations.unclothyEnabled) {
-      return NextResponse.json({ error: 'Unclothy integration is disabled.' }, { status: 403 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Unclothy integration is disabled.',
+        }),
+        { status: 403 },
+      );
     }
 
     const { taskId } = await context.params;
@@ -56,18 +73,14 @@ export async function GET(request: Request, context: RouteContext) {
     const status = normalizeStatus((payload as any)?.result?.status) ?? 'Unknown';
     const isComplete = inferCompletionFromPayload(payload as any);
 
-    return NextResponse.json({
-      taskId,
+    return createUnclothySuccessResponse({
+      task_id: taskId,
       status,
-      isComplete,
+      is_complete: isComplete,
       raw: payload,
-    });
+    }, 200, 'Task is either in progress or completed.');
   } catch (error) {
-    const authError = toAuthErrorResponse(error);
-    if (authError) {
-      return authError;
-    }
-    return toErrorResponse(error, 'Unable to load Unclothy task.');
+    return toUnclothyErrorResponse(error, 'Unable to load Unclothy task.');
   }
 }
 

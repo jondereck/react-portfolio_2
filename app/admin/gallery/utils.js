@@ -25,6 +25,16 @@ export const getAdminMediaUrl = (photoOrUrl, sourceTypeArg, sourceIdArg) => {
   return photoOrUrl;
 };
 
+export const buildPublicAlbumHref = (album) => {
+  const slug = typeof album?.slug === 'string' ? album.slug.trim() : '';
+  if (!slug) return '';
+
+  const shareToken = typeof album?.shareToken === 'string' ? album.shareToken.trim() : '';
+  const shareEnabled = Boolean(album?.shareLinkEnabled) && Boolean(shareToken);
+
+  return shareEnabled ? `/gallery/${encodeURIComponent(slug)}?share=${encodeURIComponent(shareToken)}` : `/gallery/${encodeURIComponent(slug)}`;
+};
+
 export const formatLocalDate = (value) => {
   if (!value) return '-';
   const date = new Date(value);

@@ -32,9 +32,9 @@ export function normalizeAlbumForm(form = {}) {
 }
 
 export function toRequestError(data, fallbackMessage = 'Request failed', status) {
-  const error = new Error(data?.error || fallbackMessage);
+  const error = new Error(data?.message || data?.error || data?.status_text || fallbackMessage);
   error.status = status;
-  error.errorCode = data?.errorCode;
+  error.errorCode = data?.errorCode || data?.error_code;
   error.details = data?.details;
   error.duplicate = data?.duplicate;
   error.payload = data;

@@ -570,15 +570,17 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           </main>
         }
         inspector={
-          <GalleryInspectorPanel photo={selectedPhoto} album={selectedAlbum} onClose={clearPhotoSelection}>
-            <GalleryUnclothySection
-              controller={controller}
-              selectedAlbum={selectedAlbum}
-              photo={selectedPhoto}
-              album={selectedAlbum}
-              showPreview={false}
-            />
-          </GalleryInspectorPanel>
+          selectedPhoto ? (
+            <GalleryInspectorPanel photo={selectedPhoto} album={selectedAlbum} onClose={clearPhotoSelection}>
+              <GalleryUnclothySection
+                controller={controller}
+                selectedAlbum={selectedAlbum}
+                photo={selectedPhoto}
+                album={selectedAlbum}
+                showPreview={false}
+              />
+            </GalleryInspectorPanel>
+          ) : null
         }
         mobileFooterActions={
           null

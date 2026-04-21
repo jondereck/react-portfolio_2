@@ -20,7 +20,6 @@ import {
   GalleryAlbumsSidebar,
   GalleryCmsHeader,
   GalleryCmsShell,
-  GalleryInspectorPanel,
   GallerySelectionActionsPopup,
 } from './cms';
 
@@ -83,9 +82,6 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
     mediaQuery.addListener(update);
     return () => mediaQuery.removeListener(update);
   }, []);
-
-  const selectedPhoto =
-    selectedPhotoIds.length === 1 ? arrangePhotos.find((photo) => photo.id === selectedPhotoIds[0]) ?? null : null;
 
   const firstSelectedPhoto = useMemo(() => {
     const firstId = selectedPhotoIds[0];
@@ -352,7 +348,7 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
             <GalleryMediaViewer open={Boolean(previewPhoto)} photo={previewPhoto} onClose={() => setPreviewPhoto(null)} />
           </main>
         }
-        inspector={<GalleryInspectorPanel photo={selectedPhoto} album={selectedAlbum} onClose={clearPhotoSelection} />}
+        inspector={null}
         mobileFooterActions={null}
       />
 

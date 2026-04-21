@@ -10,15 +10,15 @@ import { buttonStyles, fetchJson, ghostButtonStyles, inputStyles } from './galle
 const defaultSettings = {
   generationMode: 'naked',
   bodyType: 'skinny',
-  breastsSize: 'small',
-  assSize: 'small',
+  breastsSize: 'medium',
+  assSize: 'medium',
   pussy: 'shaved',
   age: 'automatic',
 };
 
 const fallbackEnumOptions = {
-  generationMode: ['naked', 'lingerie', 'bikini', 'latex', 'bondage'],
-  bodyType: ['skinny', 'average', 'athletic', 'curvy'],
+  generationMode: ['naked', 'swimsuit', 'underwear', 'latex', 'bondage'],
+  bodyType: ['skinny', 'fit', 'athletic', 'curvy'],
   breastsSize: ['small', 'medium', 'large'],
   assSize: ['small', 'medium', 'large'],
   pussy: ['shaved', 'normal', 'hairy'],
@@ -161,13 +161,14 @@ export default function GalleryUnclothySection({
     setStatus((current) => ({ ...current, loading: true }));
     try {
       const data = await fetchJson('/api/admin/integrations/unclothy', { method: 'GET' });
+      const result = data?.result && typeof data.result === 'object' ? data.result : data;
       setStatus({
         loading: false,
-        enabled: data.enabled === true,
-        configured: data.configured === true,
-        credits: typeof data.credits === 'number' ? data.credits : null,
-        settingsEnums: data.settingsEnums && typeof data.settingsEnums === 'object' ? data.settingsEnums : {},
-        warnings: Array.isArray(data.warnings) ? data.warnings.map(String).filter(Boolean) : [],
+        enabled: result.enabled === true,
+        configured: result.configured === true,
+        credits: typeof result.credits === 'number' ? result.credits : null,
+        settingsEnums: result.settingsEnums && typeof result.settingsEnums === 'object' ? result.settingsEnums : {},
+        warnings: Array.isArray(result.warnings) ? result.warnings.map(String).filter(Boolean) : [],
       });
     } catch (error) {
       toast.error(error?.message || 'Unable to load Unclothy status.');
@@ -223,8 +224,8 @@ export default function GalleryUnclothySection({
     }
 
     const aliases = {
-      breastsSize: ['breastsize', 'chestsize'],
-      assSize: ['asssize', 'hipsize'],
+      breastsSize: ['breastssize', 'breastsize', 'chestsize'],
+      assSize: ['asssize', 'hipsize', 'hipssize', 'buttsize'],
     };
 
     const result = {};
@@ -246,21 +247,11 @@ export default function GalleryUnclothySection({
       const providerKey = providerKeyByUiKey[key] || key;
       const fromProvider = enumOptionsByKey[providerKey];
       if (Array.isArray(fromProvider) && fromProvider.length > 0) {
-        const merged = [...fromProvider];
-        const extras = fallbackEnumOptions[key];
-        if (Array.isArray(extras) && extras.length > 0) {
-          for (const option of extras) {
-            if (option && !merged.includes(option)) {
-              merged.push(option);
-            }
-          }
-        }
-
         if (key === 'age') {
-          const allowed = merged.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
+          const allowed = fromProvider.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
           return allowed.length > 0 ? allowed : fallbackEnumOptions.age;
         }
-        return merged;
+        return fromProvider;
       }
 
       if (key === 'age') {
@@ -324,10 +315,11 @@ export default function GalleryUnclothySection({
       signal: controllerAbort.signal,
     })
       .then((data) => {
-        if (!data?.settings) {
+        const result = data?.result && typeof data.result === 'object' ? data.result : data;
+        if (!result?.settings) {
           return;
         }
-        setSettings(normalizeSettings(data.settings));
+        setSettings(normalizeSettings(result.settings));
       })
       .catch(() => {
         // ignore
@@ -335,6 +327,10 @@ export default function GalleryUnclothySection({
 
     return () => controllerAbort.abort();
   }, [normalizeSettings, selectedAlbumId]);
+
+  useEffect(() => {
+    setSettings((previous) => normalizeSettings(previous));
+  }, [normalizeSettings]);
 
   const selectionProblem = useMemo(() => {
     if (!selectedAlbumId) return 'Select an album first.';
@@ -641,7 +637,7 @@ export default function GalleryUnclothySection({
             <button
               type="button"
               className={ghostButtonStyles}
-              disabled={!canEnqueue || disableInputs}
+              disabled={disableInputs}
               onClick={() => {
                 retryActive?.();
               }}
@@ -725,10 +721,9 @@ export default function GalleryUnclothySection({
             <button
               type="button"
               className={ghostButtonStyles}
-              disabled={!canEnqueue || disableInputs}
+              disabled={disableInputs}
               onClick={() => {
-                stopTrackingActive();
-                handleEnqueue();
+                retryActive?.();
               }}
             >
               Retry

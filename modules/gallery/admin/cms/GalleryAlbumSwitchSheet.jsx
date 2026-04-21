@@ -2,9 +2,10 @@
 
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useMemo, useState } from 'react';
-import { Check, ChevronsUpDown, Search, X } from 'lucide-react';
+import { Check, ChevronsUpDown, ExternalLink, Search, X } from 'lucide-react';
+import Link from 'next/link';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
-import { getAdminMediaUrl } from '@/app/admin/gallery/utils';
+import { buildPublicAlbumHref, getAdminMediaUrl } from '@/app/admin/gallery/utils';
 
 function getAlbumCount(album) {
   if (!album) return null;
@@ -196,19 +197,23 @@ export default function GalleryAlbumSwitchSheet({
                   const count = getAlbumCount(album);
                   const coverUrl = resolveAlbumCoverUrl(album);
                   const coverPhoto = album?.coverPhoto ?? null;
+                  const publicHref = buildPublicAlbumHref(album);
                   return (
-                    <button
+                    <div
                       key={album.id}
-                      type="button"
-                      onClick={() => setPendingAlbumId(album.id)}
                       className={`w-full rounded-[24px] border p-3 text-left shadow-sm transition ${
                         isSelected
                           ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-50 dark:bg-slate-50 dark:text-slate-900'
                           : 'border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPendingAlbumId(album.id)}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <div
                           className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
                             isSelected ? 'bg-white/10 dark:bg-slate-900/10' : 'bg-slate-100 dark:bg-slate-800'
                           }`}
@@ -236,7 +241,7 @@ export default function GalleryAlbumSwitchSheet({
                           )}
                         </div>
 
-                        <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <p className="truncate text-sm font-semibold">{album.name}</p>
@@ -257,8 +262,22 @@ export default function GalleryAlbumSwitchSheet({
                             )}
                           </div>
                         </div>
+                        </button>
+
+                        {publicHref ? (
+                          <Link
+                            href={publicHref}
+                            aria-label="Open album"
+                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50 ${
+                              isSelected ? 'border-white/15 bg-white/10' : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/30'
+                            }`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </Link>
+                        ) : null}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

@@ -13,9 +13,9 @@ function resolveAlbumCoverUrl(album) {
 export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLink, siteOrigin }) {
   if (!album) {
     return (
-      <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-5 lg:block dark:border-slate-800 dark:bg-slate-950/20">
+      <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
         <div className="sticky top-28">
-          <div className="rounded-[28px] border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             Select an album to see details.
           </div>
         </div>
@@ -33,10 +33,10 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
         : 0;
 
   return (
-    <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-5 lg:block dark:border-slate-800 dark:bg-slate-950/20">
-      <div className="sticky top-28 space-y-3">
-        <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="aspect-[4/5] bg-slate-100 dark:bg-slate-950/40">
+    <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
+      <div className="sticky top-28 space-y-2">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="aspect-square bg-slate-100 dark:bg-slate-950/40">
             {coverUrl ? (
               <MediaPreview
                 url={coverUrl}
@@ -53,15 +53,15 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
               </div>
             )}
           </div>
-          <div className="p-4">
+          <div className="p-3">
             <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">{album.name}</p>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{currentCount} item{currentCount === 1 ? '' : 's'}</p>
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quick info</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
+          <div className="mt-2 space-y-1.5 text-sm text-slate-700 dark:text-slate-200">
             <div className="flex items-center justify-between gap-3">
               <span className="text-slate-500 dark:text-slate-400">Status</span>
               <span className="font-medium text-slate-900 dark:text-slate-50">{album.isPublished ? 'Published' : 'Draft'}</span>
@@ -73,7 +73,7 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
           </div>
         </div>
 
-        <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Slug</p>
           <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-50">
             {album.slug ? `/gallery/${album.slug}` : 'Generated when saved'}
@@ -84,7 +84,7 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
         </div>
 
         {shareLink ? (
-          <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Share link</p>
             <p className="mt-2 break-all text-xs text-slate-600 dark:text-slate-300">{shareLink}</p>
           </div>

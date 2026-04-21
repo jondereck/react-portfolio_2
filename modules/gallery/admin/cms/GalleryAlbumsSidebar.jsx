@@ -1,8 +1,9 @@
 'use client';
 
-import { ChevronRight, FolderOpen, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronRight, ExternalLink, FolderOpen, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import Link from 'next/link';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
-import { getAdminMediaUrl } from '@/app/admin/gallery/utils';
+import { buildPublicAlbumHref, getAdminMediaUrl } from '@/app/admin/gallery/utils';
 
 function resolveAlbumCoverUrl(album) {
   const coverPhoto = album?.coverPhoto ?? null;
@@ -27,6 +28,7 @@ export default function GalleryAlbumsSidebar({
 }) {
   const activeAlbum = Array.isArray(albums) ? albums.find((album) => album.id === selectedAlbumId) : null;
   const activeName = mobileAlbumName || activeAlbum?.name;
+  const activePublicHref = buildPublicAlbumHref(activeAlbum);
   const activeCountLabel =
     mobileAlbumCountLabel ||
     (typeof activeAlbum?._count?.photos === 'number'
@@ -51,13 +53,25 @@ export default function GalleryAlbumsSidebar({
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Active intake target for uploads and imports.</p>
               )}
             </div>
-            <button
-              type="button"
-              onClick={onMobileOpenSwitch}
-              className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
-            >
-              Switch
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {activePublicHref ? (
+                <Link
+                  href={activePublicHref}
+                  aria-label="Open album"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:text-slate-50"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </Link>
+              ) : null}
+              <button
+                type="button"
+                onClick={onMobileOpenSwitch}
+                className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+              >
+                Switch
+              </button>
+            </div>
           </div>
 
 
@@ -108,20 +122,24 @@ export default function GalleryAlbumsSidebar({
                           : '';
                 const coverUrl = resolveAlbumCoverUrl(album);
                 const coverPhoto = album?.coverPhoto ?? null;
+                const publicHref = buildPublicAlbumHref(album);
 
                 return (
-                  <button
+                  <div
                     key={album.id}
-                    type="button"
-                    onClick={() => onSelectAlbum?.(album.id)}
                     className={`w-full rounded-[24px] border p-3 text-left transition ${
                       isActive
                         ? 'border-slate-900 bg-slate-900 text-white shadow-sm dark:border-slate-50 dark:bg-slate-50 dark:text-slate-900'
                         : 'border-slate-200 bg-white text-slate-900 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onSelectAlbum?.(album.id)}
+                        className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
                         <div className="h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-800">
                           {coverUrl ? (
                             <MediaPreview
@@ -153,9 +171,25 @@ export default function GalleryAlbumsSidebar({
                           ) : null}
                         </div>
                       </div>
-                      <ChevronRight className={`h-4 w-4 ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400'}`} />
+                        <ChevronRight
+                          className={`h-4 w-4 ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400'}`}
+                        />
+                      </button>
+
+                      {publicHref ? (
+                        <Link
+                          href={publicHref}
+                          aria-label="Open album"
+                          className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50 ${
+                            isActive ? 'border-white/15 bg-white/10' : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/30'
+                          }`}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Link>
+                      ) : null}
                     </div>
-                  </button>
+                  </div>
                 );
               })
             : null}

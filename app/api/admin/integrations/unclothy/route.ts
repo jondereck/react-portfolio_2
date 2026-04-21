@@ -1,16 +1,28 @@
 import { NextResponse } from 'next/server';
 import { canMutateContent } from '@/lib/auth/roles';
-import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { requireAuthActor } from '@/lib/auth/session';
 import { getAdminSettings } from '@/lib/server/admin-settings';
-import { getUnclothyCredits, getUnclothyTaskSettings, isUnclothyConfigured } from '@/lib/server/unclothy';
-import { toErrorResponse } from '@/lib/server/api-responses';
+import {
+  createUnclothySuccessResponse,
+  getUnclothyCredits,
+  getUnclothyTaskSettings,
+  isUnclothyConfigured,
+  toUnclothyErrorResponse,
+} from '@/lib/server/unclothy';
 
 export async function GET(request: Request) {
   try {
     const actor = await requireAuthActor(request);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        {
+          success: false,
+          status_code: 403,
+          status_text: 'Forbidden',
+          message: 'Forbidden',
+        },
+        { status: 403 },
+      );
     }
 
     const settings = await getAdminSettings();
@@ -18,7 +30,7 @@ export async function GET(request: Request) {
     const configured = isUnclothyConfigured();
 
     if (!enabled || !configured) {
-      return NextResponse.json({
+      return createUnclothySuccessResponse({
         enabled,
         configured,
         credits: null,
@@ -53,7 +65,7 @@ export async function GET(request: Request) {
       );
     }
 
-    return NextResponse.json({
+    return createUnclothySuccessResponse({
       enabled,
       configured,
       credits,
@@ -61,10 +73,6 @@ export async function GET(request: Request) {
       warnings,
     });
   } catch (error) {
-    const authError = toAuthErrorResponse(error);
-    if (authError) {
-      return authError;
-    }
-    return toErrorResponse(error, 'Unable to load Unclothy status.');
+    return toUnclothyErrorResponse(error, 'Unable to load Unclothy status.');
   }
 }

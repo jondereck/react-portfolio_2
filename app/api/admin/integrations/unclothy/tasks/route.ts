@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
 import { canMutateContent } from '@/lib/auth/roles';
-import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { getAdminSettings, logAdminAuditEvent } from '@/lib/server/admin-settings';
 import { RequestValidationError } from '@/lib/server/uploads';
-import { toErrorResponse } from '@/lib/server/api-responses';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
-import { createUnclothyTask, getUnclothyTaskSettings } from '@/lib/server/unclothy';
+import {
+  createUnclothyEnvelope,
+  createUnclothySuccessResponse,
+  createUnclothyTask,
+  getUnclothyTaskSettings,
+  toUnclothyErrorResponse,
+} from '@/lib/server/unclothy';
 import { unclothyCreateTaskSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 import { isSafeHttpUrl } from '@/lib/url-safety';
@@ -63,10 +67,6 @@ function resolveEnumValue(value: unknown, options: string[]) {
 
   if (isAutomaticAgeOption(lower)) {
     return options.find((option) => isAutomaticAgeOption(option)) ?? null;
-  }
-
-  if (lower === '18') {
-    return options.find((option) => option.toLowerCase().includes('18')) ?? null;
   }
 
   return null;
@@ -221,7 +221,14 @@ async function fetchGoogleDriveImageBytes(sourceId: string, actorUserId: string)
 
 export async function POST(request: Request) {
   if (await isRateLimited(request, 'admin-mutation', 60, 60_000)) {
-    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+    return NextResponse.json(
+      createUnclothyEnvelope({
+        success: false,
+        status: 429,
+        message: 'Too many requests. Try again later.',
+      }),
+      { status: 429 },
+    );
   }
 
   try {
@@ -229,12 +236,26 @@ export async function POST(request: Request) {
     const parsed = unclothyCreateTaskSchema.parse(body);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
     if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Forbidden',
+        }),
+        { status: 403 },
+      );
     }
 
     const settings = await getAdminSettings();
     if (!settings.integrations.unclothyEnabled) {
-      return NextResponse.json({ error: 'Unclothy integration is disabled.' }, { status: 403 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Unclothy integration is disabled.',
+        }),
+        { status: 403 },
+      );
     }
 
     const { allowlist, normalizedToProviderKey } = await loadProviderEnumAllowlist();
@@ -245,12 +266,26 @@ export async function POST(request: Request) {
 
     const album = await galleryService.getAlbumById(parsed.albumId, profile.id, true);
     if (!album) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 404,
+          message: 'Album not found.',
+        }),
+        { status: 404 },
+      );
     }
 
     const downloadPayload = await galleryService.getAlbumPhotoDownloadPayload(parsed.albumId, profile.id, parsed.sourcePhotoId, true);
     if (!downloadPayload?.photo) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 404,
+          message: 'Source image not found.',
+        }),
+        { status: 404 },
+      );
     }
 
     const photo = downloadPayload.photo;
@@ -261,24 +296,31 @@ export async function POST(request: Request) {
     const rawSettings = parsed.settings ?? {};
     const sanitizedSettings: Record<string, unknown> = {};
     const fieldErrors: Record<string, string[]> = {};
-    const enumAliases = new Map<string, string>([
-      ['breastssize', 'breastsize'],
-      ['chestsize', 'breastsize'],
+    const enumAliases = new Map<string, string[]>([
+      ['breastssize', ['breastssize', 'breastsize', 'chestsize']],
+      ['breastsize', ['breastsize', 'breastssize', 'chestsize']],
+      ['chestsize', ['chestsize', 'breastsize', 'breastssize']],
+      ['asssize', ['asssize', 'hipsize', 'hipssize', 'buttsize']],
+      ['hipsize', ['hipsize', 'hipssize', 'asssize', 'buttsize']],
+      ['hipssize', ['hipssize', 'hipsize', 'asssize', 'buttsize']],
+      ['buttsize', ['buttsize', 'asssize', 'hipsize', 'hipssize']],
     ]);
 
     for (const [rawKey, rawValue] of Object.entries(rawSettings)) {
       const normalizedKey = compareEnumKey(rawKey);
-      let providerKey = normalizedKey ? normalizedToProviderKey.get(normalizedKey) : null;
-      if (!providerKey && normalizedKey) {
-        const alias = enumAliases.get(normalizedKey);
-        providerKey = alias ? normalizedToProviderKey.get(alias) ?? null : null;
-      }
+      const providerKey = normalizedKey
+        ? ((enumAliases.get(normalizedKey) ?? [normalizedKey])
+            .map((candidate) => normalizedToProviderKey.get(candidate))
+            .find((value): value is string => typeof value === 'string' && value.length > 0) ?? null)
+        : null;
 
       if (!providerKey) {
+        fieldErrors[`settings.${rawKey}`] = ['Unsupported Unclothy setting for the current provider settings.'];
         continue;
       }
 
       if (normalizedKey === 'penis' || compareEnumKey(providerKey) === 'penis') {
+        fieldErrors[`settings.${rawKey}`] = ['Unsupported Unclothy setting for this workflow.'];
         continue;
       }
 
@@ -355,12 +397,8 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ taskId }, { status: 201 });
+    return createUnclothySuccessResponse({ task_id: taskId }, 201, 'Task created successfully.');
   } catch (error) {
-    const authError = toAuthErrorResponse(error);
-    if (authError) {
-      return authError;
-    }
-    return toErrorResponse(error, 'Unable to create Unclothy task.');
+    return toUnclothyErrorResponse(error, 'Unable to create Unclothy task.');
   }
 }
