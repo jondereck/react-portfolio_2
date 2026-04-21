@@ -159,7 +159,7 @@ export default function GalleryInspectorPanel({
                 <option value="force_unblur">Force unblur</option>
               </select>
               <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                Auto blurs when filename contains <span className="font-semibold">unclothy</span> or the media is flagged NSFW.
+                Auto blurs when the media is flagged by the AI scan. Manual modes override auto.
               </p>
             </div>
           </div>

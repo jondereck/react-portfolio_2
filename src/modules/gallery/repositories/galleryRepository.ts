@@ -297,6 +297,19 @@ export class GalleryRepository {
     });
   }
 
+  async updateAlbumPhotosBlurOverride(albumId: number, photoIds: number[], blurOverride: string) {
+    await prisma.albumPhoto.updateMany({
+      where: { albumId, id: { in: photoIds } },
+      data: { blurOverride },
+    });
+
+    return prisma.albumPhoto.findMany({
+      where: { albumId, id: { in: photoIds } },
+      select: photoSelect,
+      orderBy: [{ id: 'asc' }],
+    });
+  }
+
   async reorderAlbumPhotos(albumId: number, orderedPhotoIds: number[]) {
     await prisma.$transaction(
       orderedPhotoIds.map((photoId, index) =>

@@ -10,12 +10,15 @@ export default function GallerySelectionActionsPopup({
   onPickAlbum,
   onMove,
   onCreateAlbum,
+  onBlurModeChange,
   onDelete,
   onClear,
+  savingBlurMode = false,
 }) {
   if (!open || !selectedCount) return null;
 
   const canMove = Boolean(targetAlbumName) && !disabled;
+  const blurDisabled = disabled || savingBlurMode || typeof onBlurModeChange !== 'function';
 
   return (
     <>
@@ -62,6 +65,30 @@ export default function GallerySelectionActionsPopup({
               <span className="truncate">{targetAlbumName || 'Select album'}</span>
               <ChevronsUpDown className="h-4 w-4 text-slate-400" />
             </button>
+          </div>
+
+          <div className="mt-3 rounded-[22px] border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+              Blur mode
+            </label>
+            <select
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+              defaultValue=""
+              disabled={blurDisabled}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                if (!nextValue) return;
+                onBlurModeChange?.(nextValue);
+                event.target.value = '';
+              }}
+            >
+              <option value="" disabled>
+                {savingBlurMode ? 'Saving...' : 'Set blur mode'}
+              </option>
+              <option value="auto">Auto</option>
+              <option value="force_blur">Force blur</option>
+              <option value="force_unblur">Force unblur</option>
+            </select>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -133,10 +160,34 @@ export default function GallerySelectionActionsPopup({
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="min-w-[180px] rounded-[22px] border border-slate-200 bg-slate-50 p-2 dark:border-slate-800 dark:bg-slate-950/40">
+            <label className="mb-1 block px-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+              Blur mode
+            </label>
+            <select
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+              defaultValue=""
+              disabled={blurDisabled}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                if (!nextValue) return;
+                onBlurModeChange?.(nextValue);
+                event.target.value = '';
+              }}
+            >
+              <option value="" disabled>
+                {savingBlurMode ? 'Saving...' : 'Set mode'}
+              </option>
+              <option value="auto">Auto</option>
+              <option value="force_blur">Force blur</option>
+              <option value="force_unblur">Force unblur</option>
+            </select>
+          </div>
+
+          <div className="grid w-[220px] shrink-0 grid-cols-2 gap-2">
             <button
               type="button"
-              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800"
+              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800"
               onClick={onMove}
               disabled={!canMove}
             >
@@ -144,7 +195,7 @@ export default function GallerySelectionActionsPopup({
             </button>
             <button
               type="button"
-              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-sky-200 bg-sky-50 px-4 text-sm font-medium text-sky-700 transition hover:bg-sky-100 disabled:opacity-60 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200 dark:hover:bg-sky-950/50"
+              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-sky-200 bg-sky-50 px-3 text-sm font-medium text-sky-700 transition hover:bg-sky-100 disabled:opacity-60 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-200 dark:hover:bg-sky-950/50"
               onClick={onCreateAlbum}
               disabled={disabled}
             >
@@ -152,7 +203,7 @@ export default function GallerySelectionActionsPopup({
             </button>
             <button
               type="button"
-              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-red-200 bg-red-50 px-4 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-60 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
+              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:opacity-60 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-950/50"
               onClick={onDelete}
               disabled={disabled}
             >
@@ -160,7 +211,7 @@ export default function GallerySelectionActionsPopup({
             </button>
             <button
               type="button"
-              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:opacity-60 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-200 dark:hover:bg-slate-800"
               onClick={onClear}
               disabled={disabled}
             >

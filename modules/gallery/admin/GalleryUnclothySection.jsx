@@ -88,7 +88,6 @@ export default function GalleryUnclothySection({
     warnings: [],
   });
   const [settings, setSettings] = useState(unclothyDefaultUiSettings);
-  const [confirmed, setConfirmed] = useState(false);
   const [autoRefreshedAt, setAutoRefreshedAt] = useState(null);
 
   const queue = useUnclothyTasksStore((state) => state.queue);
@@ -170,8 +169,6 @@ export default function GalleryUnclothySection({
     }
 
     setSettings(unclothyDefaultUiSettings);
-    setConfirmed(false);
-
     const controllerAbort = new AbortController();
     fetchJson(`/api/admin/integrations/unclothy/album-defaults?albumId=${encodeURIComponent(selectedAlbumId)}`, {
       method: 'GET',
@@ -208,7 +205,7 @@ export default function GalleryUnclothySection({
     return null;
   }, [selectedAlbumId, selectedPhoto, selectedPhotoId]);
 
-  const canEnqueue = status.enabled && status.configured && confirmed && !selectionProblem;
+  const canEnqueue = status.enabled && status.configured && !selectionProblem;
 
   const percent = typeof active?.percent === 'number' ? Math.max(0, Math.min(100, active.percent)) : 0;
   const phaseLabel = active?.phase
@@ -680,20 +677,6 @@ export default function GalleryUnclothySection({
         </pre>
       </details>
 
-      <label className="flex items-start gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-200">
-        <input
-          type="checkbox"
-          className="mt-1 h-4 w-4"
-          checked={confirmed}
-          onChange={(event) => setConfirmed(event.target.checked)}
-          disabled={disableInputs}
-        />
-        <span className="leading-6">
-          I confirm this request is for <span className="font-semibold">consensual adult content (18+)</span>. No minors. No non-consensual
-          imagery.
-        </span>
-      </label>
-
       <button
         type="button"
         className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-50 dark:text-slate-900"
@@ -708,9 +691,7 @@ export default function GalleryUnclothySection({
           <button type="button" className={ghostButtonStyles} onClick={clearQueue} disabled={disableInputs}>
             Clear queue
           </button>
-        ) : (
-          <span className="text-xs text-slate-500 dark:text-slate-400">Age enforced to explicit 18+.</span>
-        )}
+        ) : null}
         <button
           type="button"
           className={ghostButtonStyles}

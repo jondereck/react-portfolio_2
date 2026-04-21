@@ -5,7 +5,7 @@ import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
-import { gallerySortSchema, photoCreateSchema } from '@/src/modules/gallery/contracts';
+import { bulkPhotoBlurOverrideSchema, gallerySortSchema, photoCreateSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -87,5 +87,45 @@ export async function POST(request: Request, context: RouteContext) {
       return authError;
     }
     return toErrorResponse(error, 'Unable to add photo.');
+  }
+}
+
+export async function PATCH(request: Request, context: RouteContext) {
+  if (await isRateLimited(request, 'admin-mutation', 120, 60_000)) {
+    return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
+  }
+
+  try {
+    const body = await request.json().catch(() => ({}));
+    const parsedBody = bulkPhotoBlurOverrideSchema.parse(body);
+    const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
+    if (!canMutateContent(actor.user.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { id: idParam } = await context.params;
+    const albumId = parseId(idParam);
+    if (!albumId) {
+      return NextResponse.json({ error: 'Invalid album id' }, { status: 400 });
+    }
+
+    const album = await galleryService.getAlbumById(albumId, profile.id, true);
+    if (!album) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const updated = await galleryService.updateAlbumPhotosBlurOverride(
+      albumId,
+      parsedBody.photoIds,
+      parsedBody.blurOverride,
+    );
+
+    return NextResponse.json({ photos: updated });
+  } catch (error) {
+    const authError = toAuthErrorResponse(error);
+    if (authError) {
+      return authError;
+    }
+    return toErrorResponse(error, 'Unable to update photos.');
   }
 }

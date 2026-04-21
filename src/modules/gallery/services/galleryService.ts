@@ -412,6 +412,28 @@ export class GalleryService {
     return this.repo.updateAlbumPhotoBlurOverride(albumId, photoId, blurOverride);
   }
 
+  async updateAlbumPhotosBlurOverride(
+    albumId: number,
+    photoIds: number[],
+    blurOverride: 'auto' | 'force_blur' | 'force_unblur',
+  ) {
+    if (photoIds.length === 0) {
+      throw new RequestValidationError('Select at least one media item first.', 400, undefined, 'EMPTY_BLUR_SELECTION');
+    }
+
+    const uniqueIds = new Set(photoIds);
+    if (uniqueIds.size !== photoIds.length) {
+      throw new RequestValidationError('Duplicate photo ids are not allowed.', 400, undefined, 'DUPLICATE_PHOTO_IDS');
+    }
+
+    const existing = await this.repo.getAlbumPhotosByIds(albumId, photoIds);
+    if (existing.length !== photoIds.length) {
+      throw new RequestValidationError('Some photos are missing or belong to another album.', 400, undefined, 'PHOTO_NOT_FOUND');
+    }
+
+    return this.repo.updateAlbumPhotosBlurOverride(albumId, photoIds, blurOverride);
+  }
+
   async moveAlbumPhotos(sourceAlbumId: number, targetAlbumId: number, photoIds: number[]) {
     if (sourceAlbumId === targetAlbumId) {
       throw new RequestValidationError(

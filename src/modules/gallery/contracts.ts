@@ -65,6 +65,11 @@ export const movePhotosSchema = z.object({
   photoIds: z.array(z.number().int().positive()).min(1),
 });
 
+export const bulkPhotoBlurOverrideSchema = z.object({
+  photoIds: z.array(z.number().int().positive()).min(1),
+  blurOverride: z.enum(['auto', 'force_blur', 'force_unblur']),
+});
+
 export const driveImportSchema = z.object({
   folderId: z.string().trim().min(1),
   limit: z.number().int().min(1).max(200).optional().default(50),
@@ -89,6 +94,7 @@ export type AlbumUpdateInput = z.infer<typeof albumUpdateSchema>;
 export type PhotoCreateInput = z.infer<typeof photoCreateSchema>;
 export type ReorderPhotosInput = z.infer<typeof reorderPhotosSchema>;
 export type MovePhotosInput = z.infer<typeof movePhotosSchema>;
+export type BulkPhotoBlurOverrideInput = z.infer<typeof bulkPhotoBlurOverrideSchema>;
 export type DriveImportInput = z.infer<typeof driveImportSchema>;
 export type UnclothyCreateTaskInput = z.infer<typeof unclothyCreateTaskSchema>;
 export type UnclothyIngestTaskInput = z.infer<typeof unclothyIngestTaskSchema>;

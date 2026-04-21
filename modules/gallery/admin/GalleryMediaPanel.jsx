@@ -77,6 +77,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [previewOpenGenerate, setPreviewOpenGenerate] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [savingBulkBlurMode, setSavingBulkBlurMode] = useState(false);
   const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
   const [createMoveAlbumOpen, setCreateMoveAlbumOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -272,6 +273,27 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
   const handleOpenFilter = () => {
     setFilterOpen(true);
+  };
+
+  const handleBulkBlurModeChange = async (blurOverride) => {
+    const photoIds = [...selectedPhotoIds];
+    if (!selectedAlbumId || photoIds.length === 0) return;
+
+    setSavingBulkBlurMode(true);
+    try {
+      const payload = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photoIds, blurOverride }),
+      });
+      const updatedPhotos = Array.isArray(payload?.photos) ? payload.photos : [];
+      updatedPhotos.forEach((photo) => updatePhotoInState(photo));
+      toast.success(`Updated blur mode for ${updatedPhotos.length || photoIds.length} media item${photoIds.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update blur mode.');
+    } finally {
+      setSavingBulkBlurMode(false);
+    }
   };
 
   const openTask = (task) => {
@@ -675,7 +697,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       <GallerySelectionActionsPopup
         open={selectedCount > 0 && (isDesktop || activeTab !== 'details')}
         selectedCount={selectedCount}
-        disabled={confirmingDelete || movingPhotos}
+        disabled={confirmingDelete || movingPhotos || savingBulkBlurMode}
         targetAlbumName={moveTargetAlbumName}
         onPickAlbum={() => setMovePickerOpen(true)}
         onMove={() => {
@@ -683,6 +705,10 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           void moveSelectedPhotos();
         }}
         onCreateAlbum={() => setCreateMoveAlbumOpen(true)}
+        onBlurModeChange={(blurOverride) => {
+          void handleBulkBlurModeChange(blurOverride);
+        }}
+        savingBlurMode={savingBulkBlurMode}
         onDelete={() => setConfirmDeleteOpen(true)}
         onClear={clearPhotoSelection}
       />

@@ -399,7 +399,7 @@ export default function IntegrationsSettingsSection() {
             />
             <ToggleCard
               title="NSFW blur in admin"
-              description="Blurs media when the original filename contains unclothy or the media is flagged NSFW."
+              description="Blurs media when the AI scan flags it as NSFW. Manual blur modes can override this per item."
               checked={integrations.blurUnclothyGenerated}
               error={getFieldError(fieldErrors, 'integrations.blurUnclothyGenerated')}
               onChange={(event) => {
