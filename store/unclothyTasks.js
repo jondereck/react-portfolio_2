@@ -346,6 +346,7 @@ async function runnerLoop() {
 
         setActive({
           taskId,
+          settingsSent: result?.settingsSent && typeof result.settingsSent === 'object' ? result.settingsSent : null,
           phase: 'processing',
           percent: 15,
           statusText: 'Processing…',

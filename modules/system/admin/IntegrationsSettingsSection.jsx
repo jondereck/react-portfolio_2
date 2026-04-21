@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { CheckCircle2, ExternalLink, FolderOpen, Mail, RefreshCw, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import AdminSectionHeader from '@/components/admin/shared/AdminSectionHeader';
@@ -9,7 +10,7 @@ import FieldErrorText from '@/components/forms/FieldErrorText';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
 import { clearFieldErrors, getFieldError, normalizeFormError } from '@/lib/form-client';
 import { handleRequest } from '@/lib/handleRequest';
-import { buttonStyles, cardStyles, fetcher, inputStyles, withFieldError } from '@/modules/system/admin/settingsShared';
+import { cardStyles, fetcher, withFieldError } from '@/modules/system/admin/settingsShared';
 
 const emptyState = {
   contactRecipientEmail: '',
@@ -21,6 +22,71 @@ const emptyState = {
   blurUnclothyGenerated: true,
   defaultGalleryView: 'cinematic',
 };
+
+const formId = 'integrations-settings-form';
+
+const sectionStyles = 'rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40 sm:p-5';
+const panelStyles = 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900';
+const inputBaseStyles =
+  'h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-800';
+const iconInputStyles =
+  'h-11 w-full rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-400 focus:ring-2 focus:ring-slate-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:focus:border-slate-500 dark:focus:ring-slate-800';
+const primaryButtonStyles =
+  'inline-flex h-11 items-center justify-center rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white';
+const secondaryButtonStyles =
+  'inline-flex h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-900';
+
+function SectionTitle({ icon: Icon, title, description }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0">
+        <h3 className="text-base font-semibold text-slate-950 dark:text-slate-50">{title}</h3>
+        {description ? <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function TextField({ label, icon: Icon, error, className = '', ...props }) {
+  return (
+    <label className={`flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 ${className}`}>
+      {label}
+      <span className="relative">
+        {Icon ? <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /> : null}
+        <input className={withFieldError(Icon ? iconInputStyles : inputBaseStyles, Boolean(error))} {...props} />
+      </span>
+      <FieldErrorText error={error} />
+    </label>
+  );
+}
+
+function SettingSwitch({ checked, disabled, onChange, label }) {
+  return (
+    <label className={`relative inline-flex shrink-0 items-center ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} className="peer sr-only" aria-label={label} />
+      <span className="h-7 w-12 rounded-full bg-slate-300 transition peer-checked:bg-emerald-500 peer-focus-visible:ring-2 peer-focus-visible:ring-slate-400 peer-focus-visible:ring-offset-2 dark:bg-slate-700 dark:peer-focus-visible:ring-offset-slate-900" />
+      <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition peer-checked:translate-x-5" />
+    </label>
+  );
+}
+
+function ToggleCard({ title, description, checked, error, onChange }) {
+  return (
+    <div className={panelStyles}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-50">{title}</h4>
+          <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{description}</p>
+        </div>
+        <SettingSwitch checked={checked} onChange={onChange} label={title} />
+      </div>
+      <FieldErrorText error={error} />
+    </div>
+  );
+}
 
 export default function IntegrationsSettingsSection() {
   const nsfwScanCursorStorageKey = 'gallery:nsfwScanCursor:v1';
@@ -224,241 +290,251 @@ export default function IntegrationsSettingsSection() {
   const statuses = Array.isArray(data?.statuses) ? data.statuses : [];
 
   return (
-    <section id="integrations" className={cardStyles}>
+    <section id="integrations" className={`${cardStyles} overflow-hidden`}>
       <AdminSectionHeader
         title="Integrations"
         description="Manage safe integration settings and check service connection status without exposing API secrets."
+        actions={
+          <>
+
+            <button type="submit" form={formId} disabled={saving || isLoading} className={primaryButtonStyles}>
+              {saving ? 'Saving...' : 'Save changes'}
+            </button>
+          </>
+        }
       />
-      <div className="grid gap-6 p-6 lg:grid-cols-[1.4fr_1fr]">
-        <form onSubmit={submit} className="space-y-4">
+      <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_340px] sm:p-6">
+        <form id={formId} onSubmit={submit} className="min-w-0 space-y-5">
           <FormErrorSummary error={formError} fieldErrors={fieldErrors} />
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              Contact recipient email
-              <input
+          <section className={sectionStyles}>
+            <SectionTitle icon={Mail} title="Contact email setup" description="Recipient and sender details used by the contact form." />
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <TextField
+                label="Recipient email"
                 type="email"
                 value={integrations.contactRecipientEmail}
+                icon={Mail}
+                error={getFieldError(fieldErrors, 'integrations.contactRecipientEmail')}
                 onChange={(event) => {
                   setIntegrations((previous) => ({ ...previous, contactRecipientEmail: event.target.value }));
                   clearField('contactRecipientEmail');
                 }}
                 aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.contactRecipientEmail'))}
-                className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'integrations.contactRecipientEmail')))}
               />
-              <FieldErrorText error={getFieldError(fieldErrors, 'integrations.contactRecipientEmail')} />
-            </label>
-
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              Contact sender email
-              <input
+              <TextField
+                label="Sender email"
                 type="email"
                 value={integrations.contactSenderEmail}
+                icon={Mail}
+                error={getFieldError(fieldErrors, 'integrations.contactSenderEmail')}
                 onChange={(event) => {
                   setIntegrations((previous) => ({ ...previous, contactSenderEmail: event.target.value }));
                   clearField('contactSenderEmail');
                 }}
                 aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.contactSenderEmail'))}
-                className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'integrations.contactSenderEmail')))}
               />
-              <FieldErrorText error={getFieldError(fieldErrors, 'integrations.contactSenderEmail')} />
-            </label>
-
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 md:col-span-2">
-              Contact sender name
-              <input
+              <TextField
+                label="Sender name"
                 type="text"
                 value={integrations.contactSenderName}
+                icon={Settings2}
+                className="md:col-span-2"
+                error={getFieldError(fieldErrors, 'integrations.contactSenderName')}
                 onChange={(event) => {
                   setIntegrations((previous) => ({ ...previous, contactSenderName: event.target.value }));
                   clearField('contactSenderName');
                 }}
                 aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.contactSenderName'))}
-                className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'integrations.contactSenderName')))}
               />
-              <FieldErrorText error={getFieldError(fieldErrors, 'integrations.contactSenderName')} />
-            </label>
+            </div>
+          </section>
 
-            <label className="flex flex-col gap-2 text-sm font-medium text-slate-700 dark:text-slate-200 md:col-span-2">
-              Cloudinary base folder
-              <input
+          <section className={sectionStyles}>
+            <SectionTitle icon={FolderOpen} title="Storage and imports" description="Media storage paths and import availability." />
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <TextField
+                label="Cloudinary base folder"
                 type="text"
                 value={integrations.cloudinaryFolder}
+                icon={FolderOpen}
+                error={getFieldError(fieldErrors, 'integrations.cloudinaryFolder')}
                 onChange={(event) => {
                   setIntegrations((previous) => ({ ...previous, cloudinaryFolder: event.target.value }));
                   clearField('cloudinaryFolder');
                 }}
                 aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.cloudinaryFolder'))}
-                className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'integrations.cloudinaryFolder')))}
               />
-              <FieldErrorText error={getFieldError(fieldErrors, 'integrations.cloudinaryFolder')} />
-            </label>
-
-            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-              <div className="space-y-3">
-                <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  <span>Enable Google Drive imports</span>
-                  <input
-                    type="checkbox"
+              <div className={panelStyles}>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-50">Enable Google Drive imports</h4>
+                    <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                      Global import switch. Admins still connect their own Drive account in the gallery import workflow.
+                    </p>
+                  </div>
+                  <SettingSwitch
                     checked={integrations.googleDriveImportEnabled}
+                    label="Enable Google Drive imports"
                     onChange={(event) => {
                       setIntegrations((previous) => ({ ...previous, googleDriveImportEnabled: event.target.checked }));
                       clearField('googleDriveImportEnabled');
                     }}
                   />
-                </label>
-                <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                  This is the global master switch only. Individual admins connect their own Google Drive account from the gallery import workflow.
-                </p>
+                </div>
               </div>
             </div>
+          </section>
 
-            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-              <div className="space-y-3">
-                <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  <span>Enable Unclothy integration</span>
-                  <input
-                    type="checkbox"
-                    checked={integrations.unclothyEnabled}
-                    onChange={(event) => {
-                      setIntegrations((previous) => ({ ...previous, unclothyEnabled: event.target.checked }));
-                      clearField('unclothyEnabled');
-                    }}
-                  />
-                </label>
-                <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                  Enables the admin-only Unclothy workflow inside Gallery → Media. The API key stays server-side only.
-                </p>
-                <FieldErrorText error={getFieldError(fieldErrors, 'integrations.unclothyEnabled')} />
-              </div>
-            </div>
+          <section className="grid gap-4 md:grid-cols-2">
+            <ToggleCard
+              title="Enable Unclothy integration"
+              description="Enables the admin-only workflow inside Gallery > Media. The API key stays server-side only."
+              checked={integrations.unclothyEnabled}
+              error={getFieldError(fieldErrors, 'integrations.unclothyEnabled')}
+              onChange={(event) => {
+                setIntegrations((previous) => ({ ...previous, unclothyEnabled: event.target.checked }));
+                clearField('unclothyEnabled');
+              }}
+            />
+            <ToggleCard
+              title="NSFW blur in admin"
+              description="Blurs media when the original filename contains unclothy or the media is flagged NSFW."
+              checked={integrations.blurUnclothyGenerated}
+              error={getFieldError(fieldErrors, 'integrations.blurUnclothyGenerated')}
+              onChange={(event) => {
+                setIntegrations((previous) => ({ ...previous, blurUnclothyGenerated: event.target.checked }));
+                clearField('blurUnclothyGenerated');
+              }}
+            />
+          </section>
 
-            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
-              <div className="space-y-3">
-                <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
-                  <span>NSFW blur (Unclothy)</span>
-                  <input
-                    type="checkbox"
-                    checked={integrations.blurUnclothyGenerated}
-                    onChange={(event) => {
-                      setIntegrations((previous) => ({ ...previous, blurUnclothyGenerated: event.target.checked }));
-                      clearField('blurUnclothyGenerated');
-                    }}
-                  />
-                </label>
-                <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
-                  Blurs media when the original filename contains <span className="font-semibold">unclothy</span> (case-insensitive) across admin and gallery pages.
-                </p>
+          <section className={sectionStyles}>
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <SectionTitle icon={ShieldCheck} title="Scanning tools" description="Run moderation checks across existing gallery media." />
+              <div className={panelStyles}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">NSFW blur scanner</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">{scanState.running ? 'Scanning' : 'Idle'}</p>
+                  </div>
+                  <AdminStatusBadge label={scanState.running ? 'Running' : storedScanCursor ? 'Resumable' : 'Ready'} tone={scanState.error ? 'warning' : 'success'} />
+                </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    className={buttonStyles}
-                    disabled={saving || isLoading || scanState.running}
-                    onClick={() => runNsfwScan({ resume: false })}
-                  >
-                    {scanState.running ? 'Scanning…' : 'Scan existing media'}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" className={primaryButtonStyles} disabled={saving || isLoading || scanState.running} onClick={() => runNsfwScan({ resume: false })}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${scanState.running ? 'animate-spin' : ''}`} />
+                    {scanState.running ? 'Scanning...' : 'Run scan'}
                   </button>
                   {storedScanCursor ? (
                     <button
                       type="button"
-                      className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
+                      className={secondaryButtonStyles}
                       disabled={saving || isLoading || scanState.running}
                       onClick={() => runNsfwScan({ resume: true })}
                       title={`Resume from id ${storedScanCursor}`}
                     >
-                      Resume scan
+                      Resume
                     </button>
                   ) : null}
                   {scanState.running ? (
-                    <button
-                      type="button"
-                      className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
-                      onClick={stopScan}
-                    >
+                    <button type="button" className={secondaryButtonStyles} onClick={stopScan}>
                       Stop
                     </button>
                   ) : null}
                 </div>
 
-                <div className="text-xs text-slate-500 dark:text-slate-400">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">{scanState.processed}</span> processed ·{' '}
+                <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{scanState.processed}</span> processed |{' '}
                   <span className="font-semibold text-slate-700 dark:text-slate-200">{scanState.flagged}</span> flagged
                   {typeof scanState.remainingEstimate === 'number' ? (
                     <>
                       {' '}
-                      · ~<span className="font-semibold text-slate-700 dark:text-slate-200">{scanState.remainingEstimate}</span> remaining
+                      | ~<span className="font-semibold text-slate-700 dark:text-slate-200">{scanState.remainingEstimate}</span> remaining
                     </>
                   ) : null}
                 </div>
-                {scanState.error ? (
-                  <p className="text-xs font-medium text-rose-600 dark:text-rose-300">{scanState.error}</p>
-                ) : null}
-                <FieldErrorText error={getFieldError(fieldErrors, 'integrations.blurUnclothyGenerated')} />
+                {scanState.error ? <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-300">{scanState.error}</p> : null}
               </div>
             </div>
+          </section>
 
-            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/40">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Private gallery default view</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    Choose which layout loads by default before visitors switch views on the gallery page.
-                  </p>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  {[
-                    { value: 'cinematic', label: 'Cinematic', description: 'Editorial hero slider with floating preview cards.' },
-                    { value: 'compact', label: 'Compact', description: 'Faster browsing view with simpler album emphasis.' },
-                  ].map((option) => (
-                    <label
-                      key={option.value}
-                      className={`flex-1 cursor-pointer rounded-xl border px-4 py-3 text-sm transition ${
-                        integrations.defaultGalleryView === option.value
-                          ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
-                          : 'border-slate-200 bg-white text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="defaultGalleryView"
-                        value={option.value}
-                        checked={integrations.defaultGalleryView === option.value}
-                        onChange={(event) => {
-                          setIntegrations((previous) => ({ ...previous, defaultGalleryView: event.target.value }));
-                          clearField('defaultGalleryView');
-                        }}
-                        className="sr-only"
-                      />
-                      <span className="block font-semibold">{option.label}</span>
-                      <span className="mt-1 block text-xs opacity-80">{option.description}</span>
-                    </label>
-                  ))}
-                </div>
-                <FieldErrorText error={getFieldError(fieldErrors, 'integrations.defaultGalleryView')} />
-              </div>
+          <details className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-100">Private gallery default view</summary>
+            <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              Choose which layout loads by default before visitors switch views on the gallery page.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              {[
+                { value: 'cinematic', label: 'Cinematic', description: 'Editorial hero slider with floating preview cards.' },
+                { value: 'compact', label: 'Compact', description: 'Faster browsing view with simpler album emphasis.' },
+              ].map((option) => (
+                <label
+                  key={option.value}
+                  className={`cursor-pointer rounded-xl border p-4 text-left text-sm transition ${
+                    integrations.defaultGalleryView === option.value
+                      ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                      : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-white dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="defaultGalleryView"
+                    value={option.value}
+                    checked={integrations.defaultGalleryView === option.value}
+                    onChange={(event) => {
+                      setIntegrations((previous) => ({ ...previous, defaultGalleryView: event.target.value }));
+                      clearField('defaultGalleryView');
+                    }}
+                    className="sr-only"
+                  />
+                  <span className="flex items-center gap-2 font-semibold">
+                    {integrations.defaultGalleryView === option.value ? <CheckCircle2 className="h-4 w-4" /> : null}
+                    {option.label}
+                  </span>
+                  <span className="mt-2 block text-xs leading-5 opacity-80">{option.description}</span>
+                </label>
+              ))}
             </div>
-          </div>
-
-          <button type="submit" disabled={saving || isLoading} className={buttonStyles}>
-            {saving ? 'Saving...' : 'Update Integration Settings'}
-          </button>
+            <FieldErrorText error={getFieldError(fieldErrors, 'integrations.defaultGalleryView')} />
+          </details>
         </form>
 
-        <div className="space-y-3">
-          {statuses.map((status) => (
-            <div key={status.key} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{status.label}</h3>
-                <AdminStatusBadge
-                  label={status.state === 'connected' ? 'Connected' : status.state === 'disabled' ? 'Disabled' : 'Needs setup'}
-                  tone={status.state === 'connected' ? 'success' : status.state === 'warning' ? 'warning' : 'neutral'}
-                />
+        <aside className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900 sm:p-5">
+            <div className="flex items-center gap-3">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200">
+                <Sparkles className="h-5 w-5" />
               </div>
-              <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{status.description}</p>
+              <div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Connection status</p>
+                <h3 className="text-lg font-semibold text-slate-950 dark:text-slate-50">Service health</h3>
+              </div>
             </div>
-          ))}
-        </div>
+            <div className="mt-4 space-y-3">
+              {statuses.length ? (
+                statuses.map((status) => (
+                  <div key={status.key} className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950/40">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">{status.label}</h4>
+                        <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{status.description}</p>
+                      </div>
+                      <AdminStatusBadge
+                        label={status.state === 'connected' ? 'Connected' : status.state === 'disabled' ? 'Disabled' : 'Needs setup'}
+                        tone={status.state === 'connected' ? 'success' : status.state === 'warning' ? 'warning' : 'neutral'}
+                      />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-400">
+                  {isLoading ? 'Loading service health...' : 'Service health is unavailable.'}
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
       </div>
     </section>
   );

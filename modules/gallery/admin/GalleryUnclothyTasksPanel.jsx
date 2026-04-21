@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { Clock3, Image as ImageIcon, Loader2, TriangleAlert } from 'lucide-react';
+import { getUnclothyGenerationModeLabel } from '@/lib/unclothy-settings';
 
 function clampPercent(value) {
   if (typeof value !== 'number' || Number.isNaN(value)) return 0;
@@ -53,6 +54,7 @@ export default function GalleryUnclothyTasksPanel({
 }) {
   const queued = Array.isArray(queue) ? queue : [];
   const percent = clampPercent(active?.percent);
+  const activeGenerationMode = getUnclothyGenerationModeLabel(active?.settingsSent) || getUnclothyGenerationModeLabel(active?.settingsSnapshot);
 
   const activeTitle = useMemo(() => {
     if (!active) return null;
@@ -84,6 +86,7 @@ export default function GalleryUnclothyTasksPanel({
               <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">{phaseLabel(active.phase)}</p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Album {active.albumId} • Image {active.sourcePhotoId}
+                {activeGenerationMode ? ` • ${activeGenerationMode}` : ''}
               </p>
             </div>
             <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{percent}%</span>
@@ -167,7 +170,7 @@ export default function GalleryUnclothyTasksPanel({
                 key={task.queueTaskId || `${task.albumId}:${task.sourcePhotoId}:${task.createdAt || index}`}
                 icon={Clock3}
                 label={`Queued #${index + 1} • Album ${task.albumId}`}
-                sublabel={`Image ${task.sourcePhotoId}${task.settingsSnapshot?.['generation-mode'] ? ` • ${task.settingsSnapshot['generation-mode']}` : ''}`}
+                sublabel={`Image ${task.sourcePhotoId}${getUnclothyGenerationModeLabel(task.settingsSnapshot) ? ` • ${getUnclothyGenerationModeLabel(task.settingsSnapshot)}` : ''}`}
                 onClick={() => onOpenTask?.({ albumId: task.albumId, sourcePhotoId: task.sourcePhotoId })}
               />
             ))}
