@@ -1,6 +1,7 @@
 import '../src/index.css';
 import GlobalLoader from '@/components/GlobalLoader';
 import PwaRegistration from '@/components/pwa/PwaRegistration';
+import PwaRoutePersistence from '@/components/pwa/PwaRoutePersistence';
 import { Toaster } from '@/components/ui/sonner';
 import { BRAND_THEME_COLOR } from '@/lib/server/site-branding';
 
@@ -42,6 +43,7 @@ export default function RootLayout({ children }) {
       <body>
         <GlobalLoader />
         <PwaRegistration />
+        <PwaRoutePersistence />
         <Toaster richColors position="top-right" />
         {children}
       </body>
