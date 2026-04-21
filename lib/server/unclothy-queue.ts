@@ -9,6 +9,7 @@ import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
 const MAX_RUNNING_TASKS_PER_USER = 3;
 const WORKER_BATCH_SIZE = 24;
+const WORKER_ADVISORY_LOCK_ID = BigInt(924_641_903);
 
 type QueueTaskRecord = Prisma.UnclothyGenerationTaskGetPayload<Record<string, never>>;
 
@@ -373,7 +374,7 @@ export async function retryUnclothyQueueTask(taskId: string, userId: string) {
       errorMessage: null,
       failedAt: null,
       providerTaskId: null,
-      settingsSent: Prisma.JsonNull,
+      settingsSent: null,
       ingestRetries: 0,
       startedAt: null,
       completedAt: null,
@@ -653,40 +654,53 @@ async function startQueuedTasks() {
 }
 
 export async function processUnclothyQueueOnce() {
-  const started = await startQueuedTasks();
-  const running = await prisma.unclothyGenerationTask.findMany({
-    where: { status: UnclothyGenerationTaskStatus.running },
-    orderBy: [{ startedAt: 'asc' }, { createdAt: 'asc' }],
-    take: WORKER_BATCH_SIZE,
-  });
+  const lockRows = await prisma.$queryRaw<{ locked: boolean }[]>`
+    SELECT pg_try_advisory_lock(${WORKER_ADVISORY_LOCK_ID}) AS locked
+  `;
+  const lockAcquired = lockRows?.[0]?.locked === true;
 
-  let advanced = 0;
-  let failed = 0;
-
-  for (const task of running) {
-    try {
-      await advanceRunningTask(task);
-      advanced += 1;
-    } catch (error) {
-      await failTask(task, error);
-      failed += 1;
-    }
+  if (!lockAcquired) {
+    return { started: 0, advanced: 0, failed: 0, counts: {}, locked: true };
   }
 
-  const activeCounts = await prisma.unclothyGenerationTask.groupBy({
-    by: ['status'],
-    where: {
-      status: {
-        in: [UnclothyGenerationTaskStatus.queued, UnclothyGenerationTaskStatus.running, UnclothyGenerationTaskStatus.failed],
-      },
-    },
-    _count: { _all: true },
-  });
+  try {
+    const started = await startQueuedTasks();
+    const running = await prisma.unclothyGenerationTask.findMany({
+      where: { status: UnclothyGenerationTaskStatus.running },
+      orderBy: [{ startedAt: 'asc' }, { createdAt: 'asc' }],
+      take: WORKER_BATCH_SIZE,
+    });
 
-  return {
-    started: started.length,
-    advanced,
-    failed,
-    counts: Object.fromEntries(activeCounts.map((entry) => [entry.status, entry._count._all])),
-  };
+    let advanced = 0;
+    let failed = 0;
+
+    for (const task of running) {
+      try {
+        await advanceRunningTask(task);
+        advanced += 1;
+      } catch (error) {
+        await failTask(task, error);
+        failed += 1;
+      }
+    }
+
+    const activeCounts = await prisma.unclothyGenerationTask.groupBy({
+      by: ['status'],
+      where: {
+        status: {
+          in: [UnclothyGenerationTaskStatus.queued, UnclothyGenerationTaskStatus.running, UnclothyGenerationTaskStatus.failed],
+        },
+      },
+      _count: { _all: true },
+    });
+
+    return {
+      started: started.length,
+      advanced,
+      failed,
+      counts: Object.fromEntries(activeCounts.map((entry) => [entry.status, entry._count._all])),
+    };
+  } finally {
+    await prisma.$executeRaw`SELECT pg_advisory_unlock(${WORKER_ADVISORY_LOCK_ID})`;
+  }
 }

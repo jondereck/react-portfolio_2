@@ -104,7 +104,8 @@ export default function GalleryUnclothyTasksPanel({
   hideWhenEmpty = false,
 }) {
   const queued = Array.isArray(queue) ? queue : [];
-  const running = Array.isArray(activeTasks) && activeTasks.length > 0 ? activeTasks : active?.status === 'running' ? [active] : [];
+  const runningAll = Array.isArray(activeTasks) && activeTasks.length > 0 ? activeTasks : active?.status === 'running' ? [active] : [];
+  const running = runningAll.slice(0, 3);
   const failed = Array.isArray(failedTasks) ? failedTasks : active?.phase === 'error' ? [active] : [];
   const hasTasks = running.length > 0 || queued.length > 0 || failed.length > 0;
 
@@ -121,14 +122,16 @@ export default function GalleryUnclothyTasksPanel({
 
   return (
     <div className="space-y-4">
-      {running.length > 0 ? (
-        <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Currently running</p>
-              <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">{running.length} of 3 active</p>
-            </div>
-          </div>
+       {running.length > 0 ? (
+         <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+           <div className="flex items-start justify-between gap-3">
+             <div>
+               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Currently running</p>
+               <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
+                 {Math.min(runningAll.length, 3)} of 3 active{runningAll.length > 3 ? ` (+${runningAll.length - 3} more)` : ''}
+               </p>
+             </div>
+           </div>
 
           <div className="mt-4 space-y-3">
             {running.map((task) => (

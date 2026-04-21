@@ -7,12 +7,16 @@ export const dynamic = 'force-dynamic';
 
 function isAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET;
-  if (!secret || !secret.trim()) {
-    return false;
+  const authorization = request.headers.get('authorization') || '';
+  if (secret && secret.trim() && authorization === `Bearer ${secret.trim()}`) {
+    return true;
   }
 
-  const authorization = request.headers.get('authorization') || '';
-  return authorization === `Bearer ${secret.trim()}`;
+  if (process.env.VERCEL && request.headers.get('x-vercel-cron') === '1') {
+    return true;
+  }
+
+  return false;
 }
 
 async function handleWorker(request: Request) {
