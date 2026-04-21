@@ -12,6 +12,7 @@ import {
   isPhotoVideo,
   shouldBlurPhoto,
 } from "@/lib/gallery-media";
+import GalleryMediaFilterModal from "@/modules/gallery/admin/cms/GalleryMediaFilterModal";
 import {
   ArrowUpDown,
   ChevronLeft,
@@ -20,6 +21,7 @@ import {
   Pause,
   Play,
   Repeat2,
+  SlidersHorizontal,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -512,6 +514,7 @@ export default function AlbumDetailPage({ params }) {
   const [sort, setSort] = useState("custom");
   const [mediaFilter, setMediaFilter] = useState("all");
   const [density, setDensity] = useState(getInitialDensity);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -702,8 +705,24 @@ export default function AlbumDetailPage({ params }) {
     if (mediaFilter === "videos") {
       return isPhotoVideo(item);
     }
+    if (mediaFilter === "nsfw") {
+      return !isPhotoVideo(item) && shouldBlurPhoto(item, { blurEnabled: true });
+    }
     return true;
   });
+  const activeFilterLabel =
+    {
+      all: "All media",
+      photos: "Photos",
+      videos: "Videos",
+      nsfw: "NSFW images",
+    }[mediaFilter] || "All media";
+  const activeSortLabel =
+    {
+      custom: "Manual",
+      dateAsc: "Oldest first",
+      dateDesc: "Newest first",
+    }[sort] || "Manual";
   const filteredPhotoCount = filteredPhotos.length;
   const handleDownloadAlbumZip = useCallback(async () => {
     if (!album?.id) {
@@ -1848,60 +1867,23 @@ export default function AlbumDetailPage({ params }) {
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 text-sm sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
-            <div className="flex w-full items-center gap-1 overflow-x-auto rounded-full border border-white/25 bg-white/10 p-1 sm:w-auto">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
               <button
                 type="button"
-                onClick={() => setMediaFilter("all")}
-                className={`whitespace-nowrap rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition ${
-                  mediaFilter === "all"
-                    ? "bg-white text-slate-900"
-                    : "text-white/85 hover:bg-white/15"
-                }`}
+                onClick={() => setFilterOpen(true)}
+                className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-white/15 sm:flex-none"
               >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setMediaFilter("photos")}
-                className={`whitespace-nowrap rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition ${
-                  mediaFilter === "photos"
-                    ? "bg-white text-slate-900"
-                    : "text-white/85 hover:bg-white/15"
-                }`}
-              >
-                Photos
-              </button>
-              <button
-                type="button"
-                onClick={() => setMediaFilter("videos")}
-                className={`whitespace-nowrap rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition ${
-                  mediaFilter === "videos"
-                    ? "bg-white text-slate-900"
-                    : "text-white/85 hover:bg-white/15"
-                }`}
-              >
-                Videos
+                <SlidersHorizontal className="h-4 w-4 shrink-0" />
+                <span className="truncate">{activeFilterLabel} / {activeSortLabel}</span>
               </button>
             </div>
-            <label className="sr-only" htmlFor="density-mobile">
-              Density
-            </label>
-            <select
-              id="density-mobile"
-              className="h-10 w-full rounded-md border border-white/30 bg-slate-900/70 px-3 text-sm text-white sm:hidden"
-              value={density}
-              onChange={(event) => setDensity(event.target.value)}
-            >
-              <option value="small">Density: Small</option>
-              <option value="medium">Density: Medium</option>
-              <option value="large">Density: Large</option>
-            </select>
-            <span className="hidden sm:inline">Density:</span>
-            <div className="hidden items-center gap-1 rounded-full border border-white/25 bg-white/10 p-1 sm:flex">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <span className="shrink-0 text-xs uppercase tracking-[0.12em] text-slate-300">Density</span>
+              <div className="flex min-w-0 flex-1 items-center gap-1 rounded-full border border-white/25 bg-white/10 p-1 sm:flex-none">
               <button
                 type="button"
                 onClick={() => setDensity("small")}
-                className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition ${
+                className={`flex-1 rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition sm:flex-none ${
                   density === "small"
                     ? "bg-white text-slate-900"
                     : "text-white/85 hover:bg-white/15"
@@ -1912,7 +1894,7 @@ export default function AlbumDetailPage({ params }) {
               <button
                 type="button"
                 onClick={() => setDensity("medium")}
-                className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition ${
+                className={`flex-1 rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition sm:flex-none ${
                   density === "medium"
                     ? "bg-white text-slate-900"
                     : "text-white/85 hover:bg-white/15"
@@ -1923,7 +1905,7 @@ export default function AlbumDetailPage({ params }) {
               <button
                 type="button"
                 onClick={() => setDensity("large")}
-                className={`rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition ${
+                className={`flex-1 rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition sm:flex-none ${
                   density === "large"
                     ? "bg-white text-slate-900"
                     : "text-white/85 hover:bg-white/15"
@@ -1931,20 +1913,8 @@ export default function AlbumDetailPage({ params }) {
               >
                 Large
               </button>
+              </div>
             </div>
-            <label className="sr-only sm:not-sr-only" htmlFor="sort-media">
-              Sort
-            </label>
-            <select
-              id="sort-media"
-              className="h-10 w-full rounded-md border border-white/30 bg-slate-900/70 px-3 text-sm text-white sm:w-auto"
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-            >
-              <option value="custom">Custom</option>
-              <option value="dateAsc">Date ASC</option>
-              <option value="dateDesc">Date DESC</option>
-            </select>
             <button
               type="button"
               onClick={() => openViewerAt(0, { mode: "slideshow" })}
@@ -2020,6 +1990,21 @@ export default function AlbumDetailPage({ params }) {
             </article>
           ))}
         </section>
+
+        <GalleryMediaFilterModal
+          open={filterOpen}
+          sortMode={sort}
+          mediaFilter={mediaFilter}
+          filterOptions={[
+            { id: "all", title: "All media", description: "Show every media item in this album." },
+            { id: "photos", title: "Photos", description: "Show photos and still image files only." },
+            { id: "videos", title: "Videos", description: "Show video media only." },
+            { id: "nsfw", title: "NSFW images", description: "Show images flagged by the scanner or manual blur mode." },
+          ]}
+          onClose={() => setFilterOpen(false)}
+          onApplySort={setSort}
+          onApplyFilter={setMediaFilter}
+        />
       </div>
       {viewerOpen && activeItem ? (
         <div

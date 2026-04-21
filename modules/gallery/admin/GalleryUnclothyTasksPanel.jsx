@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo } from 'react';
 import { Clock3, Image as ImageIcon, Loader2, TriangleAlert } from 'lucide-react';
 import { getUnclothyGenerationModeLabel } from '@/lib/unclothy-settings';
 
@@ -16,6 +15,7 @@ function phaseLabel(phase) {
   if (phase === 'ingesting') return 'Saving';
   if (phase === 'done') return 'Done';
   if (phase === 'error') return 'Error';
+  if (phase === 'canceled') return 'Canceled';
   return 'Queued';
 }
 
@@ -42,8 +42,59 @@ function TaskRow({ label, sublabel, icon: Icon, onClick, tone = 'default' }) {
   );
 }
 
+function RunningTaskCard({ task, onOpenTask, onCancelActive }) {
+  const percent = clampPercent(task?.percent);
+  const generationMode =
+    getUnclothyGenerationModeLabel(task?.settingsSent) || getUnclothyGenerationModeLabel(task?.settingsSnapshot);
+  const status = task.statusText || phaseLabel(task.phase);
+  const provider = task.providerStatus ? ` (${task.providerStatus})` : '';
+
+  return (
+    <div className="rounded-[22px] border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">{phaseLabel(task.phase)}</p>
+          <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
+            Album {task.albumId} - Image {task.sourcePhotoId}
+            {generationMode ? ` - ${generationMode}` : ''}
+          </p>
+        </div>
+        <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{percent}%</span>
+      </div>
+
+      <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
+        <div className="h-full rounded-full bg-sky-500 transition-[width] duration-500" style={{ width: `${percent}%` }} />
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+        <span className="truncate">{`${status}${provider}`}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            onClick={() => onOpenTask?.({ albumId: task.albumId, sourcePhotoId: task.sourcePhotoId })}
+          >
+            <ImageIcon className="h-3.5 w-3.5" />
+            Open
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            onClick={() => onCancelActive?.(task)}
+          >
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function GalleryUnclothyTasksPanel({
   active,
+  activeTasks,
+  failedTasks,
   queue,
   onOpenTask,
   onCancelActive,
@@ -53,17 +104,9 @@ export default function GalleryUnclothyTasksPanel({
   hideWhenEmpty = false,
 }) {
   const queued = Array.isArray(queue) ? queue : [];
-  const percent = clampPercent(active?.percent);
-  const activeGenerationMode = getUnclothyGenerationModeLabel(active?.settingsSent) || getUnclothyGenerationModeLabel(active?.settingsSnapshot);
-
-  const activeTitle = useMemo(() => {
-    if (!active) return null;
-    const status = active.statusText || phaseLabel(active.phase);
-    const provider = active.providerStatus ? ` (${active.providerStatus})` : '';
-    return `${status}${provider}`;
-  }, [active]);
-
-  const hasTasks = Boolean(active) || queued.length > 0;
+  const running = Array.isArray(activeTasks) && activeTasks.length > 0 ? activeTasks : active?.status === 'running' ? [active] : [];
+  const failed = Array.isArray(failedTasks) ? failedTasks : active?.phase === 'error' ? [active] : [];
+  const hasTasks = running.length > 0 || queued.length > 0 || failed.length > 0;
 
   if (!hasTasks) {
     if (hideWhenEmpty) {
@@ -78,73 +121,57 @@ export default function GalleryUnclothyTasksPanel({
 
   return (
     <div className="space-y-4">
-      {active ? (
+      {running.length > 0 ? (
         <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Currently running</p>
-              <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">{phaseLabel(active.phase)}</p>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Album {active.albumId} • Image {active.sourcePhotoId}
-                {activeGenerationMode ? ` • ${activeGenerationMode}` : ''}
-              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">{running.length} of 3 active</p>
             </div>
-            <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{percent}%</span>
           </div>
 
-          <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-            <div className="h-full rounded-full bg-sky-500 transition-[width] duration-500" style={{ width: `${percent}%` }} />
+          <div className="mt-4 space-y-3">
+            {running.map((task) => (
+              <RunningTaskCard
+                key={task.id || task.queueTaskId}
+                task={task}
+                onOpenTask={onOpenTask}
+                onCancelActive={onCancelActive}
+              />
+            ))}
           </div>
+        </div>
+      ) : null}
 
-          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
-            <span className="truncate">{activeTitle}</span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-              onClick={() => onOpenTask?.({ albumId: active.albumId, sourcePhotoId: active.sourcePhotoId })}
-            >
-              <ImageIcon className="h-3.5 w-3.5" />
-              Open
-            </button>
-          </div>
-
-          {active.phase !== 'error' && active.phase !== 'done' ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                onClick={() => onCancelActive?.()}
-              >
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Cancel
-              </button>
-            </div>
-          ) : null}
-
-          {active.phase === 'error' ? (
-            <div className="mt-3 space-y-2">
-              <div className="flex items-start gap-2 rounded-[22px] border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-100">
-                <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
-                <span className="leading-6">{active.errorMessage || active.statusText || 'Task failed.'}</span>
+      {failed.length > 0 ? (
+        <div className="rounded-[28px] border border-rose-200 bg-rose-50 p-4 shadow-sm dark:border-rose-900/50 dark:bg-rose-950/30">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-rose-700 dark:text-rose-200">Failed</p>
+          <div className="mt-3 space-y-3">
+            {failed.map((task) => (
+              <div key={task.id || task.queueTaskId} className="space-y-2">
+                <div className="flex items-start gap-2 rounded-[22px] border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-100">
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span className="leading-6">{task.errorMessage || task.statusText || 'Task failed.'}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    onClick={() => onDismissActive?.(task)}
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    onClick={() => onRetryActive?.(task)}
+                  >
+                    Retry
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                  onClick={() => onDismissActive?.()}
-                >
-                  Dismiss
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                  onClick={() => onRetryActive?.()}
-                >
-                  Retry
-                </button>
-              </div>
-            </div>
-          ) : null}
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -169,8 +196,8 @@ export default function GalleryUnclothyTasksPanel({
               <TaskRow
                 key={task.queueTaskId || `${task.albumId}:${task.sourcePhotoId}:${task.createdAt || index}`}
                 icon={Clock3}
-                label={`Queued #${index + 1} • Album ${task.albumId}`}
-                sublabel={`Image ${task.sourcePhotoId}${getUnclothyGenerationModeLabel(task.settingsSnapshot) ? ` • ${getUnclothyGenerationModeLabel(task.settingsSnapshot)}` : ''}`}
+                label={`Queued #${index + 1} - Album ${task.albumId}`}
+                sublabel={`Image ${task.sourcePhotoId}${getUnclothyGenerationModeLabel(task.settingsSnapshot) ? ` - ${getUnclothyGenerationModeLabel(task.settingsSnapshot)}` : ''}`}
                 onClick={() => onOpenTask?.({ albumId: task.albumId, sourcePhotoId: task.sourcePhotoId })}
               />
             ))}

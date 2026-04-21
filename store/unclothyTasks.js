@@ -2,52 +2,68 @@
 
 import { useSyncExternalStore } from 'react';
 
-const storageKey = 'unclothy:tasks:v1';
 const listeners = new Set();
+const pollIntervalMs = 3500;
 
 let hydrated = false;
-let running = false;
-let runAbortController = null;
-let activeAbortController = null;
+let polling = false;
+let pollTimer = null;
+let refreshInFlight = false;
+let knownCompletedTaskIds = new Set();
 
 let state = {
+  tasks: [],
   queue: [],
+  activeTasks: [],
+  failedTasks: [],
   active: null,
   lastCompletedAt: null,
   lastCompletedAlbumId: null,
+  loading: false,
+  error: null,
 };
 
 const emitChange = () => {
   listeners.forEach((listener) => listener());
 };
 
-const persist = () => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(
-      storageKey,
-      JSON.stringify({
-        queue: state.queue,
-        active: state.active,
-        lastCompletedAt: state.lastCompletedAt,
-        lastCompletedAlbumId: state.lastCompletedAlbumId,
-      }),
-    );
-  } catch {
-    // ignore
+function normalizeTask(task) {
+  if (!task || typeof task !== 'object') return null;
+  return {
+    ...task,
+    id: typeof task.id === 'string' ? task.id : task.queueTaskId,
+    queueTaskId: typeof task.queueTaskId === 'string' ? task.queueTaskId : task.id,
+    settingsSnapshot: task.settingsSnapshot && typeof task.settingsSnapshot === 'object' ? task.settingsSnapshot : {},
+  };
+}
+
+function deriveTaskState(tasks) {
+  const normalized = Array.isArray(tasks) ? tasks.map(normalizeTask).filter(Boolean) : [];
+  const queue = normalized.filter((task) => task.status === 'queued' || task.phase === 'queued');
+  const activeTasks = normalized.filter((task) => task.status === 'running');
+  const failedTasks = normalized.filter((task) => task.status === 'failed' || task.phase === 'error');
+  const completedTasks = normalized.filter((task) => task.status === 'completed' || task.phase === 'done');
+
+  for (const task of completedTasks) {
+    if (!task.id || knownCompletedTaskIds.has(task.id)) {
+      continue;
+    }
+    knownCompletedTaskIds.add(task.id);
+    state.lastCompletedAt = task.completedAt || Date.now();
+    state.lastCompletedAlbumId = typeof task.albumId === 'number' ? task.albumId : null;
   }
-};
+
+  return {
+    tasks: normalized,
+    queue,
+    activeTasks,
+    failedTasks,
+    active: activeTasks[0] || failedTasks[0] || null,
+  };
+}
 
 const setState = (patch) => {
   state = { ...state, ...patch };
-  persist();
-  emitChange();
-};
-
-const setActive = (patch) => {
-  const next = patch ? { ...(state.active ?? {}), ...patch } : null;
-  state = { ...state, active: next };
-  persist();
   emitChange();
 };
 
@@ -57,409 +73,141 @@ const subscribe = (listener) => {
 };
 
 const getSnapshot = () => ({
-  queue: state.queue,
-  active: state.active,
-  lastCompletedAt: state.lastCompletedAt,
-  lastCompletedAlbumId: state.lastCompletedAlbumId,
+  ...state,
   hydrateFromLocalStorage,
   enqueue,
   clearQueue,
   cancelActive,
+  cancelTask,
   retryActive,
+  retryTask,
   stopTrackingActive,
   startRunner,
+  refreshTasks,
 });
-
-function createQueueTaskId() {
-  try {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID();
-    }
-  } catch {
-    // ignore
-  }
-
-  return `unclothy-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-function normalizeTask(task) {
-  if (!task || typeof task !== 'object') return null;
-  return {
-    ...task,
-    queueTaskId: typeof task.queueTaskId === 'string' && task.queueTaskId.trim() ? task.queueTaskId : createQueueTaskId(),
-    settingsSnapshot: task.settingsSnapshot && typeof task.settingsSnapshot === 'object' ? task.settingsSnapshot : {},
-  };
-}
-
-export function createUnclothyQueueTask({ albumId, sourcePhotoId, settingsSnapshot }) {
-  return {
-    queueTaskId: createQueueTaskId(),
-    albumId,
-    sourcePhotoId,
-    settingsSnapshot: settingsSnapshot && typeof settingsSnapshot === 'object' ? settingsSnapshot : {},
-    createdAt: Date.now(),
-  };
-}
 
 export const useUnclothyTasksStore = (selector = (value) => value) =>
   useSyncExternalStore(subscribe, () => selector(getSnapshot()), () => selector(getSnapshot()));
 
 useUnclothyTasksStore.getState = getSnapshot;
 
+async function parseResponse(response, fallbackMessage) {
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || fallbackMessage);
+  }
+  return payload;
+}
+
+function getResult(payload) {
+  return payload?.result && typeof payload.result === 'object' ? payload.result : payload;
+}
+
 export function hydrateFromLocalStorage() {
-  if (hydrated) return;
   hydrated = true;
-  if (typeof window === 'undefined') return;
+}
+
+export async function refreshTasks() {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
+  setState({ loading: true, error: null });
   try {
-    const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    const nextQueue = Array.isArray(parsed?.queue) ? parsed.queue.map(normalizeTask).filter(Boolean) : [];
-    const nextActive = parsed?.active && typeof parsed.active === 'object' ? normalizeTask(parsed.active) : null;
-    const lastCompletedAt = typeof parsed?.lastCompletedAt === 'number' ? parsed.lastCompletedAt : null;
-    const lastCompletedAlbumId = typeof parsed?.lastCompletedAlbumId === 'number' ? parsed.lastCompletedAlbumId : null;
-    state = { queue: nextQueue, active: nextActive, lastCompletedAt, lastCompletedAlbumId };
-    emitChange();
-  } catch {
-    // ignore
+    const response = await fetch('/api/admin/integrations/unclothy/tasks', { method: 'GET', cache: 'no-store' });
+    const payload = await parseResponse(response, 'Unable to load Unclothy tasks.');
+    const result = getResult(payload);
+    const derived = deriveTaskState(Array.isArray(result?.tasks) ? result.tasks : []);
+    setState({ ...derived, loading: false, error: null });
+  } catch (error) {
+    setState({ loading: false, error: error instanceof Error ? error.message : 'Unable to load Unclothy tasks.' });
+  } finally {
+    refreshInFlight = false;
   }
 }
 
-export function enqueue({ albumId, sourcePhotoId, settingsSnapshot }) {
-  if (!albumId || !sourcePhotoId) return;
+export async function enqueue({ albumId, sourcePhotoId, settingsSnapshot }) {
+  if (!albumId || !sourcePhotoId) return { added: false };
   hydrateFromLocalStorage();
 
-  const next = createUnclothyQueueTask({
-    albumId,
-    sourcePhotoId,
-    settingsSnapshot: settingsSnapshot && typeof settingsSnapshot === 'object' ? settingsSnapshot : {},
+  const response = await fetch('/api/admin/integrations/unclothy/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      albumId,
+      sourcePhotoId,
+      confirmedAdultConsent: true,
+      settings: settingsSnapshot ?? {},
+    }),
   });
-  setState({ queue: [...state.queue, next] });
+  await parseResponse(response, 'Unable to queue Unclothy task.');
+  await refreshTasks();
   startRunner();
   return { added: true };
 }
 
-export function clearQueue() {
-  setState({ queue: [] });
+export async function cancelTask(taskId) {
+  if (!taskId) return;
+  const response = await fetch(`/api/admin/integrations/unclothy/tasks/${encodeURIComponent(taskId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'cancel' }),
+  });
+  await parseResponse(response, 'Unable to cancel Unclothy task.');
+  await refreshTasks();
+}
+
+export async function retryTask(taskId) {
+  if (!taskId) return;
+  const response = await fetch(`/api/admin/integrations/unclothy/tasks/${encodeURIComponent(taskId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'retry' }),
+  });
+  await parseResponse(response, 'Unable to retry Unclothy task.');
+  await refreshTasks();
+  startRunner();
+}
+
+export async function clearQueue() {
+  const queued = [...state.queue];
+  await Promise.all(queued.map((task) => cancelTask(task.id || task.queueTaskId).catch(() => null)));
+  await refreshTasks();
 }
 
 export function stopTrackingActive() {
-  // This does NOT cancel the upstream task; it only stops local tracking.
-  try {
-    activeAbortController?.abort();
-  } catch {
-    // ignore
+  const failed = state.failedTasks[0];
+  if (failed?.id) {
+    void cancelTask(failed.id);
   }
-  activeAbortController = null;
-
-  try {
-    runAbortController?.abort();
-  } catch {
-    // ignore
-  }
-  runAbortController = null;
-  setActive(null);
-  running = false;
 }
 
 export function cancelActive() {
-  try {
-    activeAbortController?.abort();
-  } catch {
-    // ignore
+  const active = state.active;
+  if (active?.id) {
+    void cancelTask(active.id);
   }
-  activeAbortController = null;
-
-  try {
-    runAbortController?.abort();
-  } catch {
-    // ignore
-  }
-  runAbortController = null;
-
-  setActive(null);
-  running = false;
 }
 
 export function retryActive() {
-  hydrateFromLocalStorage();
-  const active = state.active;
-  if (!active || active.phase !== 'error') return;
-
-  const failedPhase = typeof active.failedPhase === 'string' ? active.failedPhase : null;
-  const resumePhase = failedPhase && failedPhase !== 'error' ? failedPhase : 'processing';
-
-  // If we never got a task id (failed during creation), we can't resume provider polling.
-  if (!active.taskId) {
-    const { albumId, sourcePhotoId, settingsSnapshot } = active;
-    setActive(null);
-    running = false;
-    enqueue({ albumId, sourcePhotoId, settingsSnapshot });
-    return;
+  const failed = state.failedTasks[0] || (state.active?.status === 'failed' ? state.active : null);
+  if (failed?.id) {
+    void retryTask(failed.id);
   }
-
-  if (running) return;
-
-  setActive({
-    phase: resumePhase,
-    percent:
-      resumePhase === 'ingesting'
-        ? Math.max(92, Number.isFinite(active.percent) ? active.percent : 92)
-        : Math.max(15, Number.isFinite(active.percent) ? active.percent : 15),
-    statusText: resumePhase === 'ingesting' ? nextStatusText('ingesting', 0) : 'Processing…',
-    errorMessage: null,
-  });
-
-  running = true;
-  runAbortController = new AbortController();
-  void runnerLoop();
-}
-
-const createAbortError = () => {
-  const error = new Error('Aborted');
-  error.name = 'AbortError';
-  return error;
-};
-
-const sleep = (ms, signal) =>
-  new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(createAbortError());
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      if (signal && onAbort) {
-        signal.removeEventListener('abort', onAbort);
-      }
-      resolve();
-    }, ms);
-
-    const onAbort = signal
-      ? () => {
-          clearTimeout(timeoutId);
-          signal.removeEventListener('abort', onAbort);
-          reject(createAbortError());
-        }
-      : null;
-
-    if (signal && onAbort) {
-      signal.addEventListener('abort', onAbort);
-    }
-  });
-
-function isProviderFailedStatus(value) {
-  if (typeof value !== 'string') return false;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized) return false;
-  return normalized.includes('fail') || normalized.includes('error');
-}
-
-function nextStatusText(phase, tick) {
-  if (phase === 'creating') return 'Creating task…';
-  if (phase === 'ingesting') return 'Saving to album…';
-  if (phase !== 'processing') return '';
-  const messages = ['Uploading image…', 'Processing…', 'Working on details…', 'Almost done…'];
-  return messages[tick % messages.length];
-}
-
-function getPayloadResult(payload) {
-  return payload?.result && typeof payload.result === 'object' ? payload.result : {};
-}
-
-function getPayloadMessage(payload, fallback) {
-  return payload?.message || payload?.error || payload?.status_text || fallback;
-}
-
-function bumpPercent(current, { min = 0, max = 100, step = 3 } = {}) {
-  const base = Number.isFinite(current) ? current : min;
-  return Math.max(min, Math.min(max, base + step));
-}
-
-async function runnerLoop() {
-  let statusTick = 0;
-
-  while (running) {
-    hydrateFromLocalStorage();
-
-    if (state.active?.phase === 'error') {
-      running = false;
-      runAbortController = null;
-      activeAbortController = null;
-      return;
-    }
-
-    if (!state.active) {
-      if (state.queue.length === 0) {
-        running = false;
-        runAbortController = null;
-        activeAbortController = null;
-        return;
-      }
-
-      const [next, ...rest] = state.queue;
-      setState({ queue: rest });
-      setActive({
-        taskId: null,
-        phase: 'creating',
-        percent: 7,
-        statusText: 'Creating task…',
-        providerStatus: null,
-        albumId: next.albumId,
-        sourcePhotoId: next.sourcePhotoId,
-        settingsSnapshot: next.settingsSnapshot,
-        queueTaskId: next.queueTaskId,
-        startedAt: Date.now(),
-        errorMessage: null,
-      });
-    }
-
-    const active = state.active;
-    if (!active) {
-      continue;
-    }
-
-    try {
-      if (active.phase === 'creating') {
-        activeAbortController = new AbortController();
-        const response = await fetch('/api/admin/integrations/unclothy/tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            albumId: active.albumId,
-            sourcePhotoId: active.sourcePhotoId,
-            confirmedAdultConsent: true,
-            settings: active.settingsSnapshot ?? {},
-          }),
-          signal: activeAbortController.signal,
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(getPayloadMessage(payload, `Create task failed (${response.status}).`));
-        }
-
-        const result = getPayloadResult(payload);
-        const taskId = result?.task_id;
-        if (!taskId) {
-          throw new Error('Unclothy task id missing from response.');
-        }
-
-        setActive({
-          taskId,
-          settingsSent: result?.settingsSent && typeof result.settingsSent === 'object' ? result.settingsSent : null,
-          phase: 'processing',
-          percent: 15,
-          statusText: 'Processing…',
-          providerStatus: null,
-        });
-      } else if (active.phase === 'processing') {
-        statusTick += 1;
-        setActive({
-          percent: bumpPercent(active.percent, { min: 15, max: 90, step: active.percent < 50 ? 6 : active.percent < 75 ? 4 : 2 }),
-          statusText: nextStatusText('processing', statusTick),
-        });
-
-        activeAbortController = new AbortController();
-        const response = await fetch(`/api/admin/integrations/unclothy/tasks/${encodeURIComponent(active.taskId)}`, {
-          method: 'GET',
-          signal: activeAbortController.signal,
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(getPayloadMessage(payload, `Task status failed (${response.status}).`));
-        }
-
-        const result = getPayloadResult(payload);
-        const providerStatus = result?.status || 'Unknown';
-        const isComplete = Boolean(result?.is_complete);
-        setActive({ providerStatus });
-
-        if (isProviderFailedStatus(providerStatus)) {
-          throw new Error(`Unclothy failed (${providerStatus}).`);
-        }
-
-        if (isComplete) {
-          setActive({ phase: 'ingesting', percent: 92, statusText: nextStatusText('ingesting', statusTick) });
-        } else {
-          await sleep(Math.min(5000, 1500 + statusTick * 250), runAbortController?.signal);
-        }
-      } else if (active.phase === 'ingesting') {
-        activeAbortController = new AbortController();
-        const response = await fetch(
-          `/api/admin/integrations/unclothy/tasks/${encodeURIComponent(active.taskId)}/ingest`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              albumId: active.albumId,
-              sourcePhotoId: active.sourcePhotoId,
-              confirmedAdultConsent: true,
-            }),
-            signal: activeAbortController.signal,
-          },
-        );
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          const message = getPayloadMessage(payload, '');
-          const isNotReady =
-            response.status === 409 && /not\s+(completed|ready)|no\s+output/i.test(message);
-
-          if (isNotReady) {
-            const retries = Number.isFinite(active.ingestRetries) ? active.ingestRetries : 0;
-            if (retries >= 8) {
-              throw new Error(getPayloadMessage(payload, `Ingest failed (${response.status}).`));
-            }
-
-            setActive({
-              phase: 'processing',
-              ingestRetries: retries + 1,
-              percent: Math.max(75, Math.min(90, active.percent ?? 85)),
-              statusText: 'Finalizing outputâ€¦',
-            });
-            await sleep(Math.min(5000, 1200 + retries * 400), runAbortController?.signal);
-            continue;
-          }
-
-          throw new Error(getPayloadMessage(payload, `Ingest failed (${response.status}).`));
-        }
-
-        setActive({ phase: 'done', percent: 100, statusText: 'Saved.', completedAt: Date.now() });
-        setState({
-          lastCompletedAt: Date.now(),
-          lastCompletedAlbumId: active.albumId,
-        });
-        await sleep(1200, runAbortController?.signal);
-        setActive(null);
-      } else if (active.phase === 'done') {
-        setActive(null);
-      } else {
-        await sleep(300, runAbortController?.signal);
-      }
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        activeAbortController = null;
-        runAbortController = null;
-        setActive(null);
-        running = false;
-        return;
-      }
-      const message = error instanceof Error ? error.message : 'Unclothy task failed.';
-      setActive({ phase: 'error', failedPhase: active?.phase ?? null, errorMessage: message, statusText: message });
-      running = false;
-      activeAbortController = null;
-      runAbortController = null;
-      return;
-    }
-  }
-
-  runAbortController = null;
-  activeAbortController = null;
 }
 
 export function startRunner() {
   hydrateFromLocalStorage();
-  if (running) return;
-  running = true;
-  runAbortController = new AbortController();
-  void runnerLoop();
+  if (polling) return;
+  polling = true;
+  void refreshTasks();
+  pollTimer = window.setInterval(() => {
+    void refreshTasks();
+  }, pollIntervalMs);
+}
+
+export function stopRunner() {
+  if (pollTimer) {
+    window.clearInterval(pollTimer);
+  }
+  pollTimer = null;
+  polling = false;
 }

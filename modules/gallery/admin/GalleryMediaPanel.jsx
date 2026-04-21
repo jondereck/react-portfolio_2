@@ -98,13 +98,19 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
   const unclothyQueue = useUnclothyTasksStore((state) => state.queue);
   const unclothyActive = useUnclothyTasksStore((state) => state.active);
+  const unclothyActiveTasks = useUnclothyTasksStore((state) => state.activeTasks);
+  const unclothyFailedTasks = useUnclothyTasksStore((state) => state.failedTasks);
   const startUnclothyRunner = useUnclothyTasksStore((state) => state.startRunner);
   const clearUnclothyQueue = useUnclothyTasksStore((state) => state.clearQueue);
-  const cancelUnclothyActive = useUnclothyTasksStore((state) => state.cancelActive);
-  const retryUnclothyActive = useUnclothyTasksStore((state) => state.retryActive);
-  const dismissUnclothyActive = useUnclothyTasksStore((state) => state.stopTrackingActive);
+  const cancelUnclothyTask = useUnclothyTasksStore((state) => state.cancelTask);
+  const retryUnclothyTask = useUnclothyTasksStore((state) => state.retryTask);
+  const dismissUnclothyTask = useUnclothyTasksStore((state) => state.cancelTask);
 
-  const hasTasks = Boolean(unclothyActive) || (Array.isArray(unclothyQueue) && unclothyQueue.length > 0);
+  const hasTasks =
+    Boolean(unclothyActive) ||
+    (Array.isArray(unclothyActiveTasks) && unclothyActiveTasks.length > 0) ||
+    (Array.isArray(unclothyFailedTasks) && unclothyFailedTasks.length > 0) ||
+    (Array.isArray(unclothyQueue) && unclothyQueue.length > 0);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined;
@@ -160,6 +166,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       { id: 'all', label: 'All' },
       { id: 'images', label: 'Images' },
       { id: 'videos', label: 'Videos' },
+      { id: 'nsfw', label: 'NSFW' },
       { id: 'recent', label: 'Recent' },
       { id: 'manual', label: 'Manual' },
       { id: 'selected', label: `Selected${selectedCount ? ` (${selectedCount})` : ''}` },
@@ -185,7 +192,10 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     return photos.find((photo) => photo.id === firstId) ?? null;
   }, [photos, selectedPhotoIds]);
 
-  const detailsBadge = (unclothyActive ? 1 : 0) + (Array.isArray(unclothyQueue) ? unclothyQueue.length : 0);
+  const detailsBadge =
+    (Array.isArray(unclothyActiveTasks) ? unclothyActiveTasks.length : unclothyActive ? 1 : 0) +
+    (Array.isArray(unclothyFailedTasks) ? unclothyFailedTasks.length : 0) +
+    (Array.isArray(unclothyQueue) ? unclothyQueue.length : 0);
   const mobileTabs = useMemo(
     () => [
       { id: 'media', label: 'Media', icon: Images },
@@ -226,6 +236,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       next = next.filter((photo) => !isVideoMime(photo.mimeType));
     } else if (activeChip === 'videos') {
       next = next.filter((photo) => isVideoMime(photo.mimeType));
+    } else if (activeChip === 'nsfw') {
+      next = next.filter((photo) => !isVideoMime(photo.mimeType) && shouldBlurPhoto(photo, { blurEnabled: true }));
     } else if (activeChip === 'selected') {
       const selectedSet = new Set(selectedPhotoIds);
       next = next.filter((photo) => selectedSet.has(photo.id));
@@ -643,11 +655,13 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
                 <GalleryUnclothyTasksPanel
                   active={unclothyActive}
+                  activeTasks={unclothyActiveTasks}
+                  failedTasks={unclothyFailedTasks}
                   queue={unclothyQueue}
                   onOpenTask={openTask}
-                  onCancelActive={cancelUnclothyActive}
-                  onRetryActive={retryUnclothyActive}
-                  onDismissActive={dismissUnclothyActive}
+                  onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
+                  onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
+                  onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
                   onClearQueue={clearUnclothyQueue}
                   hideWhenEmpty={Boolean(selectedPhoto)}
                 />
@@ -667,11 +681,13 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
               {hasTasks ? (
                 <GalleryUnclothyTasksPanel
                   active={unclothyActive}
+                  activeTasks={unclothyActiveTasks}
+                  failedTasks={unclothyFailedTasks}
                   queue={unclothyQueue}
                   onOpenTask={openTask}
-                  onCancelActive={cancelUnclothyActive}
-                  onRetryActive={retryUnclothyActive}
-                  onDismissActive={dismissUnclothyActive}
+                  onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
+                  onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
+                  onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
                   onClearQueue={clearUnclothyQueue}
                   hideWhenEmpty={false}
                 />
@@ -680,11 +696,13 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           ) : hasTasks ? (
             <GalleryTasksInspectorPanel
               active={unclothyActive}
+              activeTasks={unclothyActiveTasks}
+              failedTasks={unclothyFailedTasks}
               queue={unclothyQueue}
               onOpenTask={openTask}
-              onCancelActive={cancelUnclothyActive}
-              onRetryActive={retryUnclothyActive}
-              onDismissActive={dismissUnclothyActive}
+              onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
+              onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
+              onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
               onClearQueue={clearUnclothyQueue}
             />
           ) : null
@@ -734,6 +752,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       <GalleryMediaFilterModal
         open={filterOpen}
         sortMode={sortMode}
+        mediaFilter={['all', 'images', 'videos', 'nsfw', 'selected'].includes(activeChip) ? activeChip : 'all'}
         onClose={() => setFilterOpen(false)}
         onApplySort={(nextSort) => {
           if (typeof setSortMode === 'function') {
@@ -747,6 +766,17 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
             return 'all';
           });
         }}
+        onApplyFilter={(nextFilter) => {
+          if (!nextFilter) return;
+          setActiveChip(nextFilter);
+        }}
+        filterOptions={[
+          { id: 'all', title: 'All media', description: 'Show every media item in this album.' },
+          { id: 'images', title: 'Images', description: 'Show photos and still image files only.' },
+          { id: 'videos', title: 'Videos', description: 'Show video media only.' },
+          { id: 'nsfw', title: 'NSFW images', description: 'Show images flagged by the scanner or manual blur mode.' },
+          { id: 'selected', title: 'Selected', description: 'Show only the media items currently selected.' },
+        ]}
       />
 
       <GalleryCmsModal

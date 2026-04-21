@@ -172,6 +172,7 @@ model User {
   sessions      Session[]
   profile       Profile?
   auditEvents   AdminAuditEvent[] @relation("AuditActor")
+  unclothyTasks UnclothyGenerationTask[]
 }
 
 model Profile {
@@ -192,9 +193,63 @@ model Profile {
   siteConfig  SiteConfig?
   albums      Album[]
   auditEvents AdminAuditEvent[] @relation("AuditTargetProfile")
+  unclothyTasks UnclothyGenerationTask[]
 
   @@index([isPublic])
   @@index([isPrimary])
+}
+
+enum UnclothyGenerationTaskStatus {
+  queued
+  running
+  completed
+  failed
+  canceled
+}
+
+enum UnclothyGenerationTaskPhase {
+  queued
+  creating
+  processing
+  ingesting
+  done
+  error
+  canceled
+}
+
+model UnclothyGenerationTask {
+  id              String                       @id @default(cuid())
+  userId          String
+  profileId       Int
+  albumId         Int
+  sourcePhotoId   Int
+  providerTaskId  String?
+  status          UnclothyGenerationTaskStatus @default(queued)
+  phase           UnclothyGenerationTaskPhase  @default(queued)
+  percent         Int                          @default(0)
+  providerStatus  String?
+  statusText      String?
+  errorMessage    String?
+  settingsSnapshot Json
+  settingsSent    Json?
+  ingestRetries   Int                          @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  failedAt        DateTime?
+  canceledAt      DateTime?
+  createdPhotoId  Int?
+  createdAt       DateTime                     @default(now())
+  updatedAt       DateTime                     @updatedAt
+  user            User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile         Profile                      @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  album           Album                        @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  sourcePhoto     AlbumPhoto                   @relation(fields: [sourcePhotoId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@index([profileId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([providerTaskId])
+  @@index([albumId, sourcePhotoId])
 }
 
 model Account {
@@ -248,6 +303,7 @@ model Album {
   updatedAt    DateTime    @updatedAt
   profile      Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
   photos       AlbumPhoto[]
+  unclothyTasks UnclothyGenerationTask[]
   coverPhoto   AlbumPhoto? @relation("AlbumCoverPhoto", fields: [coverPhotoId], references: [id], onDelete: SetNull)
 
   @@unique([profileId, slug])
@@ -278,6 +334,7 @@ model AlbumPhoto {
   updatedAt        DateTime        @updatedAt
   album            Album           @relation(fields: [albumId], references: [id], onDelete: Cascade)
   coverForAlbum    Album?          @relation("AlbumCoverPhoto")
+  unclothyTasks    UnclothyGenerationTask[]
 
   @@index([albumId, sortOrder])
   @@index([albumId, dateTaken])

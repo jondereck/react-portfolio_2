@@ -8,6 +8,8 @@ export default function UnclothyTaskNotifier() {
   const hydrate = useUnclothyTasksStore((state) => state.hydrateFromLocalStorage);
   const startRunner = useUnclothyTasksStore((state) => state.startRunner);
   const active = useUnclothyTasksStore((state) => state.active);
+  const activeTasks = useUnclothyTasksStore((state) => state.activeTasks);
+  const failedTasks = useUnclothyTasksStore((state) => state.failedTasks);
   const queue = useUnclothyTasksStore((state) => state.queue);
   const previousPhaseRef = useRef(null);
   const previousTaskIdRef = useRef(null);
@@ -18,8 +20,9 @@ export default function UnclothyTaskNotifier() {
   }, [hydrate, startRunner]);
 
   useEffect(() => {
-    const phase = active?.phase ?? null;
-    const taskId = active?.taskId ?? null;
+    const watchedTask = active || activeTasks?.[0] || failedTasks?.[0] || null;
+    const phase = watchedTask?.phase ?? null;
+    const taskId = watchedTask?.taskId ?? watchedTask?.providerTaskId ?? watchedTask?.id ?? null;
     const previousPhase = previousPhaseRef.current;
     const previousTaskId = previousTaskIdRef.current;
 
@@ -39,11 +42,11 @@ export default function UnclothyTaskNotifier() {
     } else if (phase === 'done') {
       toast.success('Unclothy: saved to album.');
     } else if (phase === 'error') {
-      toast.error('Unclothy failed', { description: active?.errorMessage || 'Task failed.' });
+      toast.error('Unclothy failed', { description: watchedTask?.errorMessage || 'Task failed.' });
     } else if (!phase && queue.length > 0) {
       toast.message('Unclothy: queued', { description: `${queue.length} task(s) waiting.` });
     }
-  }, [active, queue.length]);
+  }, [active, activeTasks, failedTasks, queue.length]);
 
   return null;
 }

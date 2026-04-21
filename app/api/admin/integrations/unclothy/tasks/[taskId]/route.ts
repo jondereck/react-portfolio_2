@@ -2,85 +2,121 @@ import { NextResponse } from 'next/server';
 import { canMutateContent } from '@/lib/auth/roles';
 import { requireAuthActor } from '@/lib/auth/session';
 import { getAdminSettings } from '@/lib/server/admin-settings';
+import { createUnclothyEnvelope, createUnclothySuccessResponse, toUnclothyErrorResponse } from '@/lib/server/unclothy';
 import {
-  createUnclothyEnvelope,
-  createUnclothySuccessResponse,
-  getUnclothyTask,
-  toUnclothyErrorResponse,
-} from '@/lib/server/unclothy';
+  cancelUnclothyQueueTask,
+  getUnclothyQueueTaskForUser,
+  retryUnclothyQueueTask,
+} from '@/lib/server/unclothy-queue';
 
 type RouteContext = { params: Promise<{ taskId: string }> };
 
-function normalizeStatus(value: unknown) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : null;
-}
-
-function inferCompletionFromPayload(payload: any) {
-  const status = normalizeStatus(payload?.result?.status);
-  if (status) {
-    const normalized = status.toLowerCase();
-    if (['completed', 'complete', 'success', 'succeeded', 'done', 'finished'].includes(normalized)) {
-      return true;
-    }
-    if (['failed', 'error'].includes(normalized)) {
-      return true;
-    }
-  }
-
-  const result = payload?.result;
-  if (result && typeof result === 'object') {
-    for (const key of ['base64', 'image_base64', 'output_base64', 'image', 'imageUrl', 'image_url', 'result_url', 'url']) {
-      if (typeof (result as any)[key] === 'string') {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-export async function GET(request: Request, context: RouteContext) {
-  try {
-    const actor = await requireAuthActor(request);
-    if (!canMutateContent(actor.user.role)) {
-      return NextResponse.json(
+async function requireUnclothyActor(request: Request) {
+  const actor = await requireAuthActor(request);
+  if (!canMutateContent(actor.user.role)) {
+    return {
+      actor,
+      response: NextResponse.json(
         createUnclothyEnvelope({
           success: false,
           status: 403,
           message: 'Forbidden',
         }),
         { status: 403 },
-      );
-    }
+      ),
+    };
+  }
 
-    const settings = await getAdminSettings();
-    if (!settings.integrations.unclothyEnabled) {
-      return NextResponse.json(
+  const settings = await getAdminSettings();
+  if (!settings.integrations.unclothyEnabled) {
+    return {
+      actor,
+      response: NextResponse.json(
         createUnclothyEnvelope({
           success: false,
           status: 403,
           message: 'Unclothy integration is disabled.',
         }),
         { status: 403 },
+      ),
+    };
+  }
+
+  return { actor, response: null };
+}
+
+export async function GET(request: Request, context: RouteContext) {
+  try {
+    const { actor, response } = await requireUnclothyActor(request);
+    if (response) return response;
+
+    const { taskId } = await context.params;
+    const task = await getUnclothyQueueTaskForUser(taskId, actor.user.id);
+    if (!task) {
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 404,
+          message: 'Task not found.',
+        }),
+        { status: 404 },
       );
     }
 
-    const { taskId } = await context.params;
-    const payload = await getUnclothyTask(taskId);
-
-    const status = normalizeStatus((payload as any)?.result?.status) ?? 'Unknown';
-    const isComplete = inferCompletionFromPayload(payload as any);
-
-    return createUnclothySuccessResponse({
-      task_id: taskId,
-      status,
-      is_complete: isComplete,
-      raw: payload,
-    }, 200, 'Task is either in progress or completed.');
+    return createUnclothySuccessResponse({ task, task_id: task.id, status: task.status, is_complete: task.status === 'completed' }, 200, 'Task loaded successfully.');
   } catch (error) {
     return toUnclothyErrorResponse(error, 'Unable to load Unclothy task.');
   }
 }
 
+export async function PATCH(request: Request, context: RouteContext) {
+  try {
+    const { actor, response } = await requireUnclothyActor(request);
+    if (response) return response;
+
+    const body = await request.json().catch(() => ({}));
+    const action = typeof body?.action === 'string' ? body.action : '';
+    const { taskId } = await context.params;
+
+    if (action === 'cancel') {
+      const task = await cancelUnclothyQueueTask(taskId, actor.user.id);
+      if (!task) {
+        return NextResponse.json(
+          createUnclothyEnvelope({
+            success: false,
+            status: 404,
+            message: 'Task not found.',
+          }),
+          { status: 404 },
+        );
+      }
+      return createUnclothySuccessResponse({ task }, 200, 'Task canceled successfully.');
+    }
+
+    if (action === 'retry') {
+      const task = await retryUnclothyQueueTask(taskId, actor.user.id);
+      if (!task) {
+        return NextResponse.json(
+          createUnclothyEnvelope({
+            success: false,
+            status: 404,
+            message: 'Failed task not found.',
+          }),
+          { status: 404 },
+        );
+      }
+      return createUnclothySuccessResponse({ task }, 200, 'Task queued for retry.');
+    }
+
+    return NextResponse.json(
+      createUnclothyEnvelope({
+        success: false,
+        status: 400,
+        message: 'Unsupported task action.',
+      }),
+      { status: 400 },
+    );
+  } catch (error) {
+    return toUnclothyErrorResponse(error, 'Unable to update Unclothy task.');
+  }
+}

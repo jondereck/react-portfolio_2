@@ -1,20 +1,19 @@
 import { NextResponse } from 'next/server';
 import { canMutateContent } from '@/lib/auth/roles';
+import { requireAuthActor } from '@/lib/auth/session';
 import { isRateLimited } from '@/lib/server/rate-limit';
-import { getAdminSettings, logAdminAuditEvent } from '@/lib/server/admin-settings';
+import { getAdminSettings } from '@/lib/server/admin-settings';
 import { RequestValidationError } from '@/lib/server/uploads';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import {
   createUnclothyEnvelope,
   createUnclothySuccessResponse,
-  createUnclothyTask,
   getUnclothyTaskSettings,
   toUnclothyErrorResponse,
 } from '@/lib/server/unclothy';
+import { enqueueUnclothyGenerationTask, listUnclothyQueueTasksForUser } from '@/lib/server/unclothy-queue';
 import { unclothyCreateTaskSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
-import { isSafeHttpUrl } from '@/lib/url-safety';
-import { getGoogleDriveAccessTokenForUserOrAny } from '@/lib/auth/google-drive';
 import { sanitizeUnclothyProviderSettings } from '@/lib/unclothy-settings';
 
 async function loadProviderEnumAllowlist() {
@@ -34,107 +33,26 @@ async function loadProviderEnumAllowlist() {
   }
 }
 
-async function fetchSourceImageBytes(imageUrl: string) {
-  if (!isSafeHttpUrl(imageUrl)) {
-    throw new RequestValidationError('Source image URL is invalid.', 400, undefined, 'INVALID_SOURCE_URL');
-  }
-
-  const response = await fetch(imageUrl, { method: 'GET', cache: 'no-store' });
-  if (!response.ok) {
-    throw new RequestValidationError('Unable to fetch source image.', 502, undefined, 'SOURCE_IMAGE_FETCH_FAILED', {
-      upstreamStatus: response.status,
-    });
-  }
-
-  const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-  if (!contentType.startsWith('image/')) {
-    throw new RequestValidationError('Selected media must be an image.', 400, undefined, 'UNSUPPORTED_MEDIA_TYPE', {
-      contentType,
-    });
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return { buffer, contentType };
-}
-
-async function fetchGoogleDriveImageBytes(sourceId: string, actorUserId: string) {
-  let accessToken: string;
+export async function GET(request: Request) {
   try {
-    accessToken = await getGoogleDriveAccessTokenForUserOrAny(actorUserId);
+    const actor = await requireAuthActor(request);
+    if (!canMutateContent(actor.user.role)) {
+      return NextResponse.json(
+        createUnclothyEnvelope({
+          success: false,
+          status: 403,
+          message: 'Forbidden',
+        }),
+        { status: 403 },
+      );
+    }
+
+    const profileId = actor.profile?.id;
+    const tasks = await listUnclothyQueueTasksForUser(actor.user.id, profileId);
+    return createUnclothySuccessResponse({ tasks }, 200, 'Tasks loaded successfully.');
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === 'GOOGLE_DRIVE_NOT_CONNECTED') {
-        throw new RequestValidationError(
-          'Connect Google Drive before generating from imported media.',
-          503,
-          undefined,
-          'GOOGLE_DRIVE_NOT_CONNECTED',
-        );
-      }
-      if (error.message === 'GOOGLE_DRIVE_RECONNECT_REQUIRED') {
-        throw new RequestValidationError(
-          'Google Drive access expired. Reconnect Google Drive and try again.',
-          503,
-          undefined,
-          'GOOGLE_DRIVE_RECONNECT_REQUIRED',
-        );
-      }
-      if (error.message === 'GOOGLE_DRIVE_TOKEN_REFRESH_FAILED') {
-        throw new RequestValidationError(
-          'Unable to refresh Google Drive access. Reconnect Google Drive and try again.',
-          502,
-          undefined,
-          'GOOGLE_DRIVE_TOKEN_REFRESH_FAILED',
-        );
-      }
-      if (error.message === 'GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED') {
-        throw new RequestValidationError(
-          'Google Drive OAuth is not configured.',
-          503,
-          undefined,
-          'GOOGLE_DRIVE_OAUTH_NOT_CONFIGURED',
-        );
-      }
-    }
-
-    throw error;
+    return toUnclothyErrorResponse(error, 'Unable to load Unclothy tasks.');
   }
-
-  const response = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(sourceId)}?alt=media&supportsAllDrives=true`,
-    {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-      cache: 'no-store',
-    },
-  );
-
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new RequestValidationError('Google Drive file not found.', 404, undefined, 'GOOGLE_DRIVE_FILE_NOT_FOUND');
-    }
-    if (response.status === 403) {
-      throw new RequestValidationError('Google Drive file access denied.', 403, undefined, 'GOOGLE_DRIVE_FILE_FORBIDDEN');
-    }
-
-    const message = await response.text().catch(() => '');
-    throw new RequestValidationError(message || 'Unable to load Google Drive media.', 502, undefined, 'GOOGLE_DRIVE_MEDIA_FETCH_FAILED', {
-      upstreamStatus: response.status,
-    });
-  }
-
-  const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-  if (!contentType.startsWith('image/')) {
-    throw new RequestValidationError('Selected media must be an image.', 400, undefined, 'UNSUPPORTED_MEDIA_TYPE', {
-      contentType,
-    });
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const buffer = Buffer.from(arrayBuffer);
-  return { buffer, contentType };
 }
 
 export async function POST(request: Request) {
@@ -177,7 +95,6 @@ export async function POST(request: Request) {
     }
 
     const settingsEnums = await loadProviderEnumAllowlist();
-
     const album = await galleryService.getAlbumById(parsed.albumId, profile.id, true);
     if (!album) {
       return NextResponse.json(
@@ -221,40 +138,16 @@ export async function POST(request: Request) {
       );
     }
 
-    const { buffer } =
-      photo.sourceType === 'gdrive' && photo.sourceId
-        ? await fetchGoogleDriveImageBytes(String(photo.sourceId), actor.user.id)
-        : await fetchSourceImageBytes(photo.imageUrl);
-    const base64 = buffer.toString('base64');
-
-    const created = await createUnclothyTask({
-      base64,
-      settings: nextSettings,
+    const task = await enqueueUnclothyGenerationTask({
+      userId: actor.user.id,
+      profileId: profile.id,
+      albumId: parsed.albumId,
+      sourcePhotoId: parsed.sourcePhotoId,
+      settingsSnapshot: nextSettings,
     });
 
-    const taskId = typeof created?.result?.task_id === 'string' ? created.result.task_id : null;
-    if (!taskId) {
-      throw new RequestValidationError('Unclothy did not return a task id.', 502, undefined, 'UNCLOTHY_INVALID_RESPONSE', {
-        providerPayload: created,
-      });
-    }
-
-    await logAdminAuditEvent({
-      actorUserId: actor.user.id,
-      targetProfileId: profile.id,
-      type: 'unclothy_task_created',
-      targetType: 'gallery_album',
-      targetId: String(parsed.albumId),
-      details: {
-        taskId,
-        albumId: parsed.albumId,
-        sourcePhotoId: parsed.sourcePhotoId,
-        settingsSent: nextSettings,
-      },
-    });
-
-    return createUnclothySuccessResponse({ task_id: taskId, settingsSent: nextSettings }, 201, 'Task created successfully.');
+    return createUnclothySuccessResponse({ task, task_id: task.id, status: 'queued' }, 201, 'Task queued successfully.');
   } catch (error) {
-    return toUnclothyErrorResponse(error, 'Unable to create Unclothy task.');
+    return toUnclothyErrorResponse(error, 'Unable to queue Unclothy task.');
   }
 }

@@ -92,12 +92,13 @@ export default function GalleryUnclothySection({
 
   const queue = useUnclothyTasksStore((state) => state.queue);
   const active = useUnclothyTasksStore((state) => state.active);
+  const activeTasks = useUnclothyTasksStore((state) => state.activeTasks);
+  const failedTasks = useUnclothyTasksStore((state) => state.failedTasks);
   const enqueue = useUnclothyTasksStore((state) => state.enqueue);
   const clearQueue = useUnclothyTasksStore((state) => state.clearQueue);
-  const cancelActive = useUnclothyTasksStore((state) => state.cancelActive);
-  const retryActive = useUnclothyTasksStore((state) => state.retryActive);
+  const cancelTask = useUnclothyTasksStore((state) => state.cancelTask);
+  const retryTask = useUnclothyTasksStore((state) => state.retryTask);
   const startRunner = useUnclothyTasksStore((state) => state.startRunner);
-  const stopTrackingActive = useUnclothyTasksStore((state) => state.stopTrackingActive);
   const lastCompletedAt = useUnclothyTasksStore((state) => state.lastCompletedAt);
   const lastCompletedAlbumId = useUnclothyTasksStore((state) => state.lastCompletedAlbumId);
   const lastCompletedAtRef = useRef(lastCompletedAt);
@@ -207,33 +208,44 @@ export default function GalleryUnclothySection({
 
   const canEnqueue = status.enabled && status.configured && !selectionProblem;
 
-  const percent = typeof active?.percent === 'number' ? Math.max(0, Math.min(100, active.percent)) : 0;
-  const phaseLabel = active?.phase
-    ? active.phase === 'creating'
+  const selectedRunningTask = useMemo(() => {
+    if (!selectedAlbumId || !selectedPhotoId) return null;
+    const candidates = [
+      ...(Array.isArray(activeTasks) ? activeTasks : []),
+      ...(Array.isArray(failedTasks) ? failedTasks : []),
+    ];
+    return candidates.find((task) => task?.albumId === selectedAlbumId && task?.sourcePhotoId === selectedPhotoId) ?? null;
+  }, [activeTasks, failedTasks, selectedAlbumId, selectedPhotoId]);
+
+  const displayTask = selectedRunningTask || active;
+  const percent = typeof displayTask?.percent === 'number' ? Math.max(0, Math.min(100, displayTask.percent)) : 0;
+  const phaseLabel = displayTask?.phase
+    ? displayTask.phase === 'creating'
       ? 'Creating'
-      : active.phase === 'processing'
+      : displayTask.phase === 'processing'
         ? 'Processing'
-        : active.phase === 'ingesting'
+        : displayTask.phase === 'ingesting'
           ? 'Saving'
-          : active.phase === 'done'
+          : displayTask.phase === 'done'
             ? 'Done'
-            : active.phase === 'error'
+            : displayTask.phase === 'error'
               ? 'Error'
               : 'Queued'
     : null;
 
   const isActiveForSelection =
-    Boolean(active?.albumId) &&
-    Boolean(active?.sourcePhotoId) &&
-    active.albumId === selectedAlbumId &&
-    active.sourcePhotoId === selectedPhotoId;
+    Boolean(selectedRunningTask) ||
+    (Boolean(active?.albumId) &&
+      Boolean(active?.sourcePhotoId) &&
+      active.albumId === selectedAlbumId &&
+      active.sourcePhotoId === selectedPhotoId);
 
   const isSelectionQueued = useMemo(() => {
     if (!selectedAlbumId || !selectedPhotoId) return false;
     return Array.isArray(queue) && queue.some((task) => task?.albumId === selectedAlbumId && task?.sourcePhotoId === selectedPhotoId);
   }, [queue, selectedAlbumId, selectedPhotoId]);
 
-  const disableInputs = Boolean(active && active.phase === 'ingesting' && isActiveForSelection);
+  const disableInputs = Boolean(displayTask && displayTask.phase === 'ingesting' && isActiveForSelection);
 
   const basicFields = useMemo(() => ['generationMode', 'bodyType'], []);
   const advancedFields = useMemo(() => ['age', 'breastsSize', 'assSize', 'pussy'], []);
@@ -242,7 +254,7 @@ export default function GalleryUnclothySection({
     ? phaseLabel || 'Queued'
     : isSelectionQueued
       ? 'Queued'
-      : active
+    : displayTask
         ? phaseLabel || 'Queued'
         : !status.enabled
           ? 'Disabled'
@@ -250,11 +262,11 @@ export default function GalleryUnclothySection({
             ? 'Needs setup'
             : 'Ready';
 
-  const quickInfoBadgeTone = active?.phase === 'error'
+  const quickInfoBadgeTone = displayTask?.phase === 'error'
     ? 'error'
-    : active?.phase === 'done'
+    : displayTask?.phase === 'done'
       ? 'done'
-      : active
+      : displayTask
         ? 'active'
         : isSelectionQueued
           ? 'active'
@@ -285,33 +297,33 @@ export default function GalleryUnclothySection({
             : 'bg-sky-500';
 
   const quickInfoStep =
-    active?.phase === 'creating'
+    displayTask?.phase === 'creating'
       ? 1
-      : active?.phase === 'processing'
+      : displayTask?.phase === 'processing'
         ? 2
-        : active?.phase === 'ingesting'
+        : displayTask?.phase === 'ingesting'
           ? 3
-          : active?.phase === 'done'
+          : displayTask?.phase === 'done'
             ? 4
             : null;
   const quickInfoTotalSteps = 4;
   const quickInfoStepDetail =
-    active?.phase === 'creating'
+    displayTask?.phase === 'creating'
       ? 'Creating request'
-      : active?.phase === 'processing'
+      : displayTask?.phase === 'processing'
         ? 'Preparing media'
-        : active?.phase === 'ingesting'
+        : displayTask?.phase === 'ingesting'
           ? 'Saving result'
-          : active?.phase === 'done'
+          : displayTask?.phase === 'done'
             ? 'Complete'
-            : active?.phase === 'error'
+            : displayTask?.phase === 'error'
               ? 'Failed'
               : 'Queued';
 
   const quickInfoEta =
-    active?.phase === 'processing'
+    displayTask?.phase === 'processing'
       ? 'Usually takes less than a minute'
-      : active?.phase === 'creating' || active?.phase === 'ingesting'
+      : displayTask?.phase === 'creating' || displayTask?.phase === 'ingesting'
         ? 'Usually takes a few seconds'
         : 'Ready to generate';
 
@@ -319,7 +331,7 @@ export default function GalleryUnclothySection({
     return buildUnclothyProviderSettingsPayload(settings, settingsEnums);
   }, [settings, settingsEnums]);
 
-  const handleEnqueue = () => {
+  const handleEnqueue = async () => {
     if (!canEnqueue) {
       toast.error(selectionProblem || 'Complete all required fields first.');
       return;
@@ -338,16 +350,21 @@ export default function GalleryUnclothySection({
       // ignore
     }
 
-    const result = enqueue({
-      albumId: selectedAlbumId,
-      sourcePhotoId: selectedPhotoId,
-      settingsSnapshot: {
-        ...settingsPayload,
-      },
-    });
-    startRunner();
-    if (result?.added) {
-      onEnqueued?.();
+    try {
+      const result = await enqueue({
+        albumId: selectedAlbumId,
+        sourcePhotoId: selectedPhotoId,
+        settingsSnapshot: {
+          ...settingsPayload,
+        },
+      });
+      startRunner();
+      if (result?.added) {
+        onEnqueued?.();
+        toast.success('Generation task queued.');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to queue generation task.');
     }
   };
 
@@ -365,8 +382,8 @@ export default function GalleryUnclothySection({
           type="button"
           className={ghostButtonStyles}
           onClick={() => {
-            if (active?.phase === 'error') {
-              stopTrackingActive();
+            if (displayTask?.phase === 'error') {
+              cancelTask?.(displayTask.id || displayTask.queueTaskId);
             }
             loadStatus();
           }}
@@ -401,7 +418,7 @@ export default function GalleryUnclothySection({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quick info</p>
             <h3 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-50">
-              {active ? 'Processing status' : 'Integration status'}
+              {displayTask ? 'Processing status' : 'Integration status'}
             </h3>
           </div>
           <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${quickInfoBadgeClassName}`}>
@@ -414,16 +431,16 @@ export default function GalleryUnclothySection({
           <p className="mt-3 text-sm text-amber-700 dark:text-amber-200">{selectionProblem}</p>
         ) : null}
 
-        {active ? (
+        {displayTask ? (
           <div className="mt-4 rounded-[20px] border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/30">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">{active.statusText || 'Working\u2026'}</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">{displayTask.statusText || 'Working\u2026'}</p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                   {quickInfoStep
                     ? `Step ${quickInfoStep} of ${quickInfoTotalSteps} \u2022 ${quickInfoStepDetail}`
                     : quickInfoStepDetail}
-                  {active.providerStatus ? <span className="ml-1.5">({active.providerStatus})</span> : null}
+                  {displayTask.providerStatus ? <span className="ml-1.5">({displayTask.providerStatus})</span> : null}
                 </p>
               </div>
               <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{percent}%</span>
@@ -463,17 +480,17 @@ export default function GalleryUnclothySection({
           </div>
         </div>
 
-        {active && active.phase !== 'error' && active.phase !== 'done' ? (
+        {displayTask && displayTask.phase !== 'error' && displayTask.phase !== 'done' ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={ghostButtonStyles} onClick={() => cancelActive?.()}>
+            <button type="button" className={ghostButtonStyles} onClick={() => cancelTask?.(displayTask.id || displayTask.queueTaskId)}>
               Cancel
             </button>
           </div>
         ) : null}
 
-        {active?.phase === 'error' ? (
+        {displayTask?.phase === 'error' ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={ghostButtonStyles} onClick={stopTrackingActive}>
+            <button type="button" className={ghostButtonStyles} onClick={() => cancelTask?.(displayTask.id || displayTask.queueTaskId)}>
               Dismiss
             </button>
             <button
@@ -481,7 +498,7 @@ export default function GalleryUnclothySection({
               className={ghostButtonStyles}
               disabled={disableInputs}
               onClick={() => {
-                retryActive?.();
+                retryTask?.(displayTask.id || displayTask.queueTaskId);
               }}
             >
               Retry
@@ -529,7 +546,7 @@ export default function GalleryUnclothySection({
           <p className="mt-3 text-sm text-amber-700 dark:text-amber-200">{selectionProblem}</p>
         ) : null}
 
-        {active ? (
+        {displayTask ? (
           <div className="mt-4 space-y-2">
             <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
               <span className="font-semibold">
@@ -545,9 +562,9 @@ export default function GalleryUnclothySection({
               />
             </div>
             <p className="text-sm text-slate-700 dark:text-slate-200">
-              {active.statusText || 'Working…'}
-              {active.providerStatus ? (
-                <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">({active.providerStatus})</span>
+              {displayTask.statusText || 'Working…'}
+              {displayTask.providerStatus ? (
+                <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">({displayTask.providerStatus})</span>
               ) : null}
             </p>
           </div>
@@ -555,9 +572,9 @@ export default function GalleryUnclothySection({
           <p className="mt-4 text-sm text-slate-700 dark:text-slate-200">{queue.length} task(s) queued.</p>
         ) : null}
 
-        {active?.phase === 'error' ? (
+        {displayTask?.phase === 'error' ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={ghostButtonStyles} onClick={stopTrackingActive}>
+            <button type="button" className={ghostButtonStyles} onClick={() => cancelTask?.(displayTask.id || displayTask.queueTaskId)}>
               Dismiss
             </button>
             <button
@@ -565,7 +582,7 @@ export default function GalleryUnclothySection({
               className={ghostButtonStyles}
               disabled={disableInputs}
               onClick={() => {
-                retryActive?.();
+                retryTask?.(displayTask.id || displayTask.queueTaskId);
               }}
             >
               Retry
@@ -683,7 +700,7 @@ export default function GalleryUnclothySection({
         disabled={!canEnqueue || disableInputs}
         onClick={handleEnqueue}
       >
-        {queue.length > 0 || active ? 'Add to queue' : 'Save changes'}
+        {queue.length > 0 || displayTask ? 'Add to queue' : 'Save changes'}
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm">

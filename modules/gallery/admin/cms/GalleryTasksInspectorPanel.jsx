@@ -4,6 +4,8 @@ import GalleryUnclothyTasksPanel from '@/modules/gallery/admin/GalleryUnclothyTa
 
 export default function GalleryTasksInspectorPanel({
   active,
+  activeTasks,
+  failedTasks,
   queue,
   onOpenTask,
   onCancelActive,
@@ -26,6 +28,8 @@ export default function GalleryTasksInspectorPanel({
         <div className="mt-3">
           <GalleryUnclothyTasksPanel
             active={active}
+            activeTasks={activeTasks}
+            failedTasks={failedTasks}
             queue={queue}
             onOpenTask={onOpenTask}
             onCancelActive={onCancelActive}
@@ -39,4 +43,3 @@ export default function GalleryTasksInspectorPanel({
     </aside>
   );
 }
-
