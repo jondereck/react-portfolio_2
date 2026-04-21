@@ -165,9 +165,10 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const handleOpenPreview = useCallback(
     (photo) => {
       setPreviewPhoto(photo);
-      setPreviewOpenGenerate(Boolean(isDesktop) && photo && !isVideoMime(photo?.mimeType));
+      // Preview should not auto-open generation. Users explicitly open it from the Generate button.
+      setPreviewOpenGenerate(false);
     },
-    [isDesktop],
+    [],
   );
 
   const selectedPhoto =

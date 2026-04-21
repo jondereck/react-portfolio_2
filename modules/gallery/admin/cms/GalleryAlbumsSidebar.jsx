@@ -1,8 +1,8 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, ExternalLink, FolderOpen, Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ExternalLink, Plus } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { buildPublicAlbumHref, getAdminMediaUrl } from '@/app/admin/gallery/utils';
 import { isUnclothyGenerated } from '@/lib/gallery-media';
@@ -44,35 +44,27 @@ export default function GalleryAlbumsSidebar({
         ? `${activeAlbum.mediaCount} items`
         : '');
 
-  const BATCH_SIZE = 12;
-  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
-  const sentinelRef = useRef(null);
+  const pageSize = 10;
+  const [pageIndex, setPageIndex] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(resolvedAlbums.length / pageSize));
 
   useEffect(() => {
     const activeIndex = resolvedAlbums.findIndex((album) => album.id === selectedAlbumId);
     if (activeIndex === -1) return;
-    setVisibleCount((current) => Math.max(current, activeIndex + 1));
+    setPageIndex(Math.floor(activeIndex / pageSize));
   }, [resolvedAlbums, selectedAlbumId]);
 
   useEffect(() => {
-    if (collapsed) return undefined;
-    const sentinel = sentinelRef.current;
-    if (!sentinel || typeof window === 'undefined' || typeof IntersectionObserver === 'undefined') return undefined;
+    setPageIndex((current) => Math.min(current, Math.max(totalPages - 1, 0)));
+  }, [totalPages]);
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry?.isIntersecting) return;
-        setVisibleCount((current) => Math.min(current + BATCH_SIZE, resolvedAlbums.length));
-      },
-      { root: null, rootMargin: '240px 0px', threshold: 0.01 },
-    );
+  const visibleAlbums = useMemo(() => {
+    const start = pageIndex * pageSize;
+    return resolvedAlbums.slice(start, start + pageSize);
+  }, [pageIndex, pageSize, resolvedAlbums]);
 
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [collapsed, resolvedAlbums.length]);
-
-  const visibleAlbums = useMemo(() => resolvedAlbums.slice(0, visibleCount), [resolvedAlbums, visibleCount]);
+  const canGoPrev = pageIndex > 0;
+  const canGoNext = pageIndex < totalPages - 1;
 
   return (
     <>
@@ -137,14 +129,16 @@ export default function GalleryAlbumsSidebar({
             >
               {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </button>
-            <button
-              type="button"
-              onClick={onCreateAlbumClick}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
-              aria-label="Add album"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+            {!collapsed ? (
+              <button
+                type="button"
+                onClick={onCreateAlbumClick}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                aria-label="Add album"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -167,7 +161,6 @@ export default function GalleryAlbumsSidebar({
                 const isActive = album.id === selectedAlbumId;
                 const coverUrl = resolveAlbumCoverUrl(album);
                 const coverPhoto = album?.coverPhoto ?? null;
-                const publicHref = buildPublicAlbumHref(album);
                 const shouldBlurCover = Boolean(coverPhoto) && blurUnclothyGenerated && isUnclothyGenerated(coverPhoto);
 
                 return (
@@ -198,30 +191,10 @@ export default function GalleryAlbumsSidebar({
                           IMG
                         </div>
                       )}
-                      {shouldBlurCover ? (
-                        <div className="pointer-events-none absolute left-1 top-1 rounded-full border border-white/25 bg-black/55 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-white">
-                          NSFW
-                        </div>
-                      ) : null}
                     </button>
-
-                    {publicHref ? (
-                      <Link
-                        href={publicHref}
-                        aria-label="Open album"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="absolute -right-1 -bottom-1 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                        onClick={(event) => event.stopPropagation()}
-                        title="Open album in new tab"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </Link>
-                    ) : null}
                   </div>
                 );
               })}
-              <div ref={sentinelRef} className="h-1" />
             </>
           ) : (
             <>
@@ -317,9 +290,36 @@ export default function GalleryAlbumsSidebar({
                   </div>
                 );
               })}
-              <div ref={sentinelRef} className="h-1" />
             </>
           )}
+
+          {!loadingAlbums && totalPages > 1 ? (
+            <div className={`flex items-center justify-between gap-2 pt-2 ${collapsed ? 'flex-col' : ''}`}>
+              <button
+                type="button"
+                onClick={() => setPageIndex((current) => Math.max(current - 1, 0))}
+                disabled={!canGoPrev}
+                className={`inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 ${collapsed ? 'w-12 px-0' : ''}`}
+                aria-label="Previous albums page"
+              >
+                {collapsed ? <ChevronUp className="h-4 w-4" /> : 'Prev'}
+              </button>
+              {collapsed ? null : (
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Page {pageIndex + 1} / {totalPages}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setPageIndex((current) => Math.min(current + 1, totalPages - 1))}
+                disabled={!canGoNext}
+                className={`inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 ${collapsed ? 'w-12 px-0' : ''}`}
+                aria-label="Next albums page"
+              >
+                {collapsed ? <ChevronDown className="h-4 w-4" /> : 'Next'}
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
     </>

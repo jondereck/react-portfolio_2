@@ -10,10 +10,14 @@ export default function GalleryCmsShell({
   sidebarCollapsed = false,
   embedded = false,
 }) {
-  const sidebarWidth = sidebarCollapsed ? '72px' : '280px';
+  // Tailwind needs these classes to be statically present for arbitrary grid template values.
   const desktopGridColumns = inspector
-    ? `lg:grid-cols-[${sidebarWidth}_minmax(0,1fr)_260px]`
-    : `lg:grid-cols-[${sidebarWidth}_minmax(0,1fr)]`;
+    ? sidebarCollapsed
+      ? 'lg:grid-cols-[104px_minmax(0,1fr)_260px]'
+      : 'lg:grid-cols-[280px_minmax(0,1fr)_260px]'
+    : sidebarCollapsed
+      ? 'lg:grid-cols-[104px_minmax(0,1fr)]'
+      : 'lg:grid-cols-[280px_minmax(0,1fr)]';
 
   const shell = (
     <div className="overflow-hidden bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800 lg:rounded-[28px]">
