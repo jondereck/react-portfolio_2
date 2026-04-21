@@ -230,6 +230,10 @@ model UnclothyGenerationTask {
   providerStatus  String?
   statusText      String?
   errorMessage    String?
+  attempts        Int                          @default(0)
+  nextRunAt       DateTime                     @default(now())
+  lastErrorCode   String?
+  lastErrorAt     DateTime?
   settingsSnapshot Json
   settingsSent    Json?
   ingestRetries   Int                          @default(0)
@@ -248,6 +252,7 @@ model UnclothyGenerationTask {
   @@index([userId, status, createdAt])
   @@index([profileId, status, createdAt])
   @@index([status, createdAt])
+  @@index([status, nextRunAt])
   @@index([providerTaskId])
   @@index([albumId, sourcePhotoId])
 }

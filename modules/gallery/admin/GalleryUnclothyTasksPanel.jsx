@@ -124,11 +124,11 @@ export default function GalleryUnclothyTasksPanel({
     <div className="space-y-4">
        {running.length > 0 ? (
          <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-           <div className="flex items-start justify-between gap-3">
-             <div>
-               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Currently running</p>
-               <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
-                 {Math.min(runningAll.length, 3)} of 3 active{runningAll.length > 3 ? ` (+${runningAll.length - 3} more)` : ''}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Currently running</p>
+              <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">
+                 {runningAll.length} active{runningAll.length > 3 ? ` (showing 3, +${runningAll.length - 3} more)` : ''}
                </p>
              </div>
            </div>
