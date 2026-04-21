@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 
 const LAST_ROUTE_KEY = 'portfolio:last-route';
 const DID_RESTORE_KEY = 'portfolio:did-restore';
@@ -44,28 +44,59 @@ const isSafeInternalPath = (value) => typeof value === 'string' && value.startsW
 export default function PwaRoutePersistence() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const currentPath = useMemo(() => {
-    if (typeof pathname !== 'string') {
-      return null;
-    }
-
-    const queryString = searchParams?.toString?.() ?? '';
-    return queryString ? `${pathname}?${queryString}` : pathname;
-  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
 
-    if (!currentPath || !isSafeInternalPath(currentPath)) {
-      return;
-    }
+    const saveCurrentLocation = () => {
+      const currentPath = `${window.location.pathname}${window.location.search || ''}`;
+      if (!isSafeInternalPath(currentPath)) {
+        return;
+      }
 
-    window.localStorage.setItem(LAST_ROUTE_KEY, currentPath);
-  }, [currentPath]);
+      window.localStorage.setItem(LAST_ROUTE_KEY, currentPath);
+    };
+
+    saveCurrentLocation();
+
+    const handlePopState = () => saveCurrentLocation();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        saveCurrentLocation();
+      }
+    };
+
+    const originalPushState = window.history.pushState;
+    const originalReplaceState = window.history.replaceState;
+
+    window.history.pushState = function pushStateWrapper(...args) {
+      // @ts-ignore - history typings don't match rest args in JS
+      const result = originalPushState.apply(this, args);
+      saveCurrentLocation();
+      return result;
+    };
+
+    window.history.replaceState = function replaceStateWrapper(...args) {
+      // @ts-ignore - history typings don't match rest args in JS
+      const result = originalReplaceState.apply(this, args);
+      saveCurrentLocation();
+      return result;
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('pagehide', saveCurrentLocation);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.history.pushState = originalPushState;
+      window.history.replaceState = originalReplaceState;
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('pagehide', saveCurrentLocation);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -76,7 +107,8 @@ export default function PwaRoutePersistence() {
       return;
     }
 
-    if (pathname !== '/') {
+    const currentPath = `${window.location.pathname}${window.location.search || ''}`;
+    if (window.location.pathname !== '/') {
       return;
     }
 
@@ -96,8 +128,7 @@ export default function PwaRoutePersistence() {
       window.sessionStorage.setItem(DID_RESTORE_KEY, 'true');
       router.replace(lastRoute);
     }
-  }, [currentPath, pathname, router]);
+  }, [router]);
 
   return null;
 }
-

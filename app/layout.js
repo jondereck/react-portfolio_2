@@ -1,5 +1,4 @@
 import '../src/index.css';
-import { Suspense } from 'react';
 import GlobalLoader from '@/components/GlobalLoader';
 import PwaRegistration from '@/components/pwa/PwaRegistration';
 import PwaRoutePersistence from '@/components/pwa/PwaRoutePersistence';
@@ -44,9 +43,7 @@ export default function RootLayout({ children }) {
       <body>
         <GlobalLoader />
         <PwaRegistration />
-        <Suspense fallback={null}>
-          <PwaRoutePersistence />
-        </Suspense>
+        <PwaRoutePersistence />
         <Toaster richColors position="top-right" />
         {children}
       </body>
