@@ -2,6 +2,7 @@ export {
   getPlayableMediaUrl,
   getVideoPosterUrl,
   isPhotoVideo,
+  isUnclothyGenerated,
   isVideoUrl,
 } from '@/lib/gallery-media';
 

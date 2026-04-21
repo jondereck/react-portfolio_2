@@ -10,6 +10,7 @@ import {
   getPlayableMediaUrl,
   getVideoPosterUrl,
   isPhotoVideo,
+  isUnclothyGenerated,
 } from "@/lib/gallery-media";
 import {
   ArrowUpDown,
@@ -548,6 +549,7 @@ export default function AlbumDetailPage({ params }) {
   const [mediaErrors, setMediaErrors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
   const [isAlbumDownloadPending, setIsAlbumDownloadPending] = useState(false);
   const [downloadingPhotoId, setDownloadingPhotoId] = useState(null);
   const activeVideoRef = useRef(null);
@@ -585,6 +587,22 @@ export default function AlbumDetailPage({ params }) {
     const fullPath = query ? `${pathname}?${query}` : pathname;
     window.localStorage.setItem(authLastVisitedPathStorageKey, fullPath);
   }, [pathname, searchParams]);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchJson("/api/gallery/settings")
+      .then((payload) => {
+        if (!mounted) return;
+        setBlurUnclothyGenerated(payload?.blurUnclothyGenerated !== false);
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setBlurUnclothyGenerated(true);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -1982,13 +2000,20 @@ export default function AlbumDetailPage({ params }) {
                   <img
                     src={photo.imageUrl}
                     alt={photo.caption || `Photo ${photo.id}`}
-                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${
+                      blurUnclothyGenerated && isUnclothyGenerated(photo) ? "blur-md" : ""
+                    }`}
                   />
                 )}
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 to-transparent" />
                 {isPhotoVideo(photo) ? (
                   <span className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.13em] text-white">
                     Video
+                  </span>
+                ) : null}
+                {!isPhotoVideo(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo) ? (
+                  <span className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-white">
+                    NSFW
                   </span>
                 ) : null}
               </div>
@@ -2209,7 +2234,7 @@ export default function AlbumDetailPage({ params }) {
               ) : (
                 <div
                   ref={zoomSurfaceRef}
-                  className={`flex h-full w-full items-center justify-center overflow-hidden ${
+                  className={`relative flex h-full w-full items-center justify-center overflow-hidden ${
                     imageZoom.scale > 1 ? "cursor-grab active:cursor-grabbing" : ""
                   }`}
                   onPointerDown={handleImagePointerDown}
@@ -2226,7 +2251,9 @@ export default function AlbumDetailPage({ params }) {
                     key={activeMediaKey}
                     src={activeResolvedSrc}
                     alt={activeItem.caption || `Photo ${activeItem.id}`}
-                    className="max-h-full max-w-full object-contain transition-transform duration-150 ease-out"
+                    className={`max-h-full max-w-full object-contain transition-transform duration-150 ease-out ${
+                      blurUnclothyGenerated && isUnclothyGenerated(activeItem) ? "blur-md" : ""
+                    }`}
                     style={{
                       transform: `translate3d(${imageZoom.x}px, ${imageZoom.y}px, 0) scale(${imageZoom.scale})`,
                     }}
@@ -2243,6 +2270,11 @@ export default function AlbumDetailPage({ params }) {
                       );
                     }}
                   />
+                  {blurUnclothyGenerated && isUnclothyGenerated(activeItem) ? (
+                    <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+                      NSFW
+                    </div>
+                  ) : null}
                 </div>
               )}
               {!showSplitMode &&

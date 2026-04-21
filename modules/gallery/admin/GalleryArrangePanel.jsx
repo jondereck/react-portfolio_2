@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import ConfirmModal from '@/components/ConfirmModal';
 import SortableMediaGrid from '@/app/admin/gallery/components/SortableMediaGrid';
 import GalleryArrangeMobileControls from '@/modules/gallery/admin/GalleryArrangeMobileControls';
@@ -9,6 +9,7 @@ import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import {
   GalleryEmptyState,
+  fetchJson,
   GalleryPageHeader,
   GalleryPanelCard,
   buttonStyles,
@@ -24,6 +25,7 @@ import {
 } from './cms';
 
 export default function GalleryArrangePanel({ controller, embedded = false }) {
+  const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v1';
   const {
     albums,
     selectedAlbum,
@@ -69,6 +71,11 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
   const [albumSwitchOpen, setAlbumSwitchOpen] = useState(false);
   const [movePickerOpen, setMovePickerOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
+  const [manualSidebarCollapsed, setManualSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined;
@@ -82,6 +89,38 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
     mediaQuery.addListener(update);
     return () => mediaQuery.removeListener(update);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(sidebarCollapsedStorageKey, manualSidebarCollapsed ? 'true' : 'false');
+  }, [manualSidebarCollapsed, sidebarCollapsedStorageKey]);
+
+  const loadGallerySettings = useCallback(async () => {
+    try {
+      const payload = await fetchJson('/api/gallery/settings', { method: 'GET' });
+      setBlurUnclothyGenerated(payload?.blurUnclothyGenerated !== false);
+    } catch {
+      setBlurUnclothyGenerated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGallerySettings();
+
+    const onUpdated = () => {
+      void loadGallerySettings();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('gallery:settings-updated', onUpdated);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('gallery:settings-updated', onUpdated);
+      }
+    };
+  }, [loadGallerySettings]);
 
   const firstSelectedPhoto = useMemo(() => {
     const firstId = selectedPhotoIds[0];
@@ -181,6 +220,7 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
 
       <GalleryCmsShell
         embedded={embedded}
+        sidebarCollapsed={manualSidebarCollapsed}
         header={
           <GalleryCmsHeader
             albumName={selectedAlbum?.name || 'Arrange'}
@@ -226,6 +266,9 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
             onMobileFocusSearch={undefined}
             onMobileOpenSwitch={() => setAlbumSwitchOpen(true)}
             showMobileChips={false}
+            blurUnclothyGenerated={blurUnclothyGenerated}
+            collapsed={manualSidebarCollapsed}
+            onToggleCollapsed={() => setManualSidebarCollapsed((current) => !current)}
           />
         }
         mobileTabs={null}

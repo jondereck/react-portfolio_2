@@ -17,6 +17,8 @@ export default function GalleryMediaGrid({
   togglePhotoSelect,
   selectPhotoRange,
   onOpenPreview,
+  inspectorOpen = false,
+  blurUnclothyGenerated = true,
   emptyState,
 }) {
   const orderedIds = useMemo(() => (Array.isArray(photos) ? photos.map((photo) => photo.id) : []), [photos]);
@@ -40,7 +42,7 @@ export default function GalleryMediaGrid({
 
   return (
     <div
-      className={`grid grid-cols-2 gap-3 px-4 pb-6 sm:grid-cols-3 sm:px-5 xl:grid-cols-4 lg:px-6 ${selectedCount > 0 ? 'pb-32 lg:pb-28' : ''}`}
+      className={`grid grid-cols-2 gap-3 px-4 pb-6 sm:grid-cols-3 sm:px-5 lg:px-6 ${inspectorOpen ? 'xl:grid-cols-3' : 'xl:grid-cols-4'} ${selectedCount > 0 ? 'pb-32 lg:pb-28' : ''}`}
       style={{ touchAction: touchSelecting ? 'none' : 'pan-y' }}
       onPointerMove={(event) => {
         if (event.pointerType !== 'touch') return;
@@ -175,6 +177,7 @@ export default function GalleryMediaGrid({
               albumName={albumName}
               selected={selected}
               statusLabel={statusLabel}
+              blurUnclothyGenerated={blurUnclothyGenerated}
               onOpenPreview={() => onOpenPreview?.(photo)}
               onToggleSelect={(event) => {
                 togglePhotoSelect?.(photo.id, { shiftKey: Boolean(event?.shiftKey) });
@@ -186,4 +189,3 @@ export default function GalleryMediaGrid({
     </div>
   );
 }
-

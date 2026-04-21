@@ -9,9 +9,9 @@ import { buttonStyles, fetchJson, ghostButtonStyles, inputStyles } from './galle
 
 const defaultSettings = {
   generationMode: 'naked',
-  bodyType: 'skinny',
-  breastsSize: 'medium',
-  assSize: 'medium',
+  bodyType: 'fit',
+  breastsSize: 'large',
+  assSize: 'large',
   pussy: 'shaved',
   age: 'automatic',
 };

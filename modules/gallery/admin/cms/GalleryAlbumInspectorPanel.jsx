@@ -2,6 +2,7 @@
 
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { getAdminMediaUrl } from '@/app/admin/gallery/utils';
+import { isUnclothyGenerated } from '@/lib/gallery-media';
 
 function resolveAlbumCoverUrl(album) {
   const coverPhoto = album?.coverPhoto ?? null;
@@ -10,7 +11,7 @@ function resolveAlbumCoverUrl(album) {
   return typeof url === 'string' ? url : '';
 }
 
-export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLink, siteOrigin }) {
+export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLink, siteOrigin, blurUnclothyGenerated = true }) {
   if (!album) {
     return (
       <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
@@ -25,6 +26,7 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
 
   const coverUrl = resolveAlbumCoverUrl(album);
   const coverPhoto = album?.coverPhoto ?? null;
+  const shouldBlurCover = Boolean(coverPhoto) && blurUnclothyGenerated && isUnclothyGenerated(coverPhoto);
   const currentCount =
     typeof album?._count?.photos === 'number'
       ? album._count.photos
@@ -44,7 +46,7 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
                 sourceType={coverPhoto?.sourceType}
                 sourceId={coverPhoto?.sourceId}
                 alt={album.name}
-                className="h-full w-full object-cover"
+                className={`h-full w-full object-cover ${shouldBlurCover ? 'blur-md' : ''}`}
                 controls={false}
               />
             ) : (

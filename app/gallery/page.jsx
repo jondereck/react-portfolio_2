@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { getVideoPosterUrl, isPhotoVideo } from '@/lib/gallery-media';
+import { getVideoPosterUrl, isPhotoVideo, isUnclothyGenerated } from '@/lib/gallery-media';
 import { useLoadingStore } from '@/store/loading';
 
 const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
@@ -34,7 +34,9 @@ const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
   return <img src={posterSrc} alt={alt} className={className} />;
 };
 
-const AlbumCover = ({ src, alt, className, fallbackClassName }) => {
+const AlbumCover = ({ photo, alt, className, fallbackClassName, blurUnclothyGenerated = true }) => {
+  const src = typeof photo?.imageUrl === 'string' ? photo.imageUrl : '';
+  const shouldBlur = Boolean(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo);
   if (!src) {
     return <div className={fallbackClassName} />;
   }
@@ -43,7 +45,16 @@ const AlbumCover = ({ src, alt, className, fallbackClassName }) => {
     return <VideoPoster src={src} alt={alt} className={className} fallbackClassName={fallbackClassName} />;
   }
 
-  return <img src={src} alt={alt} className={className} />;
+  return (
+    <>
+      <img src={src} alt={alt} className={joinClassNames(className, shouldBlur ? 'blur-md' : '')} />
+      {shouldBlur ? (
+        <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+          NSFW
+        </div>
+      ) : null}
+    </>
+  );
 };
 
 const normalizeLabel = (album) => {
@@ -101,7 +112,8 @@ const normalizeGalleryAlbum = (album) => {
   };
 };
 
-const resolveAlbumCover = (album) => album?.coverPhoto?.imageUrl || album?.photos?.[0]?.imageUrl || '';
+const resolveAlbumCoverPhoto = (album) => album?.coverPhoto || album?.photos?.[0] || null;
+const resolveAlbumCover = (album) => resolveAlbumCoverPhoto(album)?.imageUrl || '';
 
 const attachAlbumMediaCounts = async (albums) => {
   const withCounts = await Promise.all(
@@ -321,7 +333,7 @@ function CinematicGalleryView({
             >
               <div className="flex snap-x snap-mandatory items-stretch gap-3.5 pr-[24vw] sm:pr-[12vw] lg:pr-0">
                 {previewAlbums.map(({ album, index, order }) => {
-                  const coverImage = resolveAlbumCover(album);
+                  const coverPhoto = resolveAlbumCoverPhoto(album);
                   const albumCounts = getAlbumMediaCounts(album);
                   const isNextUp = order === 0;
 
@@ -337,10 +349,11 @@ function CinematicGalleryView({
                       aria-label={`Show album ${album.name}`}
                     >
                       <AlbumCover
-                        src={coverImage}
+                        photo={coverPhoto}
                         alt={album.name}
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                         fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]"
+                        blurUnclothyGenerated={blurUnclothyGenerated}
                       />
                       <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.9),rgba(2,6,23,0.08)_62%)]" />
                       <div className="absolute inset-x-0 bottom-0 space-y-1.5 p-3.5 sm:p-4">
@@ -427,10 +440,11 @@ function CompactGalleryView({
             >
               <div className="relative aspect-[0.86] overflow-hidden">
                 <AlbumCover
-                  src={resolveAlbumCover(album)}
+                  photo={resolveAlbumCoverPhoto(album)}
                   alt={album.name}
                   className="h-full w-full object-cover transition duration-500 hover:scale-105"
                   fallbackClassName="h-full w-full bg-[linear-gradient(140deg,#475569,#64748b,#334155)]"
+                  blurUnclothyGenerated={blurUnclothyGenerated}
                 />
                 <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(2,6,23,0.9),rgba(2,6,23,0.08)_55%)]" />
                 {isActive ? (
@@ -495,6 +509,7 @@ export default function GalleryPage() {
   const [albums, setAlbums] = useState([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [currentView, setCurrentView] = useState('cinematic');
+  const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isAutoplayPaused, setIsAutoplayPaused] = useState(false);
@@ -526,7 +541,7 @@ export default function GalleryPage() {
     const loadGallery = async () => {
       try {
         const [settingsPayload, albumsPayload] = await Promise.all([
-          fetchJson('/api/admin/settings').catch(() => null),
+          fetchJson('/api/gallery/settings').catch(() => null),
           fetchJson('/api/gallery/albums'),
         ]);
 
@@ -536,7 +551,8 @@ export default function GalleryPage() {
               .sort((left, right) => getAlbumActivityTime(right) - getAlbumActivityTime(left))
           : [];
         const albumsWithCounts = await attachAlbumMediaCounts(publishedAlbums);
-        const resolvedDefaultView = normalizeGalleryView(settingsPayload?.settings?.integrations?.defaultGalleryView);
+        const resolvedDefaultView = normalizeGalleryView(settingsPayload?.defaultGalleryView);
+        setBlurUnclothyGenerated(settingsPayload?.blurUnclothyGenerated !== false);
 
         setAlbums(albumsWithCounts.map((album) => normalizeGalleryAlbum(album)));
         setActiveIndex(0);
@@ -743,10 +759,11 @@ export default function GalleryPage() {
             transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
           >
             <AlbumCover
-              src={activeCover}
+              photo={resolveAlbumCoverPhoto(activeAlbum)}
               alt={activeAlbum?.name || 'Active album'}
               className="h-full w-full object-cover"
               fallbackClassName="h-full w-full bg-[linear-gradient(135deg,#0f172a,#1e293b,#0b1120)]"
+              blurUnclothyGenerated={blurUnclothyGenerated}
             />
           </motion.div>
         ) : (

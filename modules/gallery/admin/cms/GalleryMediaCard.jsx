@@ -2,6 +2,7 @@
 
 import { MoreHorizontal } from 'lucide-react';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
+import { isUnclothyGenerated } from '@/lib/gallery-media';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
@@ -12,11 +13,13 @@ export default function GalleryMediaCard({
   albumName,
   selected,
   statusLabel,
+  blurUnclothyGenerated = true,
   onToggleSelect,
   onOpenPreview,
 }) {
   const title = photo?.caption || photo?.originalFilename || photo?.sourceId || `media_${photo?.id}`;
   const isVideo = isVideoMime(photo?.mimeType);
+  const shouldBlur = Boolean(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo);
 
   return (
     <article
@@ -36,9 +39,14 @@ export default function GalleryMediaCard({
                 sourceType={photo.sourceType}
                 sourceId={photo.sourceId}
                 alt={title}
-                className="h-full w-full object-cover"
+                className={`h-full w-full object-cover ${shouldBlur ? 'blur-md' : ''}`}
                 controls={false}
               />
+            ) : null}
+            {shouldBlur ? (
+              <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-white/25 bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+                NSFW
+              </div>
             ) : null}
           </div>
         </button>

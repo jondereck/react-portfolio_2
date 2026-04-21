@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
+import { isUnclothyGenerated } from '@/lib/gallery-media';
 
 function formatBytes(bytes) {
   if (typeof bytes !== 'number' || Number.isNaN(bytes) || bytes <= 0) return null;
@@ -21,9 +22,10 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
-export default function GalleryInspectorPanel({ photo, album, onClose, children }) {
+export default function GalleryInspectorPanel({ photo, album, onClose, children, blurUnclothyGenerated = true }) {
   const title = photo?.caption || photo?.originalFilename || photo?.sourceId || (photo ? `media_${photo.id}` : '');
   const subtitle = album?.name || '';
+  const shouldBlur = Boolean(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo);
 
   const quickInfo = useMemo(() => {
     if (!photo) return [];
@@ -87,7 +89,7 @@ export default function GalleryInspectorPanel({ photo, album, onClose, children 
               sourceType={photo.sourceType}
               sourceId={photo.sourceId}
               alt={title}
-              className="h-full w-full object-contain"
+              className={`h-full w-full object-contain ${shouldBlur ? 'blur-md' : ''}`}
               controls={false}
             />
           </div>

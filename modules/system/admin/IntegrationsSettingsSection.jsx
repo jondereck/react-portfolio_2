@@ -18,6 +18,7 @@ const emptyState = {
   cloudinaryFolder: '',
   googleDriveImportEnabled: true,
   unclothyEnabled: false,
+  blurUnclothyGenerated: true,
   defaultGalleryView: 'cinematic',
 };
 
@@ -40,6 +41,7 @@ export default function IntegrationsSettingsSection() {
       cloudinaryFolder: data.settings.integrations.cloudinaryFolder ?? '',
       googleDriveImportEnabled: data.settings.integrations.googleDriveImportEnabled !== false,
       unclothyEnabled: data.settings.integrations.unclothyEnabled === true,
+      blurUnclothyGenerated: data.settings.integrations.blurUnclothyGenerated !== false,
       defaultGalleryView: data.settings.integrations.defaultGalleryView === 'compact' ? 'compact' : 'cinematic',
     });
     setFormError('');
@@ -79,6 +81,7 @@ export default function IntegrationsSettingsSection() {
               cloudinaryFolder: integrations.cloudinaryFolder.trim(),
               googleDriveImportEnabled: integrations.googleDriveImportEnabled,
               unclothyEnabled: integrations.unclothyEnabled,
+              blurUnclothyGenerated: integrations.blurUnclothyGenerated,
               defaultGalleryView: integrations.defaultGalleryView,
             },
           }),
@@ -93,6 +96,9 @@ export default function IntegrationsSettingsSection() {
 
       await updatePromise;
       await mutate();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('gallery:settings-updated'));
+      }
     } catch (requestFailure) {
       const nextError = normalizeFormError(requestFailure, 'Unable to update integration settings');
       setFormError(nextError.formError);
@@ -211,6 +217,26 @@ export default function IntegrationsSettingsSection() {
                   Enables the admin-only Unclothy workflow inside Gallery → Media. The API key stays server-side only.
                 </p>
                 <FieldErrorText error={getFieldError(fieldErrors, 'integrations.unclothyEnabled')} />
+              </div>
+            </div>
+
+            <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/40">
+              <div className="space-y-3">
+                <label className="flex items-center justify-between gap-3 text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <span>NSFW blur (Unclothy)</span>
+                  <input
+                    type="checkbox"
+                    checked={integrations.blurUnclothyGenerated}
+                    onChange={(event) => {
+                      setIntegrations((previous) => ({ ...previous, blurUnclothyGenerated: event.target.checked }));
+                      clearField('blurUnclothyGenerated');
+                    }}
+                  />
+                </label>
+                <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  Blurs media when the original filename contains <span className="font-semibold">unclothy</span> (case-insensitive) across admin and gallery pages.
+                </p>
+                <FieldErrorText error={getFieldError(fieldErrors, 'integrations.blurUnclothyGenerated')} />
               </div>
             </div>
 

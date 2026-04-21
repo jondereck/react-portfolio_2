@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Info, Plus, Save, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ConfirmModal from '@/components/ConfirmModal';
-import { GalleryEmptyState, GalleryPanelCard, buttonStyles, ghostButtonStyles, inputStyles } from './galleryAdminShared';
+import { fetchJson, GalleryEmptyState, GalleryPanelCard, buttonStyles, ghostButtonStyles, inputStyles } from './galleryAdminShared';
 import {
   GalleryAlbumInspectorPanel,
   GalleryAlbumSwitchSheet,
@@ -22,11 +22,17 @@ const mobileTabs = [
 ];
 
 export default function GalleryAlbumsPanel({ controller, embedded = false }) {
+  const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v1';
   const [activeTab, setActiveTab] = useState('manage');
   const [createAlbumOpen, setCreateAlbumOpen] = useState(false);
   const [albumSwitchOpen, setAlbumSwitchOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [siteOrigin, setSiteOrigin] = useState('');
+  const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
+  const [manualSidebarCollapsed, setManualSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
+  });
 
   const platformOptions = useMemo(
     () => [
@@ -65,6 +71,40 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
   useEffect(() => {
     setSiteOrigin(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(sidebarCollapsedStorageKey, manualSidebarCollapsed ? 'true' : 'false');
+  }, [manualSidebarCollapsed, sidebarCollapsedStorageKey]);
+
+  const loadGallerySettings = useCallback(async () => {
+    try {
+      const payload = await fetchJson('/api/gallery/settings', { method: 'GET' });
+      setBlurUnclothyGenerated(payload?.blurUnclothyGenerated !== false);
+    } catch {
+      setBlurUnclothyGenerated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGallerySettings();
+  }, [loadGallerySettings]);
+
+  useEffect(() => {
+    const onUpdated = () => {
+      void loadGallerySettings();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('gallery:settings-updated', onUpdated);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('gallery:settings-updated', onUpdated);
+      }
+    };
+  }, [loadGallerySettings]);
 
   const albumCountLabel = useMemo(() => {
     if (!selectedAlbum) return '';
@@ -187,6 +227,7 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
 
       <GalleryCmsShell
         embedded={embedded}
+        sidebarCollapsed={manualSidebarCollapsed}
         header={
           <GalleryCmsHeader
             albumName={selectedAlbum?.name || 'Albums'}
@@ -252,6 +293,9 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
             onMobileFocusSearch={undefined}
             onMobileOpenSwitch={() => setAlbumSwitchOpen(true)}
             showMobileChips={false}
+            blurUnclothyGenerated={blurUnclothyGenerated}
+            collapsed={manualSidebarCollapsed}
+            onToggleCollapsed={() => setManualSidebarCollapsed((current) => !current)}
           />
         }
         mobileTabs={<GalleryMobileTabs activeTab={activeTab} onChange={setActiveTab} tabs={mobileTabs} />}
@@ -262,6 +306,7 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
               photosCount={Array.isArray(photos) ? photos.length : null}
               shareLink={selectedShareLink}
               siteOrigin={siteOrigin}
+              blurUnclothyGenerated={blurUnclothyGenerated}
             />
           ) : null
         }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Images, Info, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,9 @@ import ConfirmModal from '@/components/ConfirmModal';
 import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
 import GalleryDriveImportSection from './GalleryDriveImportSection';
 import GalleryMediaViewer from './GalleryMediaViewer';
-import GalleryUnclothySection from './GalleryUnclothySection';
 import GalleryUnclothyTasksPanel from './GalleryUnclothyTasksPanel';
 import GalleryUploadDropzone from './GalleryUploadDropzone';
-import { GalleryEmptyState, GalleryPageHeader } from './galleryAdminShared';
+import { fetchJson, GalleryEmptyState, GalleryPageHeader } from './galleryAdminShared';
 import {
   GalleryAlbumMovePicker,
   GalleryAlbumsSidebar,
@@ -28,6 +27,7 @@ import {
 } from './cms';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { useUnclothyTasksStore } from '@/store/unclothyTasks';
+import { isUnclothyGenerated } from '@/lib/gallery-media';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
@@ -41,6 +41,7 @@ function getPhotoSearchText(photo) {
 }
 
 export default function GalleryMediaPanel({ controller, embedded = false }) {
+  const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v1';
   const {
     albums,
     selectedAlbum,
@@ -86,6 +87,11 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [activeChip, setActiveChip] = useState('all');
   const [isDesktop, setIsDesktop] = useState(false);
   const [pendingPreviewTask, setPendingPreviewTask] = useState(null);
+  const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
+  const [manualSidebarCollapsed, setManualSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
+  });
 
   const unclothyQueue = useUnclothyTasksStore((state) => state.queue);
   const unclothyActive = useUnclothyTasksStore((state) => state.active);
@@ -112,6 +118,38 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     startUnclothyRunner?.();
   }, [startUnclothyRunner]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(sidebarCollapsedStorageKey, manualSidebarCollapsed ? 'true' : 'false');
+  }, [manualSidebarCollapsed, sidebarCollapsedStorageKey]);
+
+  const loadGallerySettings = useCallback(async () => {
+    try {
+      const payload = await fetchJson('/api/gallery/settings', { method: 'GET' });
+      setBlurUnclothyGenerated(payload?.blurUnclothyGenerated !== false);
+    } catch {
+      setBlurUnclothyGenerated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadGallerySettings();
+
+    const onUpdated = () => {
+      void loadGallerySettings();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('gallery:settings-updated', onUpdated);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('gallery:settings-updated', onUpdated);
+      }
+    };
+  }, [loadGallerySettings]);
+
   const chips = useMemo(
     () => [
       { id: 'all', label: 'All' },
@@ -124,8 +162,17 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     [selectedCount],
   );
 
+  const handleOpenPreview = useCallback(
+    (photo) => {
+      setPreviewPhoto(photo);
+      setPreviewOpenGenerate(Boolean(isDesktop) && photo && !isVideoMime(photo?.mimeType));
+    },
+    [isDesktop],
+  );
+
   const selectedPhoto =
     selectedPhotoIds.length === 1 ? photos.find((photo) => photo.id === selectedPhotoIds[0]) ?? null : null;
+  const effectiveSidebarCollapsed = manualSidebarCollapsed || Boolean(selectedPhoto);
   const firstSelectedPhoto = useMemo(() => {
     const firstId = selectedPhotoIds[0];
     if (!firstId) return null;
@@ -365,6 +412,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
       <GalleryCmsShell
         embedded={embedded}
+        sidebarCollapsed={effectiveSidebarCollapsed}
         header={
           <GalleryCmsHeader
             albumName={selectedAlbum?.name || 'Media'}
@@ -398,6 +446,13 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                 if (typeof document === 'undefined') return;
                 document.getElementById('gallery-media-search')?.focus();
               }, 40);
+            }}
+            blurUnclothyGenerated={blurUnclothyGenerated}
+            collapsed={effectiveSidebarCollapsed}
+            toggleDisabled={Boolean(selectedPhoto)}
+            onToggleCollapsed={() => {
+              if (selectedPhoto) return;
+              setManualSidebarCollapsed((current) => !current);
             }}
           />
         }
@@ -434,7 +489,9 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   selectedPhotoIds={selectedPhotoIds}
                   togglePhotoSelect={togglePhotoSelect}
                   selectPhotoRange={selectPhotoRange}
-                  onOpenPreview={(photo) => setPreviewPhoto(photo)}
+                  onOpenPreview={handleOpenPreview}
+                  inspectorOpen={Boolean(selectedPhoto)}
+                  blurUnclothyGenerated={blurUnclothyGenerated}
                   emptyState={
                     photos.length === 0 ? (
                       <GalleryEmptyState
@@ -523,7 +580,9 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                           sourceType={selectedPhoto.sourceType}
                           sourceId={selectedPhoto.sourceId}
                           alt={selectedPhoto.caption || `media_${selectedPhoto.id}`}
-                          className="h-full w-full object-contain"
+                          className={`h-full w-full object-contain ${
+                            blurUnclothyGenerated && isUnclothyGenerated(selectedPhoto) ? 'blur-md' : ''
+                          }`}
                           controls={false}
                         />
                       </div>
@@ -571,15 +630,12 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         }
         inspector={
           selectedPhoto ? (
-            <GalleryInspectorPanel photo={selectedPhoto} album={selectedAlbum} onClose={clearPhotoSelection}>
-              <GalleryUnclothySection
-                controller={controller}
-                selectedAlbum={selectedAlbum}
-                photo={selectedPhoto}
-                album={selectedAlbum}
-                showPreview={false}
-              />
-            </GalleryInspectorPanel>
+            <GalleryInspectorPanel
+              photo={selectedPhoto}
+              album={selectedAlbum}
+              onClose={clearPhotoSelection}
+              blurUnclothyGenerated={blurUnclothyGenerated}
+            />
           ) : null
         }
         mobileFooterActions={
@@ -732,6 +788,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         album={selectedAlbum}
         openGenerate={previewOpenGenerate}
         onGenerateOpened={() => setPreviewOpenGenerate(false)}
+        blurUnclothyGenerated={blurUnclothyGenerated}
       />
     </div>
   );

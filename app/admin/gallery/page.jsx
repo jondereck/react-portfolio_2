@@ -1,9 +1,10 @@
 import {
   ArrowUpDown,
   FolderOpen,
+  Globe,
   Images,
+  LayoutDashboard,
 } from 'lucide-react';
-import Link from 'next/link';
 import AdminOverviewCard from '@/components/admin/shared/AdminOverviewCard';
 import AdminMetricCard from '@/components/admin/shared/AdminMetricCard';
 import { getCurrentProfile } from '@/lib/auth/session';
@@ -35,6 +36,15 @@ const galleryOverviewCards = [
     badge: 'Order',
     accent: 'amber',
   },
+  {
+    title: 'Advanced Gallery Workspace',
+    description: 'Open the integrated all-in-one gallery workspace for power workflows.',
+    href: buildGalleryRouteHref('workspace'),
+    icon: LayoutDashboard,
+    badge: 'Workspace',
+    accent: 'slate',
+  },
+  
 ];
 
 function formatAlbumHint(totalAlbums) {
@@ -58,20 +68,8 @@ export default async function GalleryAdminPage() {
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <h2 className="text-xl font-semibold">Gallery Module Overview</h2>
         <p className="mt-2 max-w-3xl text-sm text-slate-500">
-          Each card now opens a dedicated route with only the relevant tools visible. The advanced all-in-one workspace remains
-          available separately for power workflows, but it is no longer the default destination.
+          Each card opens a dedicated route with only the relevant tools visible, with shortcuts to both the advanced workspace and the live gallery below.
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Link href="/admin/gallery/workspace" className="inline-flex text-sm font-medium text-sky-600 hover:text-sky-700 dark:text-sky-300 dark:hover:text-sky-200">
-            Open advanced workspace
-          </Link>
-          <Link
-            href="/gallery"
-            className="inline-flex text-sm font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-100"
-          >
-            Open live gallery
-          </Link>
-        </div>
       </section>
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3">

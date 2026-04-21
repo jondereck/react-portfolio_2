@@ -5,6 +5,7 @@ export const defaultAdminIntegrations = {
   cloudinaryFolder: 'portfolio',
   googleDriveImportEnabled: true,
   unclothyEnabled: false,
+  blurUnclothyGenerated: true,
   unclothyAlbumDefaults: {},
   defaultGalleryView: 'cinematic',
 };

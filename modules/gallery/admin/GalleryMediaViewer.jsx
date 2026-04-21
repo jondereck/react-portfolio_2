@@ -5,16 +5,27 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import GalleryUnclothySection from './GalleryUnclothySection';
+import { isUnclothyGenerated } from '@/lib/gallery-media';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
 }
 
-export default function GalleryMediaViewer({ open, photo, onClose, controller, album, openGenerate = false, onGenerateOpened }) {
+export default function GalleryMediaViewer({
+  open,
+  photo,
+  onClose,
+  controller,
+  album,
+  openGenerate = false,
+  onGenerateOpened,
+  blurUnclothyGenerated = true,
+}) {
   const title = photo?.caption || 'Untitled media';
   const canGenerate = Boolean(photo) && !isVideoMime(photo?.mimeType) && Boolean(controller) && Boolean(album);
   const [generateOpen, setGenerateOpen] = useState(false);
   const generateSheetRef = useRef(null);
+  const shouldBlurPreview = Boolean(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo);
 
   useEffect(() => {
     if (!open) {
@@ -77,18 +88,30 @@ export default function GalleryMediaViewer({ open, photo, onClose, controller, a
                       {title}
                     </Dialog.Title>
                   </div>
-                  <button
-                    type="button"
-                    className="hidden h-10 items-center justify-center rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:inline-flex"
-                    onClick={onClose}
-                  >
-                    <X className="size-4" />
-                    <span className="ml-2">Close</span>
-                  </button>
+                  <div className="hidden items-center gap-2 sm:flex">
+                    {canGenerate ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        onClick={() => setGenerateOpen(true)}
+                      >
+                        <Sparkles className="size-4" />
+                        <span className="ml-2">Generate</span>
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                      onClick={onClose}
+                    >
+                      <X className="size-4" />
+                      <span className="ml-2">Close</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-1 bg-slate-100 p-2 dark:bg-slate-950 sm:p-5">
-                  <div className="flex h-full min-h-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-black dark:border-slate-800">
+                  <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-black dark:border-slate-800">
                     {photo ? (
                       <MediaPreview
                         url={photo.imageUrl}
@@ -96,9 +119,14 @@ export default function GalleryMediaViewer({ open, photo, onClose, controller, a
                         sourceType={photo.sourceType}
                         sourceId={photo.sourceId}
                         alt={title}
-                        className="mx-auto block max-h-[58dvh] max-w-[88vw] object-contain sm:max-h-[68dvh] sm:max-w-[78vw] lg:max-h-[66dvh] lg:max-w-[820px]"
+                        className={`mx-auto block max-h-[58dvh] max-w-[88vw] object-contain sm:max-h-[68dvh] sm:max-w-[78vw] lg:max-h-[66dvh] lg:max-w-[820px] ${shouldBlurPreview ? 'blur-md' : ''}`}
                         controls
                       />
+                    ) : null}
+                    {shouldBlurPreview ? (
+                      <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+                        NSFW
+                      </div>
                     ) : null}
                   </div>
                 </div>
@@ -136,21 +164,21 @@ export default function GalleryMediaViewer({ open, photo, onClose, controller, a
                 </div>
 
                 {generateOpen ? (
-                  <div className="sm:hidden">
+                  <>
                     <button
                       type="button"
-                      className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm"
+                      className="fixed inset-0 z-[60] bg-slate-950/40 backdrop-blur-sm"
                       aria-label="Close generate panel"
                       onClick={() => setGenerateOpen(false)}
                     />
                     <div
                       ref={generateSheetRef}
-                      className="fixed inset-x-0 bottom-0 z-50 max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-[28px] border border-slate-200 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] shadow-2xl dark:border-slate-800 dark:bg-slate-950"
+                      className="fixed inset-x-0 bottom-0 z-[60] max-h-[92dvh] overflow-y-auto overscroll-contain rounded-t-[28px] border border-slate-200 bg-white px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:inset-x-auto sm:right-6 sm:top-20 sm:bottom-auto sm:w-[420px] sm:max-h-[calc(92dvh-5.5rem)] sm:rounded-[28px] sm:px-5"
                       style={{ WebkitOverflowScrolling: 'touch' }}
                       role="region"
                       aria-label="Generate settings"
                     >
-                      <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-200 dark:bg-slate-700" />
+                      <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-200 dark:bg-slate-700 sm:hidden" />
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500 dark:text-slate-400">
@@ -182,7 +210,7 @@ export default function GalleryMediaViewer({ open, photo, onClose, controller, a
                         />
                       </div>
                     </div>
-                  </div>
+                  </>
                 ) : null}
               </Dialog.Panel>
             </Transition.Child>

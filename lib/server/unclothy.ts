@@ -289,5 +289,13 @@ export async function createUnclothyTask(input: { base64: string; webhook_url?: 
 export async function getUnclothyTaskSettings() {
   const settingsPath = requireEnv('UNCLOTHY_SETTINGS_PATH') || DEFAULT_SETTINGS_PATH;
   const payload = await unclothyFetchJson<Record<string, unknown>>(settingsPath, { method: 'GET' });
-  return payload?.result ?? {};
+  const result = payload?.result;
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    const nested = (result as Record<string, unknown>).settings;
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      return nested as Record<string, unknown>;
+    }
+    return result as Record<string, unknown>;
+  }
+  return {};
 }
