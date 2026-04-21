@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
-import { isUnclothyGenerated } from '@/lib/gallery-media';
+import { fetchJson } from '@/modules/gallery/admin/galleryAdminShared';
+import { shouldBlurPhoto } from '@/lib/gallery-media';
 
 function formatBytes(bytes) {
   if (typeof bytes !== 'number' || Number.isNaN(bytes) || bytes <= 0) return null;
@@ -22,10 +24,19 @@ function formatDate(value) {
   return date.toLocaleString();
 }
 
-export default function GalleryInspectorPanel({ photo, album, onClose, children, blurUnclothyGenerated = true }) {
+export default function GalleryInspectorPanel({
+  photo,
+  album,
+  onClose,
+  children,
+  blurUnclothyGenerated = true,
+  onPhotoUpdated,
+}) {
   const title = photo?.caption || photo?.originalFilename || photo?.sourceId || (photo ? `media_${photo.id}` : '');
   const subtitle = album?.name || '';
-  const shouldBlur = Boolean(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo);
+  const shouldBlur = Boolean(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated });
+  const [savingBlurMode, setSavingBlurMode] = useState(false);
+  const blurMode = typeof photo?.blurOverride === 'string' && photo.blurOverride.trim() ? photo.blurOverride : 'auto';
 
   const quickInfo = useMemo(() => {
     if (!photo) return [];
@@ -111,6 +122,45 @@ export default function GalleryInspectorPanel({ photo, album, onClose, children,
                   <span className="truncate font-medium text-slate-900 dark:text-slate-50">{row.value}</span>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-3 border-t border-slate-200 pt-3 dark:border-slate-800">
+              <label className="block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                Blur mode
+              </label>
+              <select
+                className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                value={blurMode}
+                disabled={savingBlurMode || !album?.id || !photo?.id}
+                onChange={async (event) => {
+                  const nextValue = event.target.value;
+                  if (!album?.id || !photo?.id) return;
+
+                  setSavingBlurMode(true);
+                  try {
+                    const updated = await fetchJson(`/api/gallery/albums/${album.id}/photos/${photo.id}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ blurOverride: nextValue }),
+                    });
+
+                    if (typeof onPhotoUpdated === 'function') {
+                      onPhotoUpdated(updated);
+                    }
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Unable to update blur mode.');
+                  } finally {
+                    setSavingBlurMode(false);
+                  }
+                }}
+              >
+                <option value="auto">Auto</option>
+                <option value="force_blur">Force blur</option>
+                <option value="force_unblur">Force unblur</option>
+              </select>
+              <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                Auto blurs when filename contains <span className="font-semibold">unclothy</span> or the media is flagged NSFW.
+              </p>
             </div>
           </div>
 

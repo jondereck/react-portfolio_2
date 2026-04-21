@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   areIdListsEqual,
@@ -38,6 +38,7 @@ export function useGalleryAdminController() {
   const [albums, setAlbums] = useState([]);
   const [selectedAlbumId, setSelectedAlbumId] = useState(() => readStoredAlbumId());
   const [photos, setPhotos] = useState([]);
+  const previousPhotoIdsRef = useRef([]);
 
   const [loadingAlbums, setLoadingAlbums] = useState(true);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
@@ -211,14 +212,30 @@ export function useGalleryAdminController() {
   }, [selectedAlbum]);
 
   useEffect(() => {
+    const previousIds = Array.isArray(previousPhotoIdsRef.current) ? previousPhotoIdsRef.current : [];
+    const nextIds = Array.isArray(photos) ? photos.map((photo) => photo?.id).filter(Boolean) : [];
+    const idsUnchanged = areIdListsEqual(nextIds, previousIds);
+
+    previousPhotoIdsRef.current = nextIds;
     setArrangePhotos(photos);
-    setSelectedPhotoIds([]);
-    setSelectionAnchorId(null);
-    setOrderDirty(false);
-    setOrderHistory([]);
-    setDragSnapshotTaken(false);
-    setArrangeDragState({ isDragging: false, draggingCount: 0 });
+
+    if (!idsUnchanged) {
+      setSelectedPhotoIds([]);
+      setSelectionAnchorId(null);
+      setOrderDirty(false);
+      setOrderHistory([]);
+      setDragSnapshotTaken(false);
+      setArrangeDragState({ isDragging: false, draggingCount: 0 });
+    }
   }, [photos]);
+
+  const updatePhotoInState = (updatedPhoto) => {
+    if (!updatedPhoto || !updatedPhoto.id) return;
+
+    setPhotos((current) =>
+      current.map((photo) => (photo.id === updatedPhoto.id ? { ...photo, ...updatedPhoto } : photo)),
+    );
+  };
 
   const selectedAlbumMediaCount = selectedAlbum?._count?.photos ?? photos.length;
 
@@ -829,6 +846,7 @@ export function useGalleryAdminController() {
     setSelectedAlbumId: selectAlbum,
     loadAlbums,
     loadPhotos,
+    updatePhotoInState,
     createAlbumRecord,
     createAlbum,
     deleteAlbum,

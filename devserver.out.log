@@ -1,6 +1,33 @@
+
+> portfolio@0.1.0 dev
+> next dev
+
    ▲ Next.js 15.5.15
-   - Local:        http://localhost:3010
-   - Network:      http://192.168.1.158:3010
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.158:3000
    - Environments: .env
 
  ✓ Starting...
+ ✓ Ready in 2.3s
+ ○ Compiling /admin/integrations ...
+ ✓ Compiled /admin/integrations in 4.2s (996 modules)
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 2.5s (1326 modules)
+ GET /admin/integrations?defaultGalleryView=cinematic 500 in 9424ms
+ GET /admin/integrations?defaultGalleryView=cinematic 500 in 276ms
+ ○ Compiling / ...
+ ✓ Compiled / in 5.5s (2238 modules)
+ GET / 500 in 7157ms
+ GET / 500 in 254ms
+ GET / 500 in 885ms
+ GET / 500 in 265ms
+ GET / 500 in 847ms
+ GET / 500 in 267ms
+ GET / 500 in 118ms
+ GET / 500 in 38ms
+ GET / 500 in 95ms
+ GET / 500 in 31ms
+ GET / 500 in 109ms
+ GET / 500 in 34ms
+ GET / 500 in 111ms
+ GET / 500 in 37ms

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import AdminSectionHeader from '@/components/admin/shared/AdminSectionHeader';
@@ -23,8 +23,18 @@ const emptyState = {
 };
 
 export default function IntegrationsSettingsSection() {
+  const nsfwScanCursorStorageKey = 'gallery:nsfwScanCursor:v1';
   const [integrations, setIntegrations] = useState(emptyState);
   const [saving, setSaving] = useState(false);
+  const scanAbortRef = useRef(null);
+  const [scanState, setScanState] = useState({
+    running: false,
+    processed: 0,
+    flagged: 0,
+    remainingEstimate: null,
+    cursor: null,
+    error: '',
+  });
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState({});
   const { data, error: requestError, isLoading, mutate } = useSWR('/api/admin/settings', fetcher);
@@ -107,6 +117,109 @@ export default function IntegrationsSettingsSection() {
       setSaving(false);
     }
   };
+
+  const stopScan = () => {
+    try {
+      scanAbortRef.current?.abort?.();
+    } catch {
+      // ignore
+    }
+
+    scanAbortRef.current = null;
+    setScanState((current) => ({ ...current, running: false }));
+  };
+
+  const readStoredScanCursor = () => {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(nsfwScanCursorStorageKey);
+    const parsed = Number.parseInt(raw ?? '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  const persistScanCursor = (cursor) => {
+    if (typeof window === 'undefined') return;
+    if (cursor && Number.isFinite(cursor)) {
+      window.localStorage.setItem(nsfwScanCursorStorageKey, String(cursor));
+      return;
+    }
+    window.localStorage.removeItem(nsfwScanCursorStorageKey);
+  };
+
+  const runNsfwScan = async ({ resume = false } = {}) => {
+    if (scanState.running) return;
+
+    setScanState({
+      running: true,
+      processed: 0,
+      flagged: 0,
+      remainingEstimate: null,
+      cursor: resume ? readStoredScanCursor() : null,
+      error: '',
+    });
+
+    const controller = new AbortController();
+    scanAbortRef.current = controller;
+
+    let cursor = resume ? readStoredScanCursor() : null;
+    let processed = 0;
+    let flagged = 0;
+
+    try {
+      // Keep running batches until the endpoint returns no next cursor.
+      // This avoids inventing a separate long-running job system.
+      for (let iteration = 0; iteration < 500; iteration += 1) {
+        const payload = await handleRequest(() =>
+          fetch('/api/admin/gallery/nsfw/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cursor, limit: 20 }),
+            signal: controller.signal,
+          }),
+        );
+
+        const batchProcessed = Number(payload?.processed ?? 0);
+        const batchFlagged = Number(payload?.flagged ?? 0);
+        const nextCursor = payload?.nextCursor ?? null;
+
+        processed += Number.isFinite(batchProcessed) ? batchProcessed : 0;
+        flagged += Number.isFinite(batchFlagged) ? batchFlagged : 0;
+
+        setScanState((current) => ({
+          ...current,
+          running: true,
+          processed,
+          flagged,
+          remainingEstimate: typeof payload?.remainingEstimate === 'number' ? payload.remainingEstimate : current.remainingEstimate,
+          cursor: nextCursor,
+        }));
+
+        persistScanCursor(nextCursor);
+
+        if (!nextCursor || batchProcessed <= 0) {
+          break;
+        }
+
+        cursor = nextCursor;
+      }
+
+      toast.success('NSFW scan completed.');
+      persistScanCursor(null);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        setScanState((current) => ({ ...current, error: 'Scan stopped.' }));
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : 'Unable to scan existing media.';
+      setScanState((current) => ({ ...current, error: message }));
+      toast.error('Unable to scan existing media', { description: message });
+    } finally {
+      scanAbortRef.current = null;
+      setScanState((current) => ({ ...current, running: false }));
+    }
+  };
+
+  const storedScanCursor = readStoredScanCursor();
 
   const statuses = Array.isArray(data?.statuses) ? data.statuses : [];
 
@@ -236,6 +349,51 @@ export default function IntegrationsSettingsSection() {
                 <p className="text-xs leading-5 text-slate-500 dark:text-slate-400">
                   Blurs media when the original filename contains <span className="font-semibold">unclothy</span> (case-insensitive) across admin and gallery pages.
                 </p>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className={buttonStyles}
+                    disabled={saving || isLoading || scanState.running}
+                    onClick={() => runNsfwScan({ resume: false })}
+                  >
+                    {scanState.running ? 'Scanning…' : 'Scan existing media'}
+                  </button>
+                  {storedScanCursor ? (
+                    <button
+                      type="button"
+                      className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
+                      disabled={saving || isLoading || scanState.running}
+                      onClick={() => runNsfwScan({ resume: true })}
+                      title={`Resume from id ${storedScanCursor}`}
+                    >
+                      Resume scan
+                    </button>
+                  ) : null}
+                  {scanState.running ? (
+                    <button
+                      type="button"
+                      className="h-10 rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
+                      onClick={stopScan}
+                    >
+                      Stop
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{scanState.processed}</span> processed ·{' '}
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{scanState.flagged}</span> flagged
+                  {typeof scanState.remainingEstimate === 'number' ? (
+                    <>
+                      {' '}
+                      · ~<span className="font-semibold text-slate-700 dark:text-slate-200">{scanState.remainingEstimate}</span> remaining
+                    </>
+                  ) : null}
+                </div>
+                {scanState.error ? (
+                  <p className="text-xs font-medium text-rose-600 dark:text-rose-300">{scanState.error}</p>
+                ) : null}
                 <FieldErrorText error={getFieldError(fieldErrors, 'integrations.blurUnclothyGenerated')} />
               </div>
             </div>

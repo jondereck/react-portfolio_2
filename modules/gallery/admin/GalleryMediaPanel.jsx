@@ -19,6 +19,7 @@ import {
   GalleryCmsModal,
   GalleryCmsShell,
   GalleryInspectorPanel,
+  GalleryTasksInspectorPanel,
   GalleryMediaGrid,
   GalleryMediaFilterModal,
   GalleryMediaToolbar,
@@ -27,7 +28,7 @@ import {
 } from './cms';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { useUnclothyTasksStore } from '@/store/unclothyTasks';
-import { isUnclothyGenerated } from '@/lib/gallery-media';
+import { shouldBlurPhoto } from '@/lib/gallery-media';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
@@ -58,6 +59,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     uploadFiles,
     createAlbumRecord,
     loadAlbums,
+    updatePhotoInState,
     deleteSelectedPhotos,
     moveSelectedPhotos,
     moveTargetAlbumId,
@@ -100,6 +102,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const cancelUnclothyActive = useUnclothyTasksStore((state) => state.cancelActive);
   const retryUnclothyActive = useUnclothyTasksStore((state) => state.retryActive);
   const dismissUnclothyActive = useUnclothyTasksStore((state) => state.stopTrackingActive);
+
+  const hasTasks = Boolean(unclothyActive) || (Array.isArray(unclothyQueue) && unclothyQueue.length > 0);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined;
@@ -575,17 +579,17 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
                     <div className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
                       <div className="aspect-[4/5]">
-                        <MediaPreview
-                          url={selectedPhoto.imageUrl}
-                          mimeType={selectedPhoto.mimeType}
-                          sourceType={selectedPhoto.sourceType}
-                          sourceId={selectedPhoto.sourceId}
-                          alt={selectedPhoto.caption || `media_${selectedPhoto.id}`}
-                          className={`h-full w-full object-contain ${
-                            blurUnclothyGenerated && isUnclothyGenerated(selectedPhoto) ? 'blur-md' : ''
-                          }`}
-                          controls={false}
-                        />
+                          <MediaPreview
+                            url={selectedPhoto.imageUrl}
+                            mimeType={selectedPhoto.mimeType}
+                            sourceType={selectedPhoto.sourceType}
+                            sourceId={selectedPhoto.sourceId}
+                            alt={selectedPhoto.caption || `media_${selectedPhoto.id}`}
+                            className={`h-full w-full object-contain ${
+                              shouldBlurPhoto(selectedPhoto, { blurEnabled: blurUnclothyGenerated }) ? 'blur-md' : ''
+                            }`}
+                            controls={false}
+                          />
                       </div>
                       <div className="border-t border-slate-200 p-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
                         {selectedAlbum?.name}
@@ -636,6 +640,30 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
               album={selectedAlbum}
               onClose={clearPhotoSelection}
               blurUnclothyGenerated={blurUnclothyGenerated}
+              onPhotoUpdated={updatePhotoInState}
+            >
+              {hasTasks ? (
+                <GalleryUnclothyTasksPanel
+                  active={unclothyActive}
+                  queue={unclothyQueue}
+                  onOpenTask={openTask}
+                  onCancelActive={cancelUnclothyActive}
+                  onRetryActive={retryUnclothyActive}
+                  onDismissActive={dismissUnclothyActive}
+                  onClearQueue={clearUnclothyQueue}
+                  hideWhenEmpty={false}
+                />
+              ) : null}
+            </GalleryInspectorPanel>
+          ) : hasTasks ? (
+            <GalleryTasksInspectorPanel
+              active={unclothyActive}
+              queue={unclothyQueue}
+              onOpenTask={openTask}
+              onCancelActive={cancelUnclothyActive}
+              onRetryActive={retryUnclothyActive}
+              onDismissActive={dismissUnclothyActive}
+              onClearQueue={clearUnclothyQueue}
             />
           ) : null
         }

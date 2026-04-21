@@ -70,6 +70,37 @@ const getSnapshot = () => ({
   startRunner,
 });
 
+function createQueueTaskId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // ignore
+  }
+
+  return `unclothy-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeTask(task) {
+  if (!task || typeof task !== 'object') return null;
+  return {
+    ...task,
+    queueTaskId: typeof task.queueTaskId === 'string' && task.queueTaskId.trim() ? task.queueTaskId : createQueueTaskId(),
+    settingsSnapshot: task.settingsSnapshot && typeof task.settingsSnapshot === 'object' ? task.settingsSnapshot : {},
+  };
+}
+
+export function createUnclothyQueueTask({ albumId, sourcePhotoId, settingsSnapshot }) {
+  return {
+    queueTaskId: createQueueTaskId(),
+    albumId,
+    sourcePhotoId,
+    settingsSnapshot: settingsSnapshot && typeof settingsSnapshot === 'object' ? settingsSnapshot : {},
+    createdAt: Date.now(),
+  };
+}
+
 export const useUnclothyTasksStore = (selector = (value) => value) =>
   useSyncExternalStore(subscribe, () => selector(getSnapshot()), () => selector(getSnapshot()));
 
@@ -83,8 +114,8 @@ export function hydrateFromLocalStorage() {
     const raw = window.localStorage.getItem(storageKey);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    const nextQueue = Array.isArray(parsed?.queue) ? parsed.queue : [];
-    const nextActive = parsed?.active && typeof parsed.active === 'object' ? parsed.active : null;
+    const nextQueue = Array.isArray(parsed?.queue) ? parsed.queue.map(normalizeTask).filter(Boolean) : [];
+    const nextActive = parsed?.active && typeof parsed.active === 'object' ? normalizeTask(parsed.active) : null;
     const lastCompletedAt = typeof parsed?.lastCompletedAt === 'number' ? parsed.lastCompletedAt : null;
     const lastCompletedAlbumId = typeof parsed?.lastCompletedAlbumId === 'number' ? parsed.lastCompletedAlbumId : null;
     state = { queue: nextQueue, active: nextActive, lastCompletedAt, lastCompletedAlbumId };
@@ -98,20 +129,11 @@ export function enqueue({ albumId, sourcePhotoId, settingsSnapshot }) {
   if (!albumId || !sourcePhotoId) return;
   hydrateFromLocalStorage();
 
-  const isDuplicateQueued = state.queue.some(
-    (task) => task?.albumId === albumId && task?.sourcePhotoId === sourcePhotoId,
-  );
-  const isDuplicateActive = state.active?.albumId === albumId && state.active?.sourcePhotoId === sourcePhotoId;
-  if (isDuplicateQueued || isDuplicateActive) {
-    return { added: false, reason: 'duplicate' };
-  }
-
-  const next = {
+  const next = createUnclothyQueueTask({
     albumId,
     sourcePhotoId,
     settingsSnapshot: settingsSnapshot && typeof settingsSnapshot === 'object' ? settingsSnapshot : {},
-    createdAt: Date.now(),
-  };
+  });
   setState({ queue: [...state.queue, next] });
   startRunner();
   return { added: true };
@@ -286,6 +308,7 @@ async function runnerLoop() {
         albumId: next.albumId,
         sourcePhotoId: next.sourcePhotoId,
         settingsSnapshot: next.settingsSnapshot,
+        queueTaskId: next.queueTaskId,
         startedAt: Date.now(),
         errorMessage: null,
       });

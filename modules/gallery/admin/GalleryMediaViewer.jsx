@@ -5,7 +5,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Sparkles, X } from 'lucide-react';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import GalleryUnclothySection from './GalleryUnclothySection';
-import { isUnclothyGenerated } from '@/lib/gallery-media';
+import { shouldBlurPhoto } from '@/lib/gallery-media';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
@@ -25,7 +25,7 @@ export default function GalleryMediaViewer({
   const canGenerate = Boolean(photo) && !isVideoMime(photo?.mimeType) && Boolean(controller) && Boolean(album);
   const [generateOpen, setGenerateOpen] = useState(false);
   const generateSheetRef = useRef(null);
-  const shouldBlurPreview = Boolean(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo);
+  const shouldBlurPreview = Boolean(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated });
 
   useEffect(() => {
     if (!open) {

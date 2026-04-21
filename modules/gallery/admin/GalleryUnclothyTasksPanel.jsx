@@ -164,10 +164,10 @@ export default function GalleryUnclothyTasksPanel({
           <div className="mt-4 space-y-2">
             {queued.map((task, index) => (
               <TaskRow
-                key={`${task.albumId}:${task.sourcePhotoId}:${task.createdAt || index}`}
+                key={task.queueTaskId || `${task.albumId}:${task.sourcePhotoId}:${task.createdAt || index}`}
                 icon={Clock3}
-                label={`Queued • Album ${task.albumId}`}
-                sublabel={`Image ${task.sourcePhotoId}`}
+                label={`Queued #${index + 1} • Album ${task.albumId}`}
+                sublabel={`Image ${task.sourcePhotoId}${task.settingsSnapshot?.['generation-mode'] ? ` • ${task.settingsSnapshot['generation-mode']}` : ''}`}
                 onClick={() => onOpenTask?.({ albumId: task.albumId, sourcePhotoId: task.sourcePhotoId })}
               />
             ))}

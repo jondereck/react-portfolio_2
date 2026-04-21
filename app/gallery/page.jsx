@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { getVideoPosterUrl, isPhotoVideo, isUnclothyGenerated } from '@/lib/gallery-media';
+import { getVideoPosterUrl, isPhotoVideo, shouldBlurPhoto } from '@/lib/gallery-media';
 import { useLoadingStore } from '@/store/loading';
 
 const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
@@ -36,13 +36,27 @@ const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
 
 const AlbumCover = ({ photo, alt, className, fallbackClassName, blurUnclothyGenerated = true }) => {
   const src = typeof photo?.imageUrl === 'string' ? photo.imageUrl : '';
-  const shouldBlur = Boolean(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo);
+  const shouldBlur = Boolean(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated });
   if (!src) {
     return <div className={fallbackClassName} />;
   }
 
   if (isPhotoVideo({ imageUrl: src })) {
-    return <VideoPoster src={src} alt={alt} className={className} fallbackClassName={fallbackClassName} />;
+    return (
+      <>
+        <VideoPoster
+          src={src}
+          alt={alt}
+          className={joinClassNames(className, shouldBlur ? 'blur-md' : '')}
+          fallbackClassName={fallbackClassName}
+        />
+        {shouldBlur ? (
+          <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
+            NSFW
+          </div>
+        ) : null}
+      </>
+    );
   }
 
   return (

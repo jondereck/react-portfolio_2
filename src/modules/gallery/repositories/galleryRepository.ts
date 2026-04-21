@@ -11,6 +11,10 @@ export const photoSelect = {
   originalFilename: true,
   mimeType: true,
   fileSizeBytes: true,
+  nsfwDetected: true,
+  nsfwDetectedAt: true,
+  nsfwScores: true,
+  blurOverride: true,
   caption: true,
   dateTaken: true,
   uploadedAt: true,
@@ -233,6 +237,10 @@ export class GalleryRepository {
     originalFilename?: string;
     mimeType?: string;
     fileSizeBytes?: number;
+    nsfwDetected?: boolean | null;
+    nsfwDetectedAt?: Date;
+    nsfwScores?: Prisma.InputJsonValue;
+    blurOverride?: string;
     caption?: string;
     dateTaken?: Date;
     sourceType?: PhotoSourceType;
@@ -253,6 +261,10 @@ export class GalleryRepository {
         originalFilename: data.originalFilename ?? null,
         mimeType: data.mimeType ?? null,
         fileSizeBytes: data.fileSizeBytes ?? null,
+        nsfwDetected: data.nsfwDetected ?? null,
+        nsfwDetectedAt: data.nsfwDetectedAt,
+        nsfwScores: data.nsfwScores ?? undefined,
+        blurOverride: (data.blurOverride ?? 'auto') || 'auto',
         caption: data.caption ?? null,
         dateTaken: data.dateTaken,
         sourceType: data.sourceType ?? PhotoSourceType.upload,
@@ -266,6 +278,22 @@ export class GalleryRepository {
   async deleteAlbumPhoto(albumId: number, photoId: number) {
     await prisma.albumPhoto.deleteMany({
       where: { id: photoId, albumId },
+    });
+  }
+
+  async updateAlbumPhotoBlurOverride(albumId: number, photoId: number, blurOverride: string) {
+    const result = await prisma.albumPhoto.updateMany({
+      where: { id: photoId, albumId },
+      data: { blurOverride },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    return prisma.albumPhoto.findFirst({
+      where: { id: photoId, albumId },
+      select: photoSelect,
     });
   }
 

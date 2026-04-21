@@ -2,7 +2,7 @@
 
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { getAdminMediaUrl } from '@/app/admin/gallery/utils';
-import { isUnclothyGenerated } from '@/lib/gallery-media';
+import { shouldBlurPhoto } from '@/lib/gallery-media';
 
 function resolveAlbumCoverUrl(album) {
   const coverPhoto = album?.coverPhoto ?? null;
@@ -26,7 +26,7 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
 
   const coverUrl = resolveAlbumCoverUrl(album);
   const coverPhoto = album?.coverPhoto ?? null;
-  const shouldBlurCover = Boolean(coverPhoto) && blurUnclothyGenerated && isUnclothyGenerated(coverPhoto);
+  const shouldBlurCover = Boolean(coverPhoto) && shouldBlurPhoto(coverPhoto, { blurEnabled: blurUnclothyGenerated });
   const currentCount =
     typeof album?._count?.photos === 'number'
       ? album._count.photos

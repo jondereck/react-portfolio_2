@@ -5,47 +5,14 @@ import { Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { useUnclothyTasksStore } from '@/store/unclothyTasks';
-import { buttonStyles, fetchJson, ghostButtonStyles, inputStyles } from './galleryAdminShared';
-
-const defaultSettings = {
-  generationMode: 'naked',
-  bodyType: 'fit',
-  breastsSize: 'large',
-  assSize: 'large',
-  pussy: 'shaved',
-  age: 'automatic',
-};
-
-const fallbackEnumOptions = {
-  generationMode: ['naked', 'swimsuit', 'underwear', 'latex', 'bondage'],
-  bodyType: ['skinny', 'fit', 'athletic', 'curvy'],
-  breastsSize: ['small', 'medium', 'large'],
-  assSize: ['small', 'medium', 'large'],
-  pussy: ['shaved', 'normal', 'hairy'],
-  age: ['automatic', '18', '25', '35', '45'],
-};
-
-function normalizeEnumOptions(value) {
-  if (Array.isArray(value)) {
-    return value.map(String).filter(Boolean);
-  }
-
-  if (value && typeof value === 'object') {
-    const options = value.options;
-    if (Array.isArray(options)) {
-      return options.map(String).filter(Boolean);
-    }
-  }
-
-  return null;
-}
-
-function compareEnumKey(value) {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
-}
+import { fetchJson, ghostButtonStyles } from './galleryAdminShared';
+import {
+  buildUnclothyProviderSettingsPayload,
+  getUnclothyOptionsForUiKey,
+  isAutomaticUnclothyAgeOption,
+  normalizeUnclothyUiSettings,
+  unclothyDefaultUiSettings,
+} from '@/lib/unclothy-settings';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
@@ -69,27 +36,6 @@ function isProbablyImage(photo) {
   return inferImageFromUrl(photo.imageUrl);
 }
 
-function isAutomaticAgeOption(value) {
-  if (typeof value !== 'string') return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === 'automatic' || normalized === 'auto';
-}
-
-function isExplicitAdultAgeOption(value) {
-  if (typeof value !== 'string') return false;
-  const normalized = value.trim().toLowerCase();
-  if (!normalized || isAutomaticAgeOption(normalized)) {
-    return false;
-  }
-
-  const asNumber = Number.parseInt(normalized, 10);
-  if (Number.isFinite(asNumber)) {
-    return asNumber >= 18;
-  }
-
-  return normalized.includes('adult') || normalized.includes('mature');
-}
-
 function humanizeEnumOption(key, option) {
   const raw = String(option ?? '').trim();
   if (!raw) return '';
@@ -106,7 +52,7 @@ function humanizeEnumOption(key, option) {
   }
 
   if (key === 'age') {
-    if (isAutomaticAgeOption(normalized)) return 'Automatic';
+    if (isAutomaticUnclothyAgeOption(normalized)) return 'Automatic';
     return raw;
   }
 
@@ -141,7 +87,7 @@ export default function GalleryUnclothySection({
     settingsEnums: {},
     warnings: [],
   });
-  const [settings, setSettings] = useState(defaultSettings);
+  const [settings, setSettings] = useState(unclothyDefaultUiSettings);
   const [confirmed, setConfirmed] = useState(false);
   const [autoRefreshedAt, setAutoRefreshedAt] = useState(null);
 
@@ -202,103 +148,20 @@ export default function GalleryUnclothySection({
     void loadStatus();
   }, [controller, lastCompletedAlbumId, lastCompletedAt, loadStatus, selectedAlbumId]);
 
-  const enumOptionsByKey = useMemo(() => {
-    const result = {};
-    const enums = status.settingsEnums && typeof status.settingsEnums === 'object' ? status.settingsEnums : {};
-    for (const [key, value] of Object.entries(enums)) {
-      const normalized = normalizeEnumOptions(value);
-      if (normalized && normalized.length > 0) {
-        result[key] = normalized;
-      }
-    }
-    return result;
-  }, [status.settingsEnums]);
-
-  const providerKeyByUiKey = useMemo(() => {
-    const normalizedToProviderKey = new Map();
-    for (const providerKey of Object.keys(enumOptionsByKey)) {
-      const normalizedKey = compareEnumKey(providerKey);
-      if (normalizedKey && !normalizedToProviderKey.has(normalizedKey)) {
-        normalizedToProviderKey.set(normalizedKey, providerKey);
-      }
-    }
-
-    const aliases = {
-      breastsSize: ['breastssize', 'breastsize', 'chestsize'],
-      assSize: ['asssize', 'hipsize', 'hipssize', 'buttsize'],
-    };
-
-    const result = {};
-    for (const uiKey of Object.keys(defaultSettings)) {
-      const normalizedCandidates = [compareEnumKey(uiKey), ...(aliases[uiKey] || [])].filter(Boolean);
-      const resolvedProviderKey = normalizedCandidates
-        .map((candidate) => normalizedToProviderKey.get(candidate))
-        .find((value) => typeof value === 'string' && value);
-      if (resolvedProviderKey) {
-        result[uiKey] = resolvedProviderKey;
-      }
-    }
-
-    return result;
-  }, [enumOptionsByKey]);
+  const settingsEnums = useMemo(() => status.settingsEnums && typeof status.settingsEnums === 'object' ? status.settingsEnums : {}, [status.settingsEnums]);
 
   const getOptions = useCallback(
     (key) => {
-      const providerKey = providerKeyByUiKey[key] || key;
-      const fromProvider = enumOptionsByKey[providerKey];
-      if (Array.isArray(fromProvider) && fromProvider.length > 0) {
-        if (key === 'age') {
-          const allowed = fromProvider.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
-          return allowed.length > 0 ? allowed : fallbackEnumOptions.age;
-        }
-        return fromProvider;
-      }
-
-      if (key === 'age') {
-        const fallback = fallbackEnumOptions.age || [];
-        const allowed = fallback.filter((option) => isAutomaticAgeOption(option) || isExplicitAdultAgeOption(option));
-        return allowed.length > 0 ? allowed : fallback;
-      }
-
-      return fallbackEnumOptions[key] || [];
+      return getUnclothyOptionsForUiKey(key, settingsEnums);
     },
-    [enumOptionsByKey, providerKeyByUiKey],
+    [settingsEnums],
   );
 
   const normalizeSettings = useCallback(
     (candidate) => {
-      const merged = {
-        ...defaultSettings,
-        ...(candidate && typeof candidate === 'object' ? candidate : {}),
-      };
-
-      const normalized = { ...merged };
-      for (const key of Object.keys(defaultSettings)) {
-        const providerKey = providerKeyByUiKey[key];
-        if (
-          candidate &&
-          typeof candidate === 'object' &&
-          providerKey &&
-          normalized[key] === defaultSettings[key] &&
-          candidate[providerKey] != null
-        ) {
-          normalized[key] = candidate[providerKey];
-        }
-
-        const options = getOptions(key);
-        if (!Array.isArray(options) || options.length === 0) {
-          continue;
-        }
-
-        const value = String(normalized[key] ?? '').trim();
-        if (!value || !options.includes(value)) {
-          normalized[key] = options[0];
-        }
-      }
-
-      return normalized;
+      return normalizeUnclothyUiSettings(candidate, settingsEnums);
     },
-    [getOptions, providerKeyByUiKey],
+    [settingsEnums],
   );
 
   useEffect(() => {
@@ -306,7 +169,7 @@ export default function GalleryUnclothySection({
       return;
     }
 
-    setSettings(defaultSettings);
+    setSettings(unclothyDefaultUiSettings);
     setConfirmed(false);
 
     const controllerAbort = new AbortController();
@@ -456,30 +319,12 @@ export default function GalleryUnclothySection({
         : 'Ready to generate';
 
   const settingsPayload = useMemo(() => {
-    const payload = {};
-    for (const key of Object.keys(defaultSettings)) {
-      const providerKey = providerKeyByUiKey[key] || key;
-      const value = settings[key];
-      if (value == null) {
-        continue;
-      }
-      const normalizedValue = String(value).trim();
-      if (!normalizedValue) {
-        continue;
-      }
-      payload[providerKey] = normalizedValue;
-    }
-    return payload;
-  }, [providerKeyByUiKey, settings]);
+    return buildUnclothyProviderSettingsPayload(settings, settingsEnums);
+  }, [settings, settingsEnums]);
 
   const handleEnqueue = () => {
     if (!canEnqueue) {
       toast.error(selectionProblem || 'Complete all required fields first.');
-      return;
-    }
-
-    if (isActiveForSelection || isSelectionQueued) {
-      toast.message('Already queued.');
       return;
     }
 
@@ -852,7 +697,7 @@ export default function GalleryUnclothySection({
       <button
         type="button"
         className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-50 dark:text-slate-900"
-        disabled={!canEnqueue || disableInputs || isSelectionQueued || isActiveForSelection}
+        disabled={!canEnqueue || disableInputs}
         onClick={handleEnqueue}
       >
         {queue.length > 0 || active ? 'Add to queue' : 'Save changes'}
@@ -870,7 +715,7 @@ export default function GalleryUnclothySection({
           type="button"
           className={ghostButtonStyles}
           disabled={disableInputs}
-          onClick={() => setSettings(defaultSettings)}
+          onClick={() => setSettings(unclothyDefaultUiSettings)}
         >
           Reset settings
         </button>

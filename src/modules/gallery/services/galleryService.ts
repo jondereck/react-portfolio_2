@@ -19,6 +19,7 @@ import {
   type AlbumPhotoRecord,
 } from '@/src/modules/gallery/repositories/galleryRepository';
 import { GoogleDriveAdapter } from '@/src/modules/gallery/adapters/googleDriveAdapter';
+import { moderateImageUrlForNsfw } from '@/lib/server/nsfw-moderation';
 
 type MoveAlbumPhotoResultEntry = {
   photoId: number;
@@ -276,7 +277,12 @@ export class GalleryService {
 
   async addAlbumPhoto(
     albumId: number,
-    input: PhotoCreateInput,
+    input: PhotoCreateInput & {
+      nsfwDetected?: boolean | null;
+      nsfwDetectedAt?: Date;
+      nsfwScores?: Prisma.InputJsonValue;
+      blurOverride?: string;
+    },
     options: { skipContentHashDuplicateCheck?: boolean } = {},
   ) {
     if (input.contentHash && !options.skipContentHashDuplicateCheck) {
@@ -302,6 +308,10 @@ export class GalleryService {
         originalFilename: input.originalFilename,
         mimeType: input.mimeType,
         fileSizeBytes: input.fileSizeBytes,
+        nsfwDetected: input.nsfwDetected ?? null,
+        nsfwDetectedAt: input.nsfwDetectedAt,
+        nsfwScores: input.nsfwScores,
+        blurOverride: input.blurOverride,
         caption: input.caption,
         dateTaken: input.dateTaken ? new Date(input.dateTaken) : undefined,
         sourceType: input.sourceType as PhotoSourceType,
@@ -341,6 +351,39 @@ export class GalleryService {
 
     const uploadedMedia = await uploadPreparedMediaFile(prepared, `portfolio/gallery/${albumId}`);
 
+    let nsfwDetected: boolean | null | undefined;
+    let nsfwDetectedAt: Date | undefined;
+    let nsfwScores: Prisma.InputJsonValue | undefined;
+
+    if (typeof prepared.mimeType === 'string' && prepared.mimeType.toLowerCase().startsWith('image/')) {
+      try {
+        const moderation = await moderateImageUrlForNsfw({ imageUrl: uploadedMedia.secureUrl });
+        if (moderation) {
+          nsfwDetected = moderation.nsfwDetected;
+          nsfwDetectedAt = new Date();
+          nsfwScores = moderation.nsfwScores as unknown as Prisma.InputJsonValue;
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV !== 'production') {
+          // eslint-disable-next-line no-console
+          console.warn('[gallery upload] NSFW moderation failed', error);
+        }
+
+        // Mark as scanned (safe) so uploads do not get stuck in a re-scan loop when
+        // the underlying format is unsupported by the provider.
+        nsfwDetected = false;
+        nsfwDetectedAt = new Date();
+        nsfwScores = {
+          provider: 'openai',
+          error: true,
+          message: error instanceof Error ? error.message : 'Moderation failed.',
+          code: typeof (error as any)?.code === 'string' ? (error as any).code : undefined,
+          status: typeof (error as any)?.status === 'number' ? (error as any).status : undefined,
+          requestID: typeof (error as any)?.requestID === 'string' ? (error as any).requestID : undefined,
+        } as unknown as Prisma.InputJsonValue;
+      }
+    }
+
     return this.addAlbumPhoto(
       albumId,
       {
@@ -352,9 +395,21 @@ export class GalleryService {
         mimeType: prepared.mimeType,
         fileSizeBytes: prepared.fileSizeBytes,
         sourceType: args.input.sourceType ?? 'upload',
+        nsfwDetected,
+        nsfwDetectedAt,
+        nsfwScores,
+        blurOverride: 'auto',
       },
       { skipContentHashDuplicateCheck: true },
     );
+  }
+
+  async updateAlbumPhotoBlurOverride(
+    albumId: number,
+    photoId: number,
+    blurOverride: 'auto' | 'force_blur' | 'force_unblur',
+  ) {
+    return this.repo.updateAlbumPhotoBlurOverride(albumId, photoId, blurOverride);
   }
 
   async moveAlbumPhotos(sourceAlbumId: number, targetAlbumId: number, photoIds: number[]) {

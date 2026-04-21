@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { buildPublicAlbumHref, getAdminMediaUrl } from '@/app/admin/gallery/utils';
-import { isUnclothyGenerated } from '@/lib/gallery-media';
+import { shouldBlurPhoto } from '@/lib/gallery-media';
 
 function resolveAlbumCoverUrl(album) {
   const coverPhoto = album?.coverPhoto ?? null;
@@ -161,7 +161,7 @@ export default function GalleryAlbumsSidebar({
                 const isActive = album.id === selectedAlbumId;
                 const coverUrl = resolveAlbumCoverUrl(album);
                 const coverPhoto = album?.coverPhoto ?? null;
-                const shouldBlurCover = Boolean(coverPhoto) && blurUnclothyGenerated && isUnclothyGenerated(coverPhoto);
+                const shouldBlurCover = Boolean(coverPhoto) && shouldBlurPhoto(coverPhoto, { blurEnabled: blurUnclothyGenerated });
 
                 return (
                   <div key={album.id} className="relative flex justify-center">
@@ -213,7 +213,7 @@ export default function GalleryAlbumsSidebar({
                 const coverUrl = resolveAlbumCoverUrl(album);
                 const coverPhoto = album?.coverPhoto ?? null;
                 const publicHref = buildPublicAlbumHref(album);
-                const shouldBlurCover = Boolean(coverPhoto) && blurUnclothyGenerated && isUnclothyGenerated(coverPhoto);
+                const shouldBlurCover = Boolean(coverPhoto) && shouldBlurPhoto(coverPhoto, { blurEnabled: blurUnclothyGenerated });
 
                 return (
                   <div

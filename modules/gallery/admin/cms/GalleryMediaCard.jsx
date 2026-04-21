@@ -2,7 +2,7 @@
 
 import { MoreHorizontal } from 'lucide-react';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
-import { isUnclothyGenerated } from '@/lib/gallery-media';
+import { shouldBlurPhoto } from '@/lib/gallery-media';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
@@ -19,7 +19,7 @@ export default function GalleryMediaCard({
 }) {
   const title = photo?.caption || photo?.originalFilename || photo?.sourceId || `media_${photo?.id}`;
   const isVideo = isVideoMime(photo?.mimeType);
-  const shouldBlur = Boolean(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo);
+  const shouldBlur = Boolean(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated });
 
   return (
     <article

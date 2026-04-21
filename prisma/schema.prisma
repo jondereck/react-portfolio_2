@@ -264,6 +264,10 @@ model AlbumPhoto {
   originalFilename String?
   mimeType         String?
   fileSizeBytes    Int?
+  nsfwDetected     Boolean?
+  nsfwDetectedAt   DateTime?
+  nsfwScores       Json?
+  blurOverride     String          @default("auto")
   caption          String?
   dateTaken        DateTime?
   uploadedAt       DateTime        @default(now())

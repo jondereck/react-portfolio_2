@@ -10,7 +10,7 @@ import {
   getPlayableMediaUrl,
   getVideoPosterUrl,
   isPhotoVideo,
-  isUnclothyGenerated,
+  shouldBlurPhoto,
 } from "@/lib/gallery-media";
 import {
   ArrowUpDown,
@@ -2001,7 +2001,7 @@ export default function AlbumDetailPage({ params }) {
                     src={photo.imageUrl}
                     alt={photo.caption || `Photo ${photo.id}`}
                     className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${
-                      blurUnclothyGenerated && isUnclothyGenerated(photo) ? "blur-md" : ""
+                      shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated }) ? "blur-md" : ""
                     }`}
                   />
                 )}
@@ -2011,7 +2011,7 @@ export default function AlbumDetailPage({ params }) {
                     Video
                   </span>
                 ) : null}
-                {!isPhotoVideo(photo) && blurUnclothyGenerated && isUnclothyGenerated(photo) ? (
+                {!isPhotoVideo(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated }) ? (
                   <span className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.13em] text-white">
                     NSFW
                   </span>
@@ -2252,7 +2252,7 @@ export default function AlbumDetailPage({ params }) {
                     src={activeResolvedSrc}
                     alt={activeItem.caption || `Photo ${activeItem.id}`}
                     className={`max-h-full max-w-full object-contain transition-transform duration-150 ease-out ${
-                      blurUnclothyGenerated && isUnclothyGenerated(activeItem) ? "blur-md" : ""
+                      shouldBlurPhoto(activeItem, { blurEnabled: blurUnclothyGenerated }) ? "blur-md" : ""
                     }`}
                     style={{
                       transform: `translate3d(${imageZoom.x}px, ${imageZoom.y}px, 0) scale(${imageZoom.scale})`,
@@ -2270,7 +2270,7 @@ export default function AlbumDetailPage({ params }) {
                       );
                     }}
                   />
-                  {blurUnclothyGenerated && isUnclothyGenerated(activeItem) ? (
+                  {shouldBlurPhoto(activeItem, { blurEnabled: blurUnclothyGenerated }) ? (
                     <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
                       NSFW
                     </div>
