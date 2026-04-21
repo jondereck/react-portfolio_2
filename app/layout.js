@@ -7,7 +7,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { BRAND_THEME_COLOR } from '@/lib/server/site-branding';
 
 export const metadata = {
-  title: 'Portfolio',
+  title: 'JDN',
   description: 'Developer portfolio',
   manifest: '/manifest.webmanifest',
   appleWebApp: {
