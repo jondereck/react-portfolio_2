@@ -13,8 +13,8 @@ export default function GalleryCmsShell({
   // Tailwind needs these classes to be statically present for arbitrary grid template values.
   const desktopGridColumns = inspector
     ? sidebarCollapsed
-      ? 'lg:grid-cols-[104px_minmax(0,1fr)_260px]'
-      : 'lg:grid-cols-[280px_minmax(0,1fr)_260px]'
+      ? 'lg:grid-cols-[104px_minmax(0,1fr)_300px] xl:grid-cols-[104px_minmax(0,1fr)_340px]'
+      : 'lg:grid-cols-[280px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_340px]'
     : sidebarCollapsed
       ? 'lg:grid-cols-[104px_minmax(0,1fr)]'
       : 'lg:grid-cols-[280px_minmax(0,1fr)]';
@@ -40,7 +40,7 @@ export default function GalleryCmsShell({
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
-      <div className="mx-auto max-w-7xl lg:px-6 lg:py-6">{shell}</div>
+      <div className="mx-auto max-w-screen-2xl lg:px-6 lg:py-6 2xl:px-10 2xl:py-8">{shell}</div>
     </div>
   );
 }

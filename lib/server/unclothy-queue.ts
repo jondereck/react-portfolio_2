@@ -934,15 +934,17 @@ export async function processUnclothyQueueOnce() {
   }
 
   try {
-    const now = new Date();
     const staleMinutes = getStaleMinutes();
     const staleBefore = new Date(Date.now() - staleMinutes * 60_000);
 
     const started = await startQueuedTasks();
+    // Capture time after starting queued tasks so newly-started tasks (nextRunAt=now)
+    // can be advanced in the same worker tick.
+    const runNow = new Date();
     const running = await prisma.unclothyGenerationTask.findMany({
       where: {
         status: UnclothyGenerationTaskStatus.running,
-        nextRunAt: { lte: now },
+        nextRunAt: { lte: runNow },
       },
       orderBy: [{ nextRunAt: 'asc' }, { startedAt: 'asc' }, { createdAt: 'asc' }],
       take: WORKER_BATCH_SIZE,
