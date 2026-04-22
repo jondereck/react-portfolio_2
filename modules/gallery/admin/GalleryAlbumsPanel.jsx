@@ -9,7 +9,6 @@ import {
   GalleryAlbumInspectorPanel,
   GalleryAlbumSwitchSheet,
   GalleryAlbumsSidebar,
-  GalleryCmsHeader,
   GalleryCmsModal,
   GalleryCmsShell,
   GalleryMobileTabs,
@@ -20,6 +19,37 @@ const mobileTabs = [
   { id: 'create', label: 'Create', icon: Plus },
   { id: 'details', label: 'Details', icon: Info },
 ];
+
+function ToggleSwitchField({ id, label, description, checked, onChange, disabled = false }) {
+  return (
+    <label
+      htmlFor={id}
+      className={`flex items-start justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 transition dark:border-slate-800 dark:bg-slate-900 ${
+        disabled ? 'opacity-60' : 'hover:border-slate-300 dark:hover:border-slate-700'
+      }`}
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-slate-900 dark:text-slate-50">{label}</span>
+        {description ? (
+          <span className="mt-1 block text-xs leading-5 text-slate-500 dark:text-slate-400">{description}</span>
+        ) : null}
+      </span>
+
+      <span className="relative mt-0.5 inline-flex shrink-0 items-center">
+        <input
+          id={id}
+          type="checkbox"
+          className="peer sr-only"
+          checked={checked}
+          onChange={onChange}
+          disabled={disabled}
+        />
+        <span className="h-6 w-11 rounded-full bg-slate-200 shadow-inner transition peer-checked:bg-sky-600 dark:bg-slate-800 dark:peer-checked:bg-sky-500" />
+        <span className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 peer-checked:translate-x-5 dark:bg-slate-950" />
+      </span>
+    </label>
+  );
+}
 
 export default function GalleryAlbumsPanel({ controller, embedded = false }) {
   const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v1';
@@ -229,52 +259,68 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
         embedded={embedded}
         sidebarCollapsed={manualSidebarCollapsed}
         header={
-          <GalleryCmsHeader
-            albumName={selectedAlbum?.name || 'Albums'}
-            albumCountLabel={albumCountLabel}
-            showSearch={false}
-            showUploadButton={false}
-            desktopActions={
-              <>
+          <header className="border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
+            <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5 lg:px-6">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500 dark:text-slate-400">
+                  Album management
+                </p>
+                <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+                  <h1 className="truncate text-lg font-semibold text-slate-950 dark:text-slate-50 sm:text-xl">
+                    {selectedAlbum?.name || 'Select an album'}
+                  </h1>
+                  {albumCountLabel ? (
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-200">
+                      {albumCountLabel}
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                  Update album details, manage sharing, and publish settings.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                 <button
                   type="button"
-                  onClick={() => setCreateAlbumOpen(true)}
-                  className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                  onClick={() => setActiveTab('create')}
+                  className="inline-flex h-10 items-center gap-2 rounded-2xl bg-slate-900 px-3.5 text-sm font-medium text-white shadow-sm dark:bg-slate-100 dark:text-slate-900 lg:hidden"
                 >
                   <Plus className="h-4 w-4" />
-                  New album
+                  New
                 </button>
-                <button
-                  type="submit"
-                  form="gallery-albums-manage-form"
-                  disabled={!selectedAlbum || !detailsDirty || savingDetails}
-                  className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
-                >
-                  <Save className="h-4 w-4" />
-                  {savingDetails ? 'Saving…' : 'Save'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmDeleteOpen(true)}
-                  disabled={!selectedAlbum}
-                  className="inline-flex h-11 items-center gap-2 rounded-2xl bg-red-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-red-500 disabled:opacity-60"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </button>
-              </>
-            }
-            mobileActions={
-              <button
-                type="button"
-                onClick={() => setActiveTab('create')}
-                className="inline-flex h-10 items-center gap-2 rounded-2xl bg-slate-900 px-3 text-sm font-medium text-white shadow-sm dark:bg-slate-100 dark:text-slate-900"
-              >
-                <Plus className="h-4 w-4" />
-                New
-              </button>
-            }
-          />
+
+                <div className="hidden items-center gap-2 lg:flex">
+                  <button
+                    type="button"
+                    onClick={() => setCreateAlbumOpen(true)}
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Plus className="h-4 w-4" />
+                    New album
+                  </button>
+                  <button
+                    type="submit"
+                    form="gallery-albums-manage-form"
+                    disabled={!selectedAlbum || !detailsDirty || savingDetails}
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Save className="h-4 w-4" />
+                    {savingDetails ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteOpen(true)}
+                    disabled={!selectedAlbum}
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl bg-red-600 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-red-500 disabled:opacity-60"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </header>
         }
         sidebar={
           <GalleryAlbumsSidebar
@@ -417,67 +463,106 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                   {selectedAlbum ? (
                     <form
                       id="gallery-albums-manage-form"
-                      className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]"
+                      className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]"
                       onSubmit={saveAlbumDetails}
                     >
-                      <div className="space-y-3">
-                        <input
-                          className={inputStyles}
-                          value={detailsForm.name}
-                          onChange={(event) => {
-                            setDetailsForm((previous) => ({ ...previous, name: event.target.value }));
-                            setDetailsDirty(true);
-                          }}
-                          placeholder="Album name"
-                          required
-                        />
-                        <input
-                          className={inputStyles}
-                          value={detailsForm.slug}
-                          onChange={(event) => {
-                            setDetailsForm((previous) => ({ ...previous, slug: event.target.value }));
-                            setDetailsDirty(true);
-                          }}
-                          placeholder="album-slug"
-                        />
-                        <textarea
-                          className="min-h-24 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
-                          rows={4}
-                          value={detailsForm.description}
-                          onChange={(event) => {
-                            setDetailsForm((previous) => ({ ...previous, description: event.target.value }));
-                            setDetailsDirty(true);
-                          }}
-                          placeholder="Album description"
-                        />
-                        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                          <input
-                            type="checkbox"
-                            checked={detailsForm.isPublished}
-                            onChange={(event) => {
-                              setDetailsForm((previous) => ({ ...previous, isPublished: event.target.checked }));
-                              setDetailsDirty(true);
-                            }}
-                          />
-                          Published
-                        </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
-                          <input
-                            type="checkbox"
-                            checked={detailsForm.shareLinkEnabled}
-                            onChange={(event) => {
-                              setDetailsForm((previous) => ({ ...previous, shareLinkEnabled: event.target.checked }));
-                              setDetailsDirty(true);
-                            }}
-                          />
-                          Enable share link
-                        </label>
+                      <div className="space-y-5">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                          <div className="mb-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                              Basic details
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                              Update the album title, slug, and description shown to visitors.
+                            </p>
+                          </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
-     
-                          <button type="button" className={ghostButtonStyles} onClick={() => setConfirmDeleteOpen(true)}>
-                            Delete Album
-                          </button>
+                          <div className="grid gap-4">
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                  Album name
+                                </span>
+                                <input
+                                  className={inputStyles}
+                                  value={detailsForm.name}
+                                  onChange={(event) => {
+                                    setDetailsForm((previous) => ({ ...previous, name: event.target.value }));
+                                    setDetailsDirty(true);
+                                  }}
+                                  placeholder="Album name"
+                                  required
+                                />
+                              </label>
+                              <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                  Slug
+                                </span>
+                                <input
+                                  className={inputStyles}
+                                  value={detailsForm.slug}
+                                  onChange={(event) => {
+                                    setDetailsForm((previous) => ({ ...previous, slug: event.target.value }));
+                                    setDetailsDirty(true);
+                                  }}
+                                  placeholder="album-slug"
+                                />
+                              </label>
+                            </div>
+
+                            <label className="space-y-1">
+                              <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                Description
+                              </span>
+                              <textarea
+                                className="min-h-28 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none dark:border-slate-700 dark:bg-slate-950"
+                                rows={4}
+                                value={detailsForm.description}
+                                onChange={(event) => {
+                                  setDetailsForm((previous) => ({ ...previous, description: event.target.value }));
+                                  setDetailsDirty(true);
+                                }}
+                                placeholder="Album description"
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                          <div className="mb-4">
+                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+                              Publishing & sharing
+                            </p>
+                            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                              Control visibility and whether a private share link is available.
+                            </p>
+                          </div>
+
+                          <div className="space-y-3">
+                            <ToggleSwitchField
+                              id="gallery-albums-published"
+                              label="Published"
+                              description="Make this album visible to your audience."
+                              checked={detailsForm.isPublished}
+                              onChange={(event) => {
+                                setDetailsForm((previous) => ({ ...previous, isPublished: event.target.checked }));
+                                setDetailsDirty(true);
+                              }}
+                            />
+                            <ToggleSwitchField
+                              id="gallery-albums-share-link"
+                              label="Enable share link"
+                              description="Allow anyone with the link to view this album."
+                              checked={detailsForm.shareLinkEnabled}
+                              onChange={(event) => {
+                                setDetailsForm((previous) => ({ ...previous, shareLinkEnabled: event.target.checked }));
+                                setDetailsDirty(true);
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <button
                             type="button"
                             className={ghostButtonStyles}
@@ -489,12 +574,20 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                           >
                             Reset changes
                           </button>
+
+                          <button
+                            type="button"
+                            className={`${ghostButtonStyles} lg:hidden`}
+                            onClick={() => setConfirmDeleteOpen(true)}
+                          >
+                            Delete album
+                          </button>
                         </div>
                       </div>
 
                       <div className="space-y-6">
            
-                        <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                             Profile links
                           </p>
@@ -520,11 +613,11 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                                 return (
                                   <div
                                     key={`${entry.platform}-${index}`}
-                                    className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/40"
+                                    className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950/30"
                                   >
                                     <div className="grid gap-3 sm:grid-cols-2">
                                       <label className="space-y-1">
-                                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                                           Platform
                                         </span>
                                         <select
@@ -550,7 +643,7 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                                       </label>
 
                                       <label className="space-y-1">
-                                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                                           URL
                                         </span>
                                         <input
@@ -622,16 +715,23 @@ export default function GalleryAlbumsPanel({ controller, embedded = false }) {
                           )}
                         </div>
 
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Share link</p>
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                            Share link tools
+                          </p>
                           {selectedShareLink ? (
-                            <div className="mt-2 space-y-3">
-                              <input
-                                className={inputStyles}
-                                readOnly
-                                value={selectedShareLink}
-                                onFocus={(event) => event.currentTarget.select()}
-                              />
+                            <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                              <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                                  Share link
+                                </span>
+                                <input
+                                  className={inputStyles}
+                                  readOnly
+                                  value={selectedShareLink}
+                                  onFocus={(event) => event.currentTarget.select()}
+                                />
+                              </label>
                               <button
                                 type="button"
                                 className={ghostButtonStyles}

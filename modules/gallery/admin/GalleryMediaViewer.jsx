@@ -87,6 +87,9 @@ export default function GalleryMediaViewer({
     onGenerateOpened?.();
   }, [canGenerate, onGenerateOpened, open, openGenerate]);
 
+  const rotatingEdgeGradient =
+    'bg-[conic-gradient(from_0deg,rgba(56,189,248,0)_0deg,rgba(56,189,248,0)_40deg,rgba(56,189,248,0.95)_90deg,rgba(59,130,246,0.95)_125deg,rgba(56,189,248,0.75)_165deg,rgba(56,189,248,0)_220deg,rgba(56,189,248,0)_360deg)]';
+
   return (
     <Transition show={open} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
@@ -150,35 +153,55 @@ export default function GalleryMediaViewer({
                       </div>
 
                       <div className="relative z-10 flex h-full min-h-0 w-full items-center justify-center px-4 pt-4 pb-16 sm:px-6 sm:pt-6 sm:pb-20">
-                        <div
-                          className={`relative inline-flex max-w-full overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-xl transition-all duration-500 dark:border-slate-800 dark:bg-slate-950 ${
-                            generatingState ? 'scale-[0.988] ring-4 ring-sky-400/30 shadow-[0_0_60px_rgba(56,189,248,0.22)]' : ''
-                          }`}
-                        >
-                          {photo ? (
-                            <MediaPreview
-                              url={photo.imageUrl}
-                              mimeType={photo.mimeType}
-                              sourceType={photo.sourceType}
-                              sourceId={photo.sourceId}
-                              alt={title}
-                              className={`mx-auto block max-h-[56dvh] max-w-full object-contain sm:max-h-[62dvh] lg:max-h-[66dvh] ${
-                                shouldBlurPreview ? 'blur-md' : ''
+                        {(() => {
+                          const previewCard = (
+                            <div
+                              className={`relative inline-flex max-w-full overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-xl transition-all duration-500 dark:border-slate-800 dark:bg-slate-950 ${
+                                generatingState ? 'scale-[0.988] shadow-[0_0_60px_rgba(56,189,248,0.22)]' : ''
                               }`}
-                              controls
-                            />
-                          ) : (
-                            <div className="h-[560px] w-[380px] max-w-full rounded-[22px] bg-[radial-gradient(circle_at_top,#cbd5e1,#94a3b8_40%,#334155_100%)] dark:bg-[radial-gradient(circle_at_top,#0f172a,#1f2937_45%,#020617_100%)]" />
-                          )}
+                            >
+                              {photo ? (
+                                <MediaPreview
+                                  url={photo.imageUrl}
+                                  mimeType={photo.mimeType}
+                                  sourceType={photo.sourceType}
+                                  sourceId={photo.sourceId}
+                                  alt={title}
+                                  className={`mx-auto block max-h-[56dvh] max-w-full object-contain sm:max-h-[62dvh] lg:max-h-[66dvh] ${
+                                    shouldBlurPreview ? 'blur-md' : ''
+                                  }`}
+                                  controls
+                                />
+                              ) : (
+                                <div className="h-[560px] w-[380px] max-w-full rounded-[22px] bg-[radial-gradient(circle_at_top,#cbd5e1,#94a3b8_40%,#334155_100%)] dark:bg-[radial-gradient(circle_at_top,#0f172a,#1f2937_45%,#020617_100%)]" />
+                              )}
 
-                          {generatingState ? (
-                            <>
-                              <div className="absolute inset-0 bg-sky-400/10" />
-                              <div className="absolute inset-y-0 left-[-30%] w-[30%] skew-x-[-18deg] animate-[pulse_1.4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                              <div className="absolute bottom-0 left-0 h-1.5 w-[60%] rounded-r-full bg-sky-400 shadow-[0_0_24px_rgba(56,189,248,0.6)]" />
-                            </>
-                          ) : null}
-                        </div>
+                              {generatingState ? (
+                                <>
+                                  <div className="absolute inset-0 bg-sky-400/10" />
+                                  <div className="absolute inset-y-0 left-[-30%] w-[30%] skew-x-[-18deg] animate-[pulse_1.4s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+                                  <div className="absolute bottom-0 left-0 h-1.5 w-[60%] rounded-r-full bg-sky-400 shadow-[0_0_24px_rgba(56,189,248,0.6)]" />
+                                </>
+                              ) : null}
+                            </div>
+                          );
+
+                          if (!generatingState) {
+                            return previewCard;
+                          }
+
+                          return (
+                            <div className="relative inline-flex max-w-full rounded-[24px] p-[2px]">
+                              <div
+                                className={`pointer-events-none absolute inset-0 rounded-[24px] ${rotatingEdgeGradient} opacity-70 blur-[10px] animate-[spin_4s_linear_infinite] motion-reduce:animate-none dark:opacity-80`}
+                              />
+                              <div
+                                className={`pointer-events-none absolute inset-0 rounded-[24px] ${rotatingEdgeGradient} animate-[spin_4s_linear_infinite] motion-reduce:animate-none`}
+                              />
+                              {previewCard}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {shouldBlurPreview ? (

@@ -17,19 +17,54 @@ const parseId = (value: string) => {
 };
 
 export async function GET(request: Request, context: RouteContext) {
-  if (await isRateLimited(request, 'admin-download', 40, 60_000)) {
-    return NextResponse.json({ error: 'Too many download requests. Try again later.' }, { status: 429 });
-  }
-
   try {
-    const { profile } = await resolveManagedProfileFromRequest(request);
+    const url = new URL(request.url);
+    const shareToken = url.searchParams.get('share')?.trim() ?? '';
+
+    if (await isRateLimited(request, shareToken ? 'gallery-share-download' : 'admin-download', 40, 60_000)) {
+      return NextResponse.json({ error: 'Too many download requests. Try again later.' }, { status: 429 });
+    }
+
     const { id: idParam } = await context.params;
     const albumId = parseId(idParam);
     if (!albumId) {
       return NextResponse.json({ error: 'Invalid album id' }, { status: 400 });
     }
 
-    const payload = await galleryService.getAlbumDownloadPayload(albumId, profile.id, true);
+    if (shareToken) {
+      const sharedPayload = await galleryService.getSharedAlbumDownloadPayload(albumId, shareToken);
+      if (!sharedPayload) {
+        return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      }
+
+      const zip = await createAlbumZipStream(sharedPayload.downloadablePhotos);
+      const filename = buildAlbumZipFilename(sharedPayload.album.slug);
+      const headers = new Headers({
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        'Cache-Control': 'no-store',
+        'X-Download-Included-Count': String(sharedPayload.downloadablePhotos.length),
+        'X-Download-Skipped-Count': String(sharedPayload.skippedPhotos.length),
+      });
+
+      const stream = Readable.toWeb(zip.stream) as ReadableStream<Uint8Array>;
+      return new Response(stream, { status: 200, headers });
+    }
+
+    let managedProfileId: number | null = null;
+    try {
+      managedProfileId = (await resolveManagedProfileFromRequest(request)).profile.id;
+    } catch (managedError) {
+      if (!(managedError instanceof Error) || (managedError.message !== 'UNAUTHENTICATED' && managedError.message !== 'FORBIDDEN')) {
+        throw managedError;
+      }
+    }
+
+    if (!managedProfileId) {
+      return NextResponse.json({ error: 'Downloads are disabled for public viewers.' }, { status: 403 });
+    }
+
+    const payload = await galleryService.getAlbumDownloadPayload(albumId, managedProfileId, true);
     if (!payload) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }

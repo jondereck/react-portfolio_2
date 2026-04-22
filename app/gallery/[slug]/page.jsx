@@ -261,6 +261,38 @@ const isValidHttpUrl = (value) => {
   }
 };
 
+const WatermarkOverlay = ({ text, variant = "viewer" }) => {
+  const label = typeof text === "string" && text.trim() ? text.trim() : "Private";
+  const count = variant === "thumb" ? 18 : 30;
+  const textClassName =
+    variant === "thumb"
+      ? "text-[11px] sm:text-xs"
+      : "text-xs sm:text-sm md:text-base";
+
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 select-none overflow-hidden"
+    >
+      <div className="absolute inset-[-55%] rotate-[-24deg] opacity-35">
+        <div className="grid grid-cols-3 gap-10 sm:grid-cols-4 sm:gap-14">
+          {Array.from({ length: count }).map((_, index) => (
+            // eslint-disable-next-line react/no-array-index-key
+            <div key={index} className="flex items-center justify-center">
+              <span
+                className={`whitespace-nowrap font-semibold uppercase tracking-[0.22em] text-white/70 drop-shadow ${textClassName}`}
+              >
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent" />
+    </div>
+  );
+};
+
 const SplitPanelMediaSurface = ({
   panelId,
   hideUI,
@@ -278,6 +310,8 @@ const SplitPanelMediaSurface = ({
   onForegroundVideoReady,
   className = "",
   zoomState = { scale: 1, x: 0, y: 0 },
+  showWatermark = false,
+  watermarkText = "",
   surfaceRef,
   onPinchStart,
   onPinchMove,
@@ -397,7 +431,7 @@ const SplitPanelMediaSurface = ({
               } ${transitionClass}`}
             >
               <div
-                className="h-full w-full"
+                className="relative h-full w-full"
                 style={{
                   transform:
                     zoomState?.scale > 1
@@ -475,6 +509,9 @@ const SplitPanelMediaSurface = ({
                     }}
                   />
                 )}
+                {showWatermark && isForeground && isVisible ? (
+                  <WatermarkOverlay text={watermarkText} variant="viewer" />
+                ) : null}
               </div>
 
               {!isVisible ? (
@@ -510,6 +547,9 @@ export default function AlbumDetailPage({ params }) {
   const searchParams = useSearchParams();
   const [slug, setSlug] = useState("");
   const [album, setAlbum] = useState(null);
+  const [accessMode, setAccessMode] = useState(() =>
+    searchParams?.get("share") ? "shared" : "public",
+  );
   const [photos, setPhotos] = useState([]);
   const [sort, setSort] = useState("custom");
   const [mediaFilter, setMediaFilter] = useState("all");
@@ -582,6 +622,11 @@ export default function AlbumDetailPage({ params }) {
   const preloadedMediaUrlsRef = useRef({});
   const preloadableGdrivePhotosRef = useRef([]);
   const shareToken = searchParams?.get("share") || "";
+  const showWatermark = accessMode === "public";
+  const watermarkText = useMemo(() => {
+    const host = typeof window !== "undefined" ? window.location.host : "";
+    return `${album?.name || slug || "Album"}${host ? ` • ${host}` : ""}`;
+  }, [album?.name, slug]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -673,9 +718,26 @@ export default function AlbumDetailPage({ params }) {
         );
         const normalizedAlbum = normalizeGalleryAlbum(albumData, shareToken);
         setAlbum(normalizedAlbum);
+        setAccessMode(
+          albumData?.accessMode || (shareToken ? "shared" : "public"),
+        );
+
+        const photosUrl = new URL(
+          `/api/gallery/albums/${albumData.id}/photos`,
+          window.location.origin,
+        );
+        photosUrl.searchParams.set("sort", sort);
+        if (shareToken) {
+          photosUrl.searchParams.set("share", shareToken);
+        }
 
         const photoData = await fetchJson(
-          `/api/gallery/albums/${albumData.id}/photos?sort=${sort}`,
+          `${photosUrl.pathname}${photosUrl.search}`,
+        );
+        setAccessMode(
+          photoData?.accessMode ||
+            albumData?.accessMode ||
+            (shareToken ? "shared" : "public"),
         );
         setPhotos(
           Array.isArray(photoData.photos)
@@ -725,6 +787,10 @@ export default function AlbumDetailPage({ params }) {
     }[sort] || "Manual";
   const filteredPhotoCount = filteredPhotos.length;
   const handleDownloadAlbumZip = useCallback(async () => {
+    if (accessMode === "public") {
+      toast.error("Downloads are disabled for public viewers.");
+      return;
+    }
     if (!album?.id) {
       return;
     }
@@ -732,8 +798,16 @@ export default function AlbumDetailPage({ params }) {
     setIsAlbumDownloadPending(true);
     const toastId = toast.loading(`Preparing ${album.name || "album"}...`);
     try {
-      const result = await downloadFromApi(
+      const downloadUrl = new URL(
         `/api/gallery/albums/${album.id}/download`,
+        window.location.origin,
+      );
+      if (shareToken) {
+        downloadUrl.searchParams.set("share", shareToken);
+      }
+
+      const result = await downloadFromApi(
+        `${downloadUrl.pathname}${downloadUrl.search}`,
         `${album.slug || "album"}.zip`,
       );
       if (result.skippedCount > 0) {
@@ -754,9 +828,13 @@ export default function AlbumDetailPage({ params }) {
     } finally {
       setIsAlbumDownloadPending(false);
     }
-  }, [album]);
+  }, [accessMode, album, shareToken]);
 
   const handleDownloadMedia = useCallback(async (photo) => {
+    if (accessMode === "public") {
+      toast.error("Downloads are disabled for public viewers.");
+      return;
+    }
     if (!album?.id || !photo?.id) {
       return;
     }
@@ -765,8 +843,16 @@ export default function AlbumDetailPage({ params }) {
     const label = photo.caption || `Media ${photo.id}`;
     const toastId = toast.loading(`Preparing ${label}...`);
     try {
-      const result = await downloadFromApi(
+      const downloadUrl = new URL(
         `/api/gallery/albums/${album.id}/photos/${photo.id}/download`,
+        window.location.origin,
+      );
+      if (shareToken) {
+        downloadUrl.searchParams.set("share", shareToken);
+      }
+
+      const result = await downloadFromApi(
+        `${downloadUrl.pathname}${downloadUrl.search}`,
         `${label}.bin`,
       );
       toast.success(`Downloaded ${result.filename}.`, { id: toastId });
@@ -780,7 +866,7 @@ export default function AlbumDetailPage({ params }) {
     } finally {
       setDownloadingPhotoId((current) => (current === photo.id ? null : current));
     }
-  }, [album]);
+  }, [accessMode, album, shareToken]);
 
   const invalidatePendingNavigation = useCallback(() => {
     navigationEpochRef.current += 1;
@@ -1923,14 +2009,16 @@ export default function AlbumDetailPage({ params }) {
             >
               Slideshow
             </button>
-            <button
-              type="button"
-              onClick={handleDownloadAlbumZip}
-              disabled={isAlbumDownloadPending || !album?.id}
-              className="h-10 w-full rounded-md border border-sky-300/50 bg-sky-500/20 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-sky-100 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
-            >
-              {isAlbumDownloadPending ? "Preparing ZIP..." : "Download ZIP"}
-            </button>
+            {accessMode !== "public" ? (
+              <button
+                type="button"
+                onClick={handleDownloadAlbumZip}
+                disabled={isAlbumDownloadPending || !album?.id}
+                className="h-10 w-full rounded-md border border-sky-300/50 bg-sky-500/20 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-sky-100 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+              >
+                {isAlbumDownloadPending ? "Preparing ZIP..." : "Download ZIP"}
+              </button>
+            ) : null}
           </div>
         </header>
 
@@ -1975,6 +2063,9 @@ export default function AlbumDetailPage({ params }) {
                     }`}
                   />
                 )}
+                {showWatermark ? (
+                  <WatermarkOverlay text={watermarkText} variant="thumb" />
+                ) : null}
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/55 to-transparent" />
                 {isPhotoVideo(photo) ? (
                   <span className="absolute left-3 top-3 rounded-full border border-white/25 bg-black/45 px-2 py-1 text-[10px] uppercase tracking-[0.13em] text-white">
@@ -2032,18 +2123,20 @@ export default function AlbumDetailPage({ params }) {
                   : `${activeIndex + 1} / ${filteredPhotos.length} · ${activeItem.caption || "Untitled media"}`}
               </p>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    void handleDownloadMedia(activeItem);
-                  }}
-                  disabled={downloadingPhotoId === activeItem.id}
-                  aria-label="Download media"
-                  title="Download media"
-                  className="inline-flex h-8 items-center justify-center rounded-md border border-white/25 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {downloadingPhotoId === activeItem.id ? "..." : "Download"}
-                </button>
+                {accessMode !== "public" ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void handleDownloadMedia(activeItem);
+                    }}
+                    disabled={downloadingPhotoId === activeItem.id}
+                    aria-label="Download media"
+                    title="Download media"
+                    className="inline-flex h-8 items-center justify-center rounded-md border border-white/25 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {downloadingPhotoId === activeItem.id ? "..." : "Download"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -2082,6 +2175,8 @@ export default function AlbumDetailPage({ params }) {
                     panelId="left"
                     hideUI={hideUI}
                     label="Left Panel"
+                    showWatermark={showWatermark}
+                    watermarkText={watermarkText}
                     surfaceRef={(node) => {
                       splitSurfaceRefs.current.left = node;
                     }}
@@ -2125,6 +2220,8 @@ export default function AlbumDetailPage({ params }) {
                     panelId="right"
                     hideUI={hideUI}
                     label="Right Panel"
+                    showWatermark={showWatermark}
+                    watermarkText={watermarkText}
                     surfaceRef={(node) => {
                       splitSurfaceRefs.current.right = node;
                     }}
@@ -2175,47 +2272,52 @@ export default function AlbumDetailPage({ params }) {
                   />
                 </>
               ) : activeItemIsVideo ? (
-                <video
-                  key={activeMediaKey}
-                  ref={activeVideoRef}
-                  className="h-full w-full object-contain"
-                  controls
-                  playsInline
-                  preload="metadata"
-                  poster={getVideoPosterUrl(activeItem.imageUrl) || undefined}
-                  crossOrigin="anonymous"
-                  onLoadedMetadata={() => {
-                    markPanelMediaSuccess("primary", activeItem);
-                  }}
-                  onLoadedData={() => {
-                    markPanelMediaSuccess("primary", activeItem);
-                  }}
-                  onCanPlay={() => {
-                    markPanelMediaSuccess("primary", activeItem);
-                  }}
-                  onEnded={() => {
-                    if (viewerMode === "focus") {
-                      goToNextVideo();
-                      return;
-                    }
-                    if (isPlaying) {
-                      goToNext();
-                    }
-                  }}
-                  onError={(event) => {
-                    markPanelMediaError(
-                      "primary",
-                      activeItem,
-                      "onError",
-                      event.currentTarget,
-                      activePlayableSrc,
-                    );
-                  }}
-                >
-                  {activeVideoSources.map((src) => (
-                    <source key={src} src={src} />
-                  ))}
-                </video>
+                <div className="relative h-full w-full">
+                  <video
+                    key={activeMediaKey}
+                    ref={activeVideoRef}
+                    className="h-full w-full object-contain"
+                    controls
+                    playsInline
+                    preload="metadata"
+                    poster={getVideoPosterUrl(activeItem.imageUrl) || undefined}
+                    crossOrigin="anonymous"
+                    onLoadedMetadata={() => {
+                      markPanelMediaSuccess("primary", activeItem);
+                    }}
+                    onLoadedData={() => {
+                      markPanelMediaSuccess("primary", activeItem);
+                    }}
+                    onCanPlay={() => {
+                      markPanelMediaSuccess("primary", activeItem);
+                    }}
+                    onEnded={() => {
+                      if (viewerMode === "focus") {
+                        goToNextVideo();
+                        return;
+                      }
+                      if (isPlaying) {
+                        goToNext();
+                      }
+                    }}
+                    onError={(event) => {
+                      markPanelMediaError(
+                        "primary",
+                        activeItem,
+                        "onError",
+                        event.currentTarget,
+                        activePlayableSrc,
+                      );
+                    }}
+                  >
+                    {activeVideoSources.map((src) => (
+                      <source key={src} src={src} />
+                    ))}
+                  </video>
+                  {showWatermark ? (
+                    <WatermarkOverlay text={watermarkText} variant="viewer" />
+                  ) : null}
+                </div>
               ) : (
                 <div
                   ref={zoomSurfaceRef}
@@ -2255,6 +2357,9 @@ export default function AlbumDetailPage({ params }) {
                       );
                     }}
                   />
+                  {showWatermark ? (
+                    <WatermarkOverlay text={watermarkText} variant="viewer" />
+                  ) : null}
                   {shouldBlurPhoto(activeItem, { blurEnabled: blurUnclothyGenerated }) ? (
                     <div className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/25 bg-black/55 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">
                       NSFW
@@ -2835,18 +2940,20 @@ export default function AlbumDetailPage({ params }) {
                     : `${activeIndex + 1} / ${filteredPhotos.length} · ${activeItem.caption || "Untitled media"}`}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void handleDownloadMedia(activeItem);
-                    }}
-                    disabled={downloadingPhotoId === activeItem.id}
-                    aria-label="Download media"
-                    title="Download media"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/25 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <Download className="h-4 w-4" />
-                  </button>
+                  {accessMode !== "public" ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleDownloadMedia(activeItem);
+                      }}
+                      disabled={downloadingPhotoId === activeItem.id}
+                      aria-label="Download media"
+                      title="Download media"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/25 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {

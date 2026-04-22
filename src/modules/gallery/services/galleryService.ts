@@ -216,12 +216,36 @@ export class GalleryService {
     return this.attachSingleAlbumActivity(album);
   }
 
+  async getAlbumByIdForShare(albumId: number, shareToken: string) {
+    const album = await this.repo.getAlbumByIdAndShareToken(albumId, shareToken);
+    return this.attachSingleAlbumActivity(album);
+  }
+
   deleteAlbum(albumId: number) {
     return this.repo.deleteAlbum(albumId);
   }
 
   async listAlbumPhotos(albumId: number, profileId: number, sort: GallerySort, canViewDrafts: boolean) {
     const album = await this.getAlbumById(albumId, profileId, canViewDrafts);
+    if (!album) {
+      return null;
+    }
+
+    const basePhotos = await this.repo.listAlbumPhotos(albumId, 'custom');
+    const photos =
+      sort === 'custom'
+        ? basePhotos
+        : [...basePhotos].sort((left, right) => {
+            const leftValue = new Date(left.dateTaken ?? left.uploadedAt).getTime();
+            const rightValue = new Date(right.dateTaken ?? right.uploadedAt).getTime();
+            return sort === 'dateAsc' ? leftValue - rightValue : rightValue - leftValue;
+          });
+
+    return { album, photos };
+  }
+
+  async listSharedAlbumPhotos(albumId: number, shareToken: string, sort: GallerySort) {
+    const album = await this.getAlbumByIdForShare(albumId, shareToken);
     if (!album) {
       return null;
     }
@@ -261,8 +285,44 @@ export class GalleryService {
     };
   }
 
+  async getSharedAlbumDownloadPayload(albumId: number, shareToken: string) {
+    const album = await this.getAlbumByIdForShare(albumId, shareToken);
+    if (!album) {
+      return null;
+    }
+
+    const albumWithPhotos = await this.repo.getAlbumWithPhotosForDownloadByShareToken(albumId, shareToken);
+    if (!albumWithPhotos) {
+      return null;
+    }
+
+    const manuallySortedPhotos = this.sortPhotosByManualArrangement(albumWithPhotos.photos);
+    const downloadablePhotos = manuallySortedPhotos.filter((photo) => photo.sourceType === PhotoSourceType.upload);
+    const skippedPhotos = manuallySortedPhotos.filter((photo) => photo.sourceType !== PhotoSourceType.upload);
+
+    return {
+      album: albumWithPhotos,
+      downloadablePhotos,
+      skippedPhotos,
+    };
+  }
+
   async getAlbumPhotoDownloadPayload(albumId: number, profileId: number, photoId: number, canViewDrafts: boolean) {
     const album = await this.getAlbumById(albumId, profileId, canViewDrafts);
+    if (!album) {
+      return null;
+    }
+
+    const photo = await this.repo.getAlbumPhotoById(albumId, photoId);
+    if (!photo) {
+      return null;
+    }
+
+    return { album, photo };
+  }
+
+  async getSharedAlbumPhotoDownloadPayload(albumId: number, shareToken: string, photoId: number) {
+    const album = await this.getAlbumByIdForShare(albumId, shareToken);
     if (!album) {
       return null;
     }

@@ -94,6 +94,17 @@ export class GalleryRepository {
     return prisma.album.findFirst({ where: { id, profileId }, include: albumInclude });
   }
 
+  async getAlbumByIdAndShareToken(id: number, shareToken: string) {
+    return prisma.album.findFirst({
+      where: {
+        id,
+        shareToken,
+        shareLinkEnabled: true,
+      },
+      include: albumInclude,
+    });
+  }
+
   async getAlbumBySlug(slug: string, profileId: number, onlyPublished: boolean) {
     return prisma.album.findFirst({
       where: {
@@ -108,6 +119,23 @@ export class GalleryRepository {
   async getAlbumWithPhotosForDownload(id: number, profileId: number): Promise<AlbumDownloadRecord | null> {
     return prisma.album.findFirst({
       where: { id, profileId },
+      include: {
+        photos: {
+          select: photoSelect,
+          // Keep manual arrangement first, then use stable fallbacks for legacy/duplicate values.
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        },
+      },
+    });
+  }
+
+  async getAlbumWithPhotosForDownloadByShareToken(id: number, shareToken: string): Promise<AlbumDownloadRecord | null> {
+    return prisma.album.findFirst({
+      where: {
+        id,
+        shareToken,
+        shareLinkEnabled: true,
+      },
       include: {
         photos: {
           select: photoSelect,

@@ -3,6 +3,7 @@ import { PhotoSourceType } from '@prisma/client';
 import { getGoogleDriveAccessTokenForUserOrAny } from '@/lib/auth/google-drive';
 import { canAccessProfile, resolveRequestActor } from '@/lib/auth/session';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
+import { resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
@@ -33,6 +34,7 @@ export async function GET(request: Request, context: RouteContext) {
       select: {
         id: true,
         profileId: true,
+        isPublished: true,
         shareLinkEnabled: true,
       },
     });
@@ -56,8 +58,10 @@ export async function GET(request: Request, context: RouteContext) {
         : [];
     const hasShareAccess = sharedAlbumMatch.length > 0;
     const hasActorAccess = Boolean(actor && canAccessProfile(actor, album.profileId));
+    const resolvedPublic = await resolvePublicProfileFromRequest(request);
+    const hasPublicAccess = Boolean(album.isPublished && resolvedPublic?.profile?.id === album.profileId);
 
-    if (!hasShareAccess && !hasActorAccess) {
+    if (!hasShareAccess && !hasActorAccess && !hasPublicAccess) {
       throw new Error(actor ? 'FORBIDDEN' : 'UNAUTHENTICATED');
     }
 

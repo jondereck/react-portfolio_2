@@ -218,7 +218,7 @@ export default function GalleryAlbumsSidebar({
                 return (
                   <div
                     key={album.id}
-                    className={`w-full rounded-[24px] border p-3 text-left transition ${
+                    className={`w-full rounded-[22px] border p-2.5 text-left transition ${
                       isActive
                         ? 'border-slate-900 bg-slate-900 text-white shadow-sm dark:border-slate-50 dark:bg-slate-50 dark:text-slate-900'
                         : 'border-slate-200 bg-white text-slate-900 hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:border-slate-700'
@@ -228,10 +228,10 @@ export default function GalleryAlbumsSidebar({
                       <button
                         type="button"
                         onClick={() => onSelectAlbum?.(album.id)}
-                        className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+                        className="group flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-800">
+                          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm dark:border-slate-800 dark:bg-slate-800">
                             {coverUrl ? (
                               <MediaPreview
                                 url={coverUrl}
@@ -268,7 +268,7 @@ export default function GalleryAlbumsSidebar({
                           </div>
                         </div>
                         <ChevronRight
-                          className={`h-4 w-4 ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400'}`}
+                          className={`h-4 w-4 transition ${isActive ? 'text-slate-300 dark:text-slate-600' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200'}`}
                         />
                       </button>
 

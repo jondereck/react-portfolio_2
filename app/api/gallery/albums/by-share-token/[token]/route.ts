@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { toErrorResponse } from '@/lib/server/api-responses';
+import { canAccessProfile, resolveRequestActor } from '@/lib/auth/session';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 
 type RouteContext = { params: Promise<{ token: string }> };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
     const { token } = await context.params;
     if (!token) {
@@ -16,7 +17,13 @@ export async function GET(_request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    return NextResponse.json(album);
+    const actor = await resolveRequestActor(request);
+    const isOwner = Boolean(actor && canAccessProfile(actor, album.profileId));
+
+    return NextResponse.json({
+      ...album,
+      accessMode: isOwner ? 'owner' : 'shared',
+    });
   } catch (error) {
     return toErrorResponse(error, 'Unable to load shared album.');
   }

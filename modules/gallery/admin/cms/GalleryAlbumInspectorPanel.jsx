@@ -14,7 +14,7 @@ function resolveAlbumCoverUrl(album) {
 export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLink, siteOrigin, blurUnclothyGenerated = true }) {
   if (!album) {
     return (
-      <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
+      <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-4 lg:block dark:border-slate-800 dark:bg-slate-950/20">
         <div className="sticky top-28">
           <div className="rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             Select an album to see details.
@@ -35,33 +35,44 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
         : 0;
 
   return (
-    <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
-      <div className="sticky top-28 space-y-2">
+    <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-4 lg:block dark:border-slate-800 dark:bg-slate-950/20">
+      <div className="sticky top-28 space-y-3">
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="aspect-square bg-slate-100 dark:bg-slate-950/40">
-            {coverUrl ? (
-              <MediaPreview
-                url={coverUrl}
-                mimeType={coverPhoto?.mimeType}
-                sourceType={coverPhoto?.sourceType}
-                sourceId={coverPhoto?.sourceId}
-                alt={album.name}
-                className={`h-full w-full object-cover ${shouldBlurCover ? 'blur-md' : ''}`}
-                controls={false}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-                No cover
-              </div>
-            )}
+          <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+              Album preview
+            </p>
           </div>
-          <div className="p-3">
-            <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">{album.name}</p>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{currentCount} item{currentCount === 1 ? '' : 's'}</p>
+
+          <div className="p-4">
+            <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-950/40">
+              {coverUrl ? (
+                <MediaPreview
+                  url={coverUrl}
+                  mimeType={coverPhoto?.mimeType}
+                  sourceType={coverPhoto?.sourceType}
+                  sourceId={coverPhoto?.sourceId}
+                  alt={album.name}
+                  className={`h-full w-full object-cover ${shouldBlurCover ? 'blur-md' : ''}`}
+                  controls={false}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  No cover
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3">
+              <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">{album.name}</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {currentCount} item{currentCount === 1 ? '' : 's'}
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quick info</p>
           <div className="mt-2 space-y-1.5 text-sm text-slate-700 dark:text-slate-200">
             <div className="flex items-center justify-between gap-3">
@@ -75,7 +86,7 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Slug</p>
           <p className="mt-2 text-sm font-medium text-slate-900 dark:text-slate-50">
             {album.slug ? `/gallery/${album.slug}` : 'Generated when saved'}
@@ -86,9 +97,12 @@ export default function GalleryAlbumInspectorPanel({ album, photosCount, shareLi
         </div>
 
         {shareLink ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Share link</p>
             <p className="mt-2 break-all text-xs text-slate-600 dark:text-slate-300">{shareLink}</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              Anyone with this link can view the album without logging in. Keep it private.
+            </p>
           </div>
         ) : null}
       </div>

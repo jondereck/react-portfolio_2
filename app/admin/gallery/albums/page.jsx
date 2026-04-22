@@ -6,5 +6,5 @@ import { useGalleryAdminController } from '@/modules/gallery/admin/useGalleryAdm
 export default function GalleryAlbumsPage() {
   const controller = useGalleryAdminController();
 
-  return <GalleryAlbumsPanel controller={controller} />;
+  return <GalleryAlbumsPanel controller={controller} embedded />;
 }
