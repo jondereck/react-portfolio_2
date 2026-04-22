@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Compass,
+  Globe,
   FolderOpen,
   Images,
   LayoutDashboard,
@@ -32,6 +33,7 @@ const iconMap = {
   shield: Shield,
   sparkles: Sparkles,
   compass: Compass,
+  globe: Globe,
 };
 
 export default function CollapsibleSidebar({

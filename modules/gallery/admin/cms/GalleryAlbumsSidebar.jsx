@@ -146,11 +146,7 @@ export default function GalleryAlbumsSidebar({
           </div>
 
         <div className={`${collapsed ? 'mt-3' : 'mt-4'} flex min-h-0 flex-1 flex-col space-y-2`}>
-          {loadingAlbums ? (
-            <div className="rounded-[24px] border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-              Loading albums...
-            </div>
-          ) : null}
+   
 
           {!loadingAlbums && resolvedAlbums.length === 0 ? (
             <div className="rounded-[24px] border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">

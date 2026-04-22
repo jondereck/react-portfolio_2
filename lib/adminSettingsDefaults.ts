@@ -4,6 +4,7 @@ export const defaultAdminIntegrations = {
   contactSenderEmail: 'onboarding@resend.dev',
   cloudinaryFolder: 'portfolio',
   googleDriveImportEnabled: true,
+  mediaScrapeEnabled: false,
   unclothyEnabled: false,
   blurUnclothyGenerated: true,
   unclothyAlbumDefaults: {},
@@ -18,6 +19,9 @@ export const defaultAdminSecurity = {
   mutationRateLimitWindowSeconds: 60,
   contactRateLimitMax: 8,
   contactRateLimitWindowSeconds: 60,
+  mediaScrapeMaxItems: 50,
+  mediaScrapeMaxZipFiles: 50,
+  mediaScrapeTimeoutMs: 20_000,
   sessionVersion: 1,
 };
 

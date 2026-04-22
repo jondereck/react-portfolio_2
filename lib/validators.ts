@@ -168,6 +168,7 @@ export const integrationsSettingsSchema = z.object({
       .optional(),
   ),
   googleDriveImportEnabled: z.boolean().optional().default(true),
+  mediaScrapeEnabled: z.boolean().optional().default(false),
   unclothyEnabled: z.boolean().optional().default(false),
   blurUnclothyGenerated: z.boolean().optional().default(true),
   unclothyAlbumDefaults: z
@@ -190,6 +191,9 @@ export const securitySettingsSchema = z.object({
   mutationRateLimitWindowSeconds: z.number().int().min(1).max(3600).optional(),
   contactRateLimitMax: z.number().int().min(1).max(500).optional(),
   contactRateLimitWindowSeconds: z.number().int().min(1).max(3600).optional(),
+  mediaScrapeMaxItems: z.number().int().min(1).max(200).optional(),
+  mediaScrapeMaxZipFiles: z.number().int().min(1).max(200).optional(),
+  mediaScrapeTimeoutMs: z.number().int().min(5_000).max(120_000).optional(),
   sessionVersion: z.number().int().min(1).max(999999).optional(),
 });
 

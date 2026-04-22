@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, ExternalLink, FolderOpen, Mail, RefreshCw, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
+import { CheckCircle2, ExternalLink, FolderOpen, Globe, Mail, RefreshCw, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import AdminSectionHeader from '@/components/admin/shared/AdminSectionHeader';
@@ -18,6 +18,7 @@ const emptyState = {
   contactSenderEmail: '',
   cloudinaryFolder: '',
   googleDriveImportEnabled: true,
+  mediaScrapeEnabled: false,
   unclothyEnabled: false,
   blurUnclothyGenerated: true,
   defaultGalleryView: 'cinematic',
@@ -116,6 +117,7 @@ export default function IntegrationsSettingsSection() {
       contactSenderEmail: data.settings.integrations.contactSenderEmail ?? '',
       cloudinaryFolder: data.settings.integrations.cloudinaryFolder ?? '',
       googleDriveImportEnabled: data.settings.integrations.googleDriveImportEnabled !== false,
+      mediaScrapeEnabled: data.settings.integrations.mediaScrapeEnabled === true,
       unclothyEnabled: data.settings.integrations.unclothyEnabled === true,
       blurUnclothyGenerated: data.settings.integrations.blurUnclothyGenerated !== false,
       defaultGalleryView: data.settings.integrations.defaultGalleryView === 'compact' ? 'compact' : 'cinematic',
@@ -156,6 +158,7 @@ export default function IntegrationsSettingsSection() {
               contactSenderEmail: integrations.contactSenderEmail.trim(),
               cloudinaryFolder: integrations.cloudinaryFolder.trim(),
               googleDriveImportEnabled: integrations.googleDriveImportEnabled,
+              mediaScrapeEnabled: integrations.mediaScrapeEnabled,
               unclothyEnabled: integrations.unclothyEnabled,
               blurUnclothyGenerated: integrations.blurUnclothyGenerated,
               defaultGalleryView: integrations.defaultGalleryView,
@@ -365,26 +368,47 @@ export default function IntegrationsSettingsSection() {
                 }}
                 aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.cloudinaryFolder'))}
               />
-              <div className={panelStyles}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-50">Enable Google Drive imports</h4>
-                    <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                      Global import switch. Admins still connect their own Drive account in the gallery import workflow.
-                    </p>
+                <div className={panelStyles}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-50">Enable Google Drive imports</h4>
+                      <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                        Global import switch. Admins still connect their own Drive account in the gallery import workflow.
+                      </p>
+                    </div>
+                    <SettingSwitch
+                      checked={integrations.googleDriveImportEnabled}
+                      label="Enable Google Drive imports"
+                      onChange={(event) => {
+                        setIntegrations((previous) => ({ ...previous, googleDriveImportEnabled: event.target.checked }));
+                        clearField('googleDriveImportEnabled');
+                      }}
+                    />
                   </div>
-                  <SettingSwitch
-                    checked={integrations.googleDriveImportEnabled}
-                    label="Enable Google Drive imports"
-                    onChange={(event) => {
-                      setIntegrations((previous) => ({ ...previous, googleDriveImportEnabled: event.target.checked }));
-                      clearField('googleDriveImportEnabled');
-                    }}
-                  />
+                </div>
+                <div className={panelStyles}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-4 w-4 text-slate-500 dark:text-slate-300" />
+                        <h4 className="text-sm font-semibold text-slate-950 dark:text-slate-50">Enable Media Scraper</h4>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
+                        Admin-only URL preview and ZIP download tool. Enable only when you have permission to download the content.
+                      </p>
+                    </div>
+                    <SettingSwitch
+                      checked={integrations.mediaScrapeEnabled}
+                      label="Enable Media Scraper"
+                      onChange={(event) => {
+                        setIntegrations((previous) => ({ ...previous, mediaScrapeEnabled: event.target.checked }));
+                        clearField('mediaScrapeEnabled');
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
 
           <section className="grid gap-4 md:grid-cols-2">
             <ToggleCard

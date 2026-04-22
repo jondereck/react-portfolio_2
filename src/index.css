@@ -88,3 +88,98 @@
     @apply border-border outline-ring/50;
   }
 }
+
+@layer utilities {
+  @keyframes samsungBreathe {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(1.012);
+    }
+  }
+
+  @keyframes samsungGlow {
+    0%,
+    100% {
+      box-shadow: 0 0 0 rgba(59, 130, 246, 0.1), 0 12px 30px rgba(15, 23, 42, 0.1);
+      opacity: 0.88;
+    }
+    50% {
+      box-shadow: 0 0 48px rgba(59, 130, 246, 0.18), 0 16px 36px rgba(15, 23, 42, 0.12);
+      opacity: 1;
+    }
+  }
+
+  @keyframes samsungSweep {
+    0% {
+      transform: translateX(-150%) skewX(-18deg);
+      opacity: 0;
+    }
+    20% {
+      opacity: 0.9;
+    }
+    100% {
+      transform: translateX(360%) skewX(-18deg);
+      opacity: 0;
+    }
+  }
+
+  @keyframes samsungOrb {
+    0%,
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.35);
+    }
+    50% {
+      transform: scale(1.08);
+      box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+    }
+  }
+
+  @keyframes samsungProgress {
+    0% {
+      width: 22%;
+    }
+    35% {
+      width: 54%;
+    }
+    65% {
+      width: 78%;
+    }
+    100% {
+      width: 58%;
+    }
+  }
+
+  @keyframes samsungFadeUp {
+    0% {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-samsung-breathe {
+    animation: samsungBreathe 2.8s ease-in-out infinite;
+  }
+  .animate-samsung-glow {
+    animation: samsungGlow 2.4s ease-in-out infinite;
+  }
+  .animate-samsung-sweep {
+    animation: samsungSweep 2.4s ease-in-out infinite;
+  }
+  .animate-samsung-orb {
+    animation: samsungOrb 1.8s ease-in-out infinite;
+  }
+  .animate-samsung-progress {
+    animation: samsungProgress 2.8s ease-in-out infinite;
+  }
+  .animate-samsung-fade-up {
+    animation: samsungFadeUp 0.35s ease-out;
+  }
+}

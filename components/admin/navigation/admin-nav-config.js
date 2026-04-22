@@ -6,10 +6,11 @@ export const adminNavigationSections = [
     ],
   },
   {
-    title: 'Content Management',
+    title: 'Module Management',
     items: [
       { label: 'Portfolio', href: '/admin/portfolio', iconKey: 'folderOpen' },
       { label: 'Gallery', href: '/admin/gallery', iconKey: 'images' },
+      { label: 'Media Scraper', href: '/admin/media-scraper', iconKey: 'globe' },
     ],
   },
   {
