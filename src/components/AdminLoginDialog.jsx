@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
@@ -8,7 +8,26 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
   const router = useRouter();
   const [key, setKey] = useState('');
   const [error, setError] = useState('');
+  const [blockedUntil, setBlockedUntil] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!blockedUntil || typeof blockedUntil !== 'number') {
+      return;
+    }
+
+    const tick = () => {
+      if (Date.now() >= blockedUntil) {
+        setBlockedUntil(null);
+      }
+    };
+
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [blockedUntil]);
+
+  const formatRetryTime = (epochMs) => new Date(epochMs).toLocaleString();
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -16,6 +35,11 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
 
     if (normalizedKey.length === 0) {
       setError('Admin key is required');
+      return;
+    }
+
+    if (blockedUntil && typeof blockedUntil === 'number' && blockedUntil > Date.now()) {
+      setError(`Too many attempts. Try again at ${formatRetryTime(blockedUntil)}.`);
       return;
     }
 
@@ -31,7 +55,28 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
       });
 
       if (!response.ok) {
-        setError('Invalid credentials');
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+
+        const apiError = payload && typeof payload.error === 'string' ? payload.error : null;
+        const nextBlockedUntil =
+          payload &&
+          payload.rateLimit &&
+          typeof payload.rateLimit.blockedUntil === 'number' &&
+          payload.rateLimit.blockedUntil > 0
+            ? payload.rateLimit.blockedUntil
+            : null;
+
+        if (nextBlockedUntil) {
+          setBlockedUntil(nextBlockedUntil);
+          setError(`Too many attempts. Try again at ${formatRetryTime(nextBlockedUntil)}.`);
+        } else {
+          setError(apiError || 'Invalid credentials');
+        }
         return;
       }
 
@@ -48,9 +93,12 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
 
     setKey('');
     setError('');
+    setBlockedUntil(null);
     onOpenChange(false);
     router.push('/admin');
   };
+
+  const isLocked = blockedUntil && typeof blockedUntil === 'number' && blockedUntil > Date.now();
 
   return (
     <Dialog
@@ -59,6 +107,7 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
         if (!nextOpen) {
           setKey('');
           setError('');
+          setBlockedUntil(null);
         }
         onOpenChange(nextOpen);
       }}
@@ -74,7 +123,7 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
             placeholder="Enter admin key"
             value={key}
             autoFocus
-            disabled={submitting}
+            disabled={submitting || isLocked}
             onChange={(event) => {
               setKey(event.target.value);
               if (error) {
@@ -83,7 +132,7 @@ const AdminLoginDialog = ({ open, onOpenChange }) => {
             }}
           />
           {error ? <p className="text-sm text-rose-500">{error}</p> : null}
-          <Button type="submit" className="w-full" disabled={submitting}>
+          <Button type="submit" className="w-full" disabled={submitting || isLocked}>
             {submitting ? (
               <span className="inline-flex items-center gap-2">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />

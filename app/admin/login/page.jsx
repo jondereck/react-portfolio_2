@@ -40,9 +40,28 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [blockedUntil, setBlockedUntil] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
+
+  useEffect(() => {
+    if (!blockedUntil || typeof blockedUntil !== 'number') {
+      return;
+    }
+
+    const tick = () => {
+      if (Date.now() >= blockedUntil) {
+        setBlockedUntil(null);
+      }
+    };
+
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [blockedUntil]);
+
+  const formatRetryTime = (epochMs) => new Date(epochMs).toLocaleString();
 
   useEffect(() => {
     let active = true;
@@ -85,6 +104,10 @@ export default function AdminLoginPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (blockedUntil && typeof blockedUntil === 'number' && blockedUntil > Date.now()) {
+      setError(`Too many attempts. Try again at ${formatRetryTime(blockedUntil)}.`);
+      return;
+    }
     setSubmitting(true);
     setError('');
 
@@ -112,14 +135,34 @@ export default function AdminLoginPage() {
 
     setSubmitting(false);
     if (!result || result.error) {
+      const code = typeof result?.code === 'string' ? result.code : '';
+      if (code.startsWith('lock_')) {
+        const retryAt = Number(code.slice('lock_'.length));
+        if (Number.isFinite(retryAt) && retryAt > 0) {
+          setBlockedUntil(retryAt);
+          setError(`Too many attempts. Try again at ${formatRetryTime(retryAt)}.`);
+          return;
+        }
+      }
+
+      if (code.startsWith('warn_')) {
+        const remaining = Number(code.slice('warn_'.length));
+        if (Number.isFinite(remaining)) {
+          setError(`Invalid credentials. ${remaining} retries left before temporary lockout.`);
+          return;
+        }
+      }
+
       setError('Invalid credentials.');
       return;
     }
 
+    setBlockedUntil(null);
     window.location.assign(normalizeProtectedPath(result.url || '') || safeCallback);
   };
 
-  const disableInputs = submitting || redirecting || checkingSession;
+  const isLocked = blockedUntil && typeof blockedUntil === 'number' && blockedUntil > Date.now();
+  const disableInputs = submitting || redirecting || checkingSession || isLocked;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12 text-slate-100">

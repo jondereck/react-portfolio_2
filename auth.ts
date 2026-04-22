@@ -2,11 +2,27 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import Google from 'next-auth/providers/google';
 import { PrismaAdapter } from '@auth/prisma-adapter';
+import { CredentialsSignin } from '@auth/core/errors';
 import type { UserRole } from '@prisma/client';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { GOOGLE_DRIVE_LINK_COOKIE, isGoogleDriveOAuthConfigured } from '@/lib/auth/google-drive';
 import { verifyPassword } from '@/lib/password/password';
+import { clearLoginFailures, getLoginThrottleStatus, recordLoginFailure } from '@/lib/server/login-throttle';
+
+class LoginLockoutError extends CredentialsSignin {
+  constructor(blockedUntil: number) {
+    super();
+    this.code = `lock_${Math.trunc(blockedUntil)}`;
+  }
+}
+
+class LoginRetriesWarningError extends CredentialsSignin {
+  constructor(remaining: number) {
+    super();
+    this.code = `warn_${Math.trunc(remaining)}`;
+  }
+}
 
 const credentialsSchema = {
   email: { label: 'Email', type: 'email' },
@@ -27,11 +43,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     Credentials({
       name: 'Email and Password',
       credentials: credentialsSchema,
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const email = typeof credentials?.email === 'string' ? credentials.email.trim().toLowerCase() : '';
         const password = typeof credentials?.password === 'string' ? credentials.password : '';
         if (!email || !password) {
           return null;
+        }
+
+        const req =
+          request && typeof (request as Request).headers?.get === 'function' ? (request as Request) : undefined;
+        if (req) {
+          const status = await getLoginThrottleStatus({ request: req, email, strictEmail: true });
+          if (status.isBlocked && status.blockedUntil) {
+            throw new LoginLockoutError(status.blockedUntil);
+          }
         }
 
         const user = await prisma.user.findUnique({
@@ -39,7 +64,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           include: { profile: true },
         });
         if (!user || !user.isActive || !verifyPassword(password, user.passwordHash)) {
+          if (req) {
+            const updated = await recordLoginFailure({ request: req, email, strictEmail: true });
+            if (updated.isBlocked && updated.blockedUntil) {
+              throw new LoginLockoutError(updated.blockedUntil);
+            }
+            if (updated.remaining <= 3) {
+              throw new LoginRetriesWarningError(updated.remaining);
+            }
+          }
           return null;
+        }
+
+        if (req) {
+          await clearLoginFailures({ request: req, email, strictEmail: true });
         }
 
         await prisma.user.update({
