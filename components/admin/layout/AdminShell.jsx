@@ -65,9 +65,14 @@ export default function AdminShell({ children }) {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
       <UnclothyTaskNotifier />
-      <div className="flex min-h-screen">
-        <div className="sticky top-0 hidden h-screen lg:block">
-          <AdminSidebar collapsed={sidebarCollapsed} onToggle={handleToggleSidebar} />
+      <div className="flex min-h-screen items-stretch">
+        <div className="sticky top-0 hidden h-screen self-stretch lg:block">
+          <AdminSidebar
+            collapsed={sidebarCollapsed}
+            onToggle={handleToggleSidebar}
+            onLogout={handleLogout}
+            isLoggingOut={isLoggingOut}
+          />
         </div>
 
         <div className="min-w-0 flex-1 p-4 md:p-6">

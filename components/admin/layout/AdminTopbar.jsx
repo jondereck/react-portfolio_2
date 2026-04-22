@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Dialog, Transition } from '@headlessui/react';
-import { Fragment, useMemo, useState } from 'react';
-import { LayoutPanelLeft, Menu, X } from 'lucide-react';
+import { Dialog, Menu as HeadlessMenu, Transition } from '@headlessui/react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { LayoutPanelLeft, LogOut, Menu as MenuIcon, User, X } from 'lucide-react';
 import AdminBreadcrumbs from '@/components/admin/layout/AdminBreadcrumbs';
 import { adminNavigationSections } from '@/components/admin/navigation/admin-nav-config';
 
@@ -35,6 +35,8 @@ const pageTitles = {
 export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCollapsed = false, onToggleSidebar }) {
   const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [accountName, setAccountName] = useState('My Account');
+  const [accountLoading, setAccountLoading] = useState(true);
 
   const title = useMemo(() => pageTitles[pathname] ?? 'Admin Control Center', [pathname]);
 
@@ -50,6 +52,34 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCol
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const controller = new AbortController();
+
+    const load = async () => {
+      setAccountLoading(true);
+      try {
+        const response = await fetch('/api/admin/account', { method: 'GET', signal: controller.signal });
+        if (!response.ok) {
+          throw new Error('Account request failed');
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        const account = payload?.account ?? null;
+        const resolvedName = String(account?.name || account?.email || '').trim();
+        setAccountName(resolvedName || 'My Account');
+      } catch {
+        setAccountName('My Account');
+      } finally {
+        setAccountLoading(false);
+      }
+    };
+
+    void load();
+
+    return () => controller.abort();
+  }, []);
+
   return (
     <>
       <header className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 shadow-sm md:p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -60,15 +90,84 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCol
               <h1 className="text-2xl font-bold leading-tight text-slate-900 dark:text-slate-100">{title}</h1>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsMenuOpen(true)}
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-              aria-label="Open menu"
-              title="Open menu"
-            >
-              <Menu className="size-5" />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <HeadlessMenu as="div" className="relative">
+                <HeadlessMenu.Button
+                  className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  aria-label="Account menu"
+                  title="Account"
+                >
+                  <span className="text-xs font-semibold">
+                    {String(accountName || 'A').trim().slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
+                </HeadlessMenu.Button>
+
+                <Transition
+                  as={Fragment}
+                  enter="transition ease-out duration-120"
+                  enterFrom="opacity-0 translate-y-1"
+                  enterTo="opacity-100 translate-y-0"
+                  leave="transition ease-in duration-90"
+                  leaveFrom="opacity-100 translate-y-0"
+                  leaveTo="opacity-0 translate-y-1"
+                >
+                  <HeadlessMenu.Items className="absolute right-0 top-full z-[9999] mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl focus:outline-none dark:border-slate-800 dark:bg-slate-900">
+                    <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+                      <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">
+                        {accountLoading ? 'Loading...' : accountName}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Online</p>
+                    </div>
+                    <div className="p-2">
+                      <HeadlessMenu.Item>
+                        {({ active }) => (
+                          <Link
+                            href="/admin/account"
+                            className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                              active
+                                ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50'
+                                : 'text-slate-700 dark:text-slate-200'
+                            }`}
+                          >
+                            <User className="size-4" />
+                            Manage account
+                          </Link>
+                        )}
+                      </HeadlessMenu.Item>
+
+                      <HeadlessMenu.Item disabled={!onLogout || isLoggingOut}>
+                        {({ active, disabled }) => (
+                          <button
+                            type="button"
+                            onClick={() => onLogout?.()}
+                            disabled={disabled}
+                            className={`mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                              active
+                                ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-slate-50'
+                                : 'text-slate-700 dark:text-slate-200'
+                            } ${disabled ? 'opacity-60' : ''}`}
+                          >
+                            <LogOut className="size-4" />
+                            {isLoggingOut ? 'Logging out...' : 'Logout'}
+                          </button>
+                        )}
+                      </HeadlessMenu.Item>
+                    </div>
+                  </HeadlessMenu.Items>
+                </Transition>
+              </HeadlessMenu>
+
+              <button
+                type="button"
+                onClick={() => setIsMenuOpen(true)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                aria-label="Open menu"
+                title="Open menu"
+              >
+                <MenuIcon className="size-5" />
+              </button>
+            </div>
           </div>
 
           <div className="pt-0.5">

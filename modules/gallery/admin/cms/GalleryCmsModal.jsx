@@ -3,10 +3,17 @@
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 
-export default function GalleryCmsModal({ open, onClose, title, description, children }) {
+export default function GalleryCmsModal({ open, onClose, onOpenChange, title, description, children }) {
+  const handleClose =
+    typeof onClose === 'function'
+      ? onClose
+      : typeof onOpenChange === 'function'
+        ? () => onOpenChange(false)
+        : () => {};
+
   return (
     <Transition appear show={open} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+      <Dialog as="div" className="relative z-50" onClose={handleClose}>
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-200"

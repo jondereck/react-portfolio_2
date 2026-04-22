@@ -26,6 +26,7 @@ export default function GalleryCmsHeader({
         <div className="flex h-11 w-72 items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 dark:border-slate-800 dark:bg-slate-950/40">
           <Search className="h-4 w-4 text-slate-400" />
           <input
+            id="gallery-media-search"
             value={searchValue}
             onChange={(event) => onSearchChange?.(event.target.value)}
             placeholder="Search media"
@@ -97,7 +98,7 @@ export default function GalleryCmsHeader({
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
-      <div className="flex items-center gap-3 px-4 py-3 sm:px-5 lg:px-6">
+      <div className="flex items-center gap-4 px-4 py-4 sm:px-5 lg:px-6">
         {showMobileBack ? (
           <button
             type="button"

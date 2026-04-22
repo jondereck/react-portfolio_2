@@ -13,14 +13,14 @@ export default function GalleryCmsShell({
   // Tailwind needs these classes to be statically present for arbitrary grid template values.
   const desktopGridColumns = inspector
     ? sidebarCollapsed
-      ? 'lg:grid-cols-[104px_minmax(0,1fr)_300px] xl:grid-cols-[104px_minmax(0,1fr)_340px]'
-      : 'lg:grid-cols-[280px_minmax(0,1fr)_300px] xl:grid-cols-[280px_minmax(0,1fr)_340px]'
+      ? 'lg:grid-cols-[76px_minmax(0,1fr)] xl:grid-cols-[76px_minmax(0,1fr)_340px]'
+      : 'lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_340px]'
     : sidebarCollapsed
-      ? 'lg:grid-cols-[104px_minmax(0,1fr)]'
+      ? 'lg:grid-cols-[76px_minmax(0,1fr)]'
       : 'lg:grid-cols-[280px_minmax(0,1fr)]';
 
   const shell = (
-    <div className="overflow-hidden bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800 lg:rounded-[28px]">
+    <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       {header}
 
       <div className={`grid ${desktopGridColumns}`}>

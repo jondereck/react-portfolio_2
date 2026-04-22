@@ -50,7 +50,7 @@ export default function GalleryInspectorPanel({
 
   if (!photo) {
     return (
-      <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
+      <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 xl:block dark:border-slate-800 dark:bg-slate-950/20">
         <div className="sticky top-28">
           <div className="flex items-center justify-between">
             <div>
@@ -76,7 +76,7 @@ export default function GalleryInspectorPanel({
   }
 
   return (
-    <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 lg:block dark:border-slate-800 dark:bg-slate-950/20">
+    <aside className="hidden border-l border-slate-200 bg-slate-50/40 p-3 xl:block dark:border-slate-800 dark:bg-slate-950/20">
       <div className="sticky top-28">
         <div className="flex items-center justify-between">
           <div>

@@ -16,7 +16,7 @@ function isActivePath(pathname, href) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function AdminSidebar({ collapsed = false, onToggle }) {
+export default function AdminSidebar({ collapsed = false, onToggle, onLogout, isLoggingOut = false }) {
   const pathname = usePathname();
 
   return (
@@ -28,6 +28,8 @@ export default function AdminSidebar({ collapsed = false, onToggle }) {
       sections={adminNavigationSections}
       pathname={pathname}
       isActivePath={isActivePath}
+      onLogout={onLogout}
+      isLoggingOut={isLoggingOut}
     />
   );
 }

@@ -69,7 +69,7 @@ export default function GalleryAlbumsSidebar({
   return (
     <>
       <section className="border-b border-slate-200 px-4 py-3 sm:px-5 lg:hidden dark:border-slate-800">
-        <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
@@ -110,42 +110,45 @@ export default function GalleryAlbumsSidebar({
       </section>
 
       <aside
-        className={`hidden border-r border-slate-200 bg-slate-50/60 lg:block dark:border-slate-800 dark:bg-slate-950/30 ${collapsed ? 'p-3' : 'p-5'}`}
+        className={`hidden border-r border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900 ${collapsed ? 'p-3' : 'p-5'}`}
       >
-        <div className={`flex items-center justify-between ${collapsed ? 'flex-col gap-2' : ''}`}>
-          {collapsed ? null : (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Albums</p>
-              <h2 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-50">Quick switching</h2>
-            </div>
-          )}
-          <div className={`flex items-center gap-2 ${collapsed ? 'w-full justify-center' : ''}`}>
-            <button
-              type="button"
-              onClick={() => onToggleCollapsed?.()}
-              className={`inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 ${toggleDisabled || !onToggleCollapsed ? 'opacity-60' : ''}`}
-              aria-label={collapsed ? 'Expand album sidebar' : 'Collapse album sidebar'}
-              disabled={toggleDisabled || !onToggleCollapsed}
-            >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-            </button>
-            {!collapsed ? (
+        <div className="flex h-full flex-col">
+          <div className={`flex items-center justify-between ${collapsed ? 'flex-col gap-2' : ''}`}>
+            {collapsed ? null : (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-500 dark:text-slate-400">
+                  Albums
+                </p>
+                <h2 className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-50">Quick Switch</h2>
+              </div>
+            )}
+            <div className={`flex items-center gap-2 ${collapsed ? 'w-full justify-center' : ''}`}>
               <button
                 type="button"
-                onClick={onCreateAlbumClick}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
-                aria-label="Add album"
+                onClick={() => onToggleCollapsed?.()}
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-900 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800 ${toggleDisabled || !onToggleCollapsed ? 'opacity-60' : ''}`}
+                aria-label={collapsed ? 'Expand album sidebar' : 'Collapse album sidebar'}
+                disabled={toggleDisabled || !onToggleCollapsed}
               >
-                <Plus className="h-4 w-4" />
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
               </button>
-            ) : null}
+              {!collapsed ? (
+                <button
+                  type="button"
+                  onClick={onCreateAlbumClick}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-900 transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800"
+                  aria-label="Add album"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
           </div>
-        </div>
 
-        <div className={`${collapsed ? 'mt-3' : 'mt-4'} space-y-2`}>
+        <div className={`${collapsed ? 'mt-3' : 'mt-4'} flex min-h-0 flex-1 flex-col space-y-2`}>
           {loadingAlbums ? (
             <div className="rounded-[24px] border border-slate-200 bg-white p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-              Loading albums…
+              Loading albums...
             </div>
           ) : null}
 
@@ -156,46 +159,67 @@ export default function GalleryAlbumsSidebar({
           ) : null}
 
           {collapsed ? (
-            <>
-              {visibleAlbums.map((album) => {
-                const isActive = album.id === selectedAlbumId;
-                const coverUrl = resolveAlbumCoverUrl(album);
-                const coverPhoto = album?.coverPhoto ?? null;
-                const shouldBlurCover = Boolean(coverPhoto) && shouldBlurPhoto(coverPhoto, { blurEnabled: blurUnclothyGenerated });
+            <div className="flex min-h-0 flex-1 flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPageIndex((current) => Math.max(current - 1, 0))}
+                disabled={!canGoPrev}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                aria-label="Previous albums page"
+              >
+                <ChevronUp className="h-4 w-4" />
+              </button>
 
-                return (
-                  <div key={album.id} className="relative flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => onSelectAlbum?.(album.id)}
-                      title={album.name}
-                      className={`relative h-12 w-12 overflow-hidden rounded-2xl border transition ${
-                        isActive
-                          ? 'border-slate-900 bg-slate-900 ring-2 ring-slate-900 dark:border-slate-50 dark:bg-slate-50 dark:ring-slate-50'
-                          : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700'
-                      }`}
-                      aria-label={`Select album ${album.name}`}
-                    >
-                      {coverUrl ? (
-                        <MediaPreview
-                          url={coverUrl}
-                          mimeType={coverPhoto?.mimeType}
-                          sourceType={coverPhoto?.sourceType}
-                          sourceId={coverPhoto?.sourceId}
-                          alt={album.name}
-                          className={`h-full w-full object-cover ${shouldBlurCover ? 'blur-md' : ''}`}
-                          controls={false}
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-300">
-                          IMG
-                        </div>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </>
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+                {visibleAlbums.map((album) => {
+                  const isActive = album.id === selectedAlbumId;
+                  const coverUrl = resolveAlbumCoverUrl(album);
+                  const coverPhoto = album?.coverPhoto ?? null;
+                  const shouldBlurCover =
+                    Boolean(coverPhoto) && shouldBlurPhoto(coverPhoto, { blurEnabled: blurUnclothyGenerated });
+
+                  return (
+                    <div key={album.id} className="relative flex justify-center">
+                      <button
+                        type="button"
+                        onClick={() => onSelectAlbum?.(album.id)}
+                        title={album.name}
+                        className={`relative h-14 w-14 overflow-hidden rounded-full border-2 transition ${
+                          isActive
+                            ? 'border-blue-500 ring-4 ring-blue-100 dark:ring-blue-950/40'
+                            : 'border-white hover:border-slate-300 dark:border-slate-900 dark:hover:border-slate-700'
+                        }`}
+                        aria-label={`Select album ${album.name}`}
+                      >
+                        {coverUrl ? (
+                          <MediaPreview
+                            url={coverUrl}
+                            mimeType={coverPhoto?.mimeType}
+                            sourceType={coverPhoto?.sourceType}
+                            sourceId={coverPhoto?.sourceId}
+                            alt={album.name}
+                            className={`h-full w-full object-cover ${shouldBlurCover ? 'blur-md' : ''}`}
+                            controls={false}
+                          />
+                        ) : (
+                          <div className="h-full w-full bg-gradient-to-br from-slate-200 via-slate-100 to-white dark:from-slate-800 dark:via-slate-900 dark:to-slate-950" />
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPageIndex((current) => Math.min(current + 1, totalPages - 1))}
+                disabled={!canGoNext}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                aria-label="Next albums page"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            </div>
           ) : (
             <>
               {visibleAlbums.map((album) => {
@@ -231,7 +255,7 @@ export default function GalleryAlbumsSidebar({
                         className="group flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm dark:border-slate-800 dark:bg-slate-800">
+                          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-slate-200 bg-slate-100 shadow-sm dark:border-slate-800 dark:bg-slate-800">
                             {coverUrl ? (
                               <MediaPreview
                                 url={coverUrl}
@@ -293,34 +317,34 @@ export default function GalleryAlbumsSidebar({
             </>
           )}
 
-          {!loadingAlbums && totalPages > 1 ? (
-            <div className={`flex items-center justify-between gap-2 pt-2 ${collapsed ? 'flex-col' : ''}`}>
+          {!collapsed && !loadingAlbums && totalPages > 1 ? (
+            <div className="flex items-center justify-between gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setPageIndex((current) => Math.max(current - 1, 0))}
                 disabled={!canGoPrev}
-                className={`inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 ${collapsed ? 'w-12 px-0' : ''}`}
+                className="inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 aria-label="Previous albums page"
               >
-                {collapsed ? <ChevronUp className="h-4 w-4" /> : 'Prev'}
+                Prev
               </button>
-              {collapsed ? null : (
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  Page {pageIndex + 1} / {totalPages}
-                </span>
-              )}
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Page {pageIndex + 1} / {totalPages}
+              </span>
               <button
                 type="button"
                 onClick={() => setPageIndex((current) => Math.min(current + 1, totalPages - 1))}
                 disabled={!canGoNext}
-                className={`inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 ${collapsed ? 'w-12 px-0' : ''}`}
+                className="inline-flex h-9 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 transition hover:bg-slate-50 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 aria-label="Next albums page"
               >
-                {collapsed ? <ChevronDown className="h-4 w-4" /> : 'Next'}
+                Next
               </button>
             </div>
           ) : null}
         </div>
+
+      </div>
       </aside>
     </>
   );
