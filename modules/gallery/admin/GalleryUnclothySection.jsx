@@ -642,11 +642,8 @@ export default function GalleryUnclothySection({
         </div>
       </div>
 
-      <details className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-50">Advanced settings</summary>
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-          Keep lower-priority fields collapsed by default.
-        </p>
+      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <p className="text-sm font-semibold text-slate-900 dark:text-slate-50">Advanced settings</p>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {advancedFields.map((key) => {
@@ -682,7 +679,7 @@ export default function GalleryUnclothySection({
             );
           })}
         </div>
-      </details>
+      </div>
 
       <button
         type="button"
@@ -690,24 +687,16 @@ export default function GalleryUnclothySection({
         disabled={!canEnqueue || disableInputs}
         onClick={handleEnqueue}
       >
-        {queue.length > 0 || displayTask ? 'Add to queue' : 'Save changes'}
+        {queue.length > 0 || displayTask ? 'Add to queue' : 'Generate'}
       </button>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-        {queue.length > 0 ? (
+      {queue.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
           <button type="button" className={ghostButtonStyles} onClick={clearQueue} disabled={disableInputs}>
             Clear queue
           </button>
-        ) : null}
-        <button
-          type="button"
-          className={ghostButtonStyles}
-          disabled={disableInputs}
-          onClick={() => setSettings(unclothyDefaultUiSettings)}
-        >
-          Reset settings
-        </button>
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

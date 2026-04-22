@@ -89,8 +89,11 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [searchValue, setSearchValue] = useState('');
   const [activeChip, setActiveChip] = useState('all');
   const [isDesktop, setIsDesktop] = useState(false);
+  const [detailsOpenDesktop, setDetailsOpenDesktop] = useState(false);
   const [pendingPreviewTask, setPendingPreviewTask] = useState(null);
   const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
+  const [mediaPage, setMediaPage] = useState(1);
+  const [mediaPageSize, setMediaPageSize] = useState(48);
   const [manualSidebarCollapsed, setManualSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
@@ -268,6 +271,30 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       }
     }
   };
+
+  useEffect(() => {
+    // Reset paging when changing the album/search/filter context.
+    setMediaPage(1);
+  }, [activeChip, searchValue, selectedAlbumId]);
+
+  const mediaTotal = filteredPhotos.length;
+  const mediaTotalPages = Math.max(1, Math.ceil(mediaTotal / mediaPageSize));
+
+  useEffect(() => {
+    // Clamp to available pages if the total shrinks.
+    setMediaPage((current) => Math.min(Math.max(1, current), mediaTotalPages));
+  }, [mediaTotalPages]);
+
+  const mediaStartIndex = mediaTotal === 0 ? 0 : (mediaPage - 1) * mediaPageSize + 1;
+  const mediaEndIndex = Math.min(mediaTotal, mediaPage * mediaPageSize);
+  const pagedPhotos = filteredPhotos.slice((mediaPage - 1) * mediaPageSize, mediaPage * mediaPageSize);
+
+  useEffect(() => {
+    // Selecting an image should auto-open the details panel on desktop.
+    if (!isDesktop) return;
+    if (selectedPhotoIds.length === 0) return;
+    setDetailsOpenDesktop(true);
+  }, [isDesktop, selectedPhotoIds.length]);
 
   const handleOpenUpload = () => {
     if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches) {
@@ -461,6 +488,9 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
             searchValue={searchValue}
             onSearchChange={setSearchValue}
             onOpenFilter={handleOpenFilter}
+            onToggleDetails={() => setDetailsOpenDesktop((current) => !current)}
+            detailsOpen={detailsOpenDesktop}
+            detailsBadge={detailsBadge}
             onOpenImport={handleOpenImport}
             onOpenUpload={handleOpenUpload}
           />
@@ -501,14 +531,14 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         main={
           <main className="min-w-0 bg-white dark:bg-slate-900">
             <section className={`${activeTab !== 'media' ? 'hidden lg:block' : ''}`}>
-              <GalleryMediaToolbar
-                searchValue={searchValue}
-                onSearchChange={setSearchValue}
-                activeChip={activeChip}
-                chips={chips}
-                onChipChange={handleChipChange}
-                onOpenFilter={handleOpenFilter}
-              />
+                <GalleryMediaToolbar
+                  searchValue={searchValue}
+                  onSearchChange={setSearchValue}
+                  activeChip={activeChip}
+                  chips={chips}
+                  onChipChange={handleChipChange}
+                  onOpenFilter={handleOpenFilter}
+                />
 
               {loadingPhotos ? (
                 <div className="px-4 pb-6 sm:px-5 lg:px-6">
@@ -524,26 +554,80 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   />
                 </div>
               ) : (
-                <GalleryMediaGrid
-                  photos={filteredPhotos}
-                  albumName={selectedAlbum?.name}
-                  selectedPhotoIds={selectedPhotoIds}
-                  togglePhotoSelect={togglePhotoSelect}
-                  selectPhotoRange={selectPhotoRange}
-                  onOpenPreview={handleOpenPreview}
-                  inspectorOpen={Boolean(selectedPhoto)}
-                  blurUnclothyGenerated={blurUnclothyGenerated}
-                  emptyState={
-                    photos.length === 0 ? (
-                      <GalleryEmptyState
-                        title="No media yet"
-                        description="Upload files or import Google Drive items to populate this album."
-                      />
-                    ) : (
-                      <GalleryEmptyState title="No matches" description="Try clearing search or switching filters." />
-                    )
-                  }
-                />
+                <div>
+                  <div className="mb-4 flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:px-6">
+                    <div className="text-sm text-slate-600 dark:text-slate-300">
+                      <span className="font-medium text-slate-900 dark:text-slate-50">Showing</span>{' '}
+                      <span className="tabular-nums">
+                        {mediaStartIndex}–{mediaEndIndex}
+                      </span>{' '}
+                      <span>of</span> <span className="tabular-nums font-medium">{mediaTotal}</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                        <span className="hidden sm:inline">Per page</span>
+                        <select
+                          value={mediaPageSize}
+                          onChange={(event) => {
+                            const nextSize = Number(event.target.value);
+                            setMediaPageSize(Number.isFinite(nextSize) && nextSize > 0 ? nextSize : 48);
+                            setMediaPage(1);
+                          }}
+                          className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                        >
+                          <option value={24}>24</option>
+                          <option value={48}>48</option>
+                          <option value={72}>72</option>
+                        </select>
+                      </label>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setMediaPage((current) => Math.max(1, current - 1))}
+                          disabled={mediaPage <= 1}
+                          className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                        >
+                          Prev
+                        </button>
+                        <span className="text-sm text-slate-600 dark:text-slate-300">
+                          <span className="tabular-nums font-medium text-slate-900 dark:text-slate-50">{mediaPage}</span> /{' '}
+                          <span className="tabular-nums">{mediaTotalPages}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setMediaPage((current) => Math.min(mediaTotalPages, current + 1))}
+                          disabled={mediaPage >= mediaTotalPages}
+                          className="inline-flex h-10 items-center justify-center rounded-2xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <GalleryMediaGrid
+                    photos={pagedPhotos}
+                    albumName={selectedAlbum?.name}
+                    selectedPhotoIds={selectedPhotoIds}
+                    togglePhotoSelect={togglePhotoSelect}
+                    selectPhotoRange={selectPhotoRange}
+                    onOpenPreview={handleOpenPreview}
+                    inspectorOpen={Boolean(selectedPhoto)}
+                    blurUnclothyGenerated={blurUnclothyGenerated}
+                    emptyState={
+                      photos.length === 0 ? (
+                        <GalleryEmptyState
+                          title="No media yet"
+                          description="Upload files or import Google Drive items to populate this album."
+                        />
+                      ) : (
+                        <GalleryEmptyState title="No matches" description="Try clearing search or switching filters." />
+                      )
+                    }
+                  />
+                </div>
               )}
             </section>
 
@@ -674,45 +758,47 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           </main>
         }
         inspector={
-          selectedPhoto ? (
-            <GalleryInspectorPanel
-              photo={selectedPhoto}
-              album={selectedAlbum}
-              onClose={clearPhotoSelection}
-              blurUnclothyGenerated={blurUnclothyGenerated}
-              onPhotoUpdated={updatePhotoInState}
-            >
-              {hasTasks ? (
-                <GalleryUnclothyTasksPanel
-                  active={unclothyActive}
-                  activeTasks={unclothyActiveTasks}
-                  failedTasks={unclothyFailedTasks}
-                  completedTasks={unclothyCompletedTasks}
-                  queue={unclothyQueue}
-                  onOpenTask={openTask}
-                  onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
-                  onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
-                  onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
-                  onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
-                  onClearQueue={clearUnclothyQueue}
-                  hideWhenEmpty={false}
-                />
-              ) : null}
-            </GalleryInspectorPanel>
-          ) : hasTasks ? (
-            <GalleryTasksInspectorPanel
-              active={unclothyActive}
-              activeTasks={unclothyActiveTasks}
-              failedTasks={unclothyFailedTasks}
-              completedTasks={unclothyCompletedTasks}
-              queue={unclothyQueue}
-              onOpenTask={openTask}
-              onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
-              onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
-              onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
-              onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
-              onClearQueue={clearUnclothyQueue}
-            />
+          isDesktop && detailsOpenDesktop ? (
+            selectedPhoto ? (
+              <GalleryInspectorPanel
+                photo={selectedPhoto}
+                album={selectedAlbum}
+                onClose={clearPhotoSelection}
+                blurUnclothyGenerated={blurUnclothyGenerated}
+                onPhotoUpdated={updatePhotoInState}
+              >
+                {hasTasks ? (
+                  <GalleryUnclothyTasksPanel
+                    active={unclothyActive}
+                    activeTasks={unclothyActiveTasks}
+                    failedTasks={unclothyFailedTasks}
+                    completedTasks={unclothyCompletedTasks}
+                    queue={unclothyQueue}
+                    onOpenTask={openTask}
+                    onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
+                    onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
+                    onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
+                    onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
+                    onClearQueue={clearUnclothyQueue}
+                    hideWhenEmpty={false}
+                  />
+                ) : null}
+              </GalleryInspectorPanel>
+            ) : (
+              <GalleryTasksInspectorPanel
+                active={unclothyActive}
+                activeTasks={unclothyActiveTasks}
+                failedTasks={unclothyFailedTasks}
+                completedTasks={unclothyCompletedTasks}
+                queue={unclothyQueue}
+                onOpenTask={openTask}
+                onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
+                onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
+                onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
+                onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
+                onClearQueue={clearUnclothyQueue}
+              />
+            )
           ) : null
         }
         mobileFooterActions={

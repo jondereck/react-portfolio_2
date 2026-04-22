@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, FolderOpen, Search, SlidersHorizontal, Upload } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Info, Search, SlidersHorizontal, Upload } from 'lucide-react';
 
 export default function GalleryCmsHeader({
   albumName,
@@ -10,6 +10,9 @@ export default function GalleryCmsHeader({
   onOpenFilter,
   onOpenImport,
   onOpenUpload,
+  onToggleDetails,
+  detailsOpen = false,
+  detailsBadge = 0,
   showSearch = true,
   showUploadButton = true,
   desktopActions,
@@ -39,6 +42,32 @@ export default function GalleryCmsHeader({
         >
           <SlidersHorizontal className="h-4 w-4" />
           Filter
+        </button>
+      ) : null}
+
+      {typeof onToggleDetails === 'function' ? (
+        <button
+          type="button"
+          onClick={onToggleDetails}
+          className={`inline-flex h-11 items-center gap-2 rounded-2xl border px-4 text-sm font-medium transition ${
+            detailsOpen
+              ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-50 dark:bg-slate-50 dark:text-slate-900'
+              : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Info className="h-4 w-4" />
+          Details
+          {detailsBadge ? (
+            <span
+              className={`ml-1 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                detailsOpen
+                  ? 'bg-white/15 text-white dark:bg-slate-900 dark:text-slate-50'
+                  : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+              }`}
+            >
+              {detailsBadge}
+            </span>
+          ) : null}
         </button>
       ) : null}
 

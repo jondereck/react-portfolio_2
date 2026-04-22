@@ -375,6 +375,23 @@ export async function listUnclothyQueueTasksForUser(userId: string, profileId?: 
     take: 100,
   });
 
+  // Cleanup completed task history older than 7 days (per user/profile).
+  // This keeps the UI history list short and avoids unbounded growth.
+  try {
+    const retentionMs = 7 * 24 * 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() - retentionMs);
+    await prisma.unclothyGenerationTask.deleteMany({
+      where: {
+        userId,
+        ...(profileId ? { profileId } : {}),
+        status: UnclothyGenerationTaskStatus.completed,
+        OR: [{ completedAt: { lt: cutoff } }, { completedAt: null, createdAt: { lt: cutoff } }],
+      },
+    });
+  } catch {
+    // ignore cleanup failure
+  }
+
   const completedTasks = await prisma.unclothyGenerationTask.findMany({
     where: {
       userId,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Clock3, Image as ImageIcon, Loader2, TriangleAlert, X } from 'lucide-react';
 import { getUnclothyGenerationModeLabel } from '@/lib/unclothy-settings';
 
@@ -204,7 +204,20 @@ export default function GalleryUnclothyTasksPanel({
   hideWhenEmpty = false,
 }) {
   const queued = Array.isArray(queue) ? queue : [];
-  const completed = Array.isArray(completedTasks) ? completedTasks : [];
+  const completedRaw = Array.isArray(completedTasks) ? completedTasks : [];
+  const completed = useMemo(() => {
+    const retentionMs = 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - retentionMs;
+    return completedRaw.filter((task) => {
+      const ts =
+        typeof task?.completedAt === 'number'
+          ? task.completedAt
+          : typeof task?.createdAt === 'number'
+            ? task.createdAt
+            : null;
+      return ts ? ts >= cutoff : true;
+    });
+  }, [completedRaw]);
   const runningAll = Array.isArray(activeTasks) && activeTasks.length > 0 ? activeTasks : active?.status === 'running' ? [active] : [];
   const running = runningAll.slice(0, 3);
   const failed = Array.isArray(failedTasks) ? failedTasks : active?.phase === 'error' ? [active] : [];
@@ -214,12 +227,26 @@ export default function GalleryUnclothyTasksPanel({
   const historyCount = completed.length;
   const hasTaskItems = taskCount > 0;
   const [tab, setTab] = useState(() => (!hasTaskItems && historyCount > 0 ? 'history' : 'tasks'));
+  const [historyPage, setHistoryPage] = useState(1);
+  const historyPageSize = 6;
+  const historyTotalPages = Math.max(1, Math.ceil(historyCount / historyPageSize));
+  const historyStartIndex = historyCount === 0 ? 0 : (historyPage - 1) * historyPageSize + 1;
+  const historyEndIndex = Math.min(historyCount, historyPage * historyPageSize);
+  const pagedCompleted = completed.slice((historyPage - 1) * historyPageSize, historyPage * historyPageSize);
 
   useEffect(() => {
     if (tab === 'tasks' && !hasTaskItems && historyCount > 0) {
       setTab('history');
     }
   }, [hasTaskItems, historyCount, tab]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [tab]);
+
+  useEffect(() => {
+    setHistoryPage((current) => Math.min(Math.max(1, current), historyTotalPages));
+  }, [historyTotalPages]);
 
   if (!hasAny) {
     if (hideWhenEmpty) {
@@ -337,13 +364,43 @@ export default function GalleryUnclothyTasksPanel({
         </>
       ) : completed.length > 0 ? (
         <div className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Recently generated</p>
-            <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">{completed.length} saved result(s)</p>
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Recently generated</p>
+              <p className="mt-1 text-sm font-semibold text-slate-950 dark:text-slate-50">{completed.length} saved result(s)</p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Showing <span className="tabular-nums">{historyStartIndex}–{historyEndIndex}</span> of{' '}
+                <span className="tabular-nums">{historyCount}</span>
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
+                disabled={historyPage <= 1}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-50 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Prev
+              </button>
+              <span className="inline-flex items-center rounded-xl bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <span className="tabular-nums">{historyPage}</span>
+                <span className="px-1 text-slate-400 dark:text-slate-500">/</span>
+                <span className="tabular-nums">{historyTotalPages}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setHistoryPage((current) => Math.min(historyTotalPages, current + 1))}
+                disabled={historyPage >= historyTotalPages}
+                className="inline-flex h-9 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 disabled:opacity-50 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Next
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 space-y-2">
-            {completed.map((task) => (
+            {pagedCompleted.map((task) => (
               <HistoryRow key={task.id || task.queueTaskId} task={task} onOpenTask={onOpenTask} />
             ))}
           </div>

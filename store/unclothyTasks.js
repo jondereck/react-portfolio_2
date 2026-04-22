@@ -10,6 +10,7 @@ let polling = false;
 let pollTimer = null;
 let refreshInFlight = false;
 let knownCompletedTaskIds = new Set();
+let snapshot = null;
 
 let state = {
   tasks: [],
@@ -27,6 +28,22 @@ let state = {
 const emitChange = () => {
   listeners.forEach((listener) => listener());
 };
+
+function buildSnapshot() {
+  return {
+    ...state,
+    hydrateFromLocalStorage,
+    enqueue,
+    clearQueue,
+    cancelActive,
+    cancelTask,
+    retryActive,
+    retryTask,
+    stopTrackingActive,
+    startRunner,
+    refreshTasks,
+  };
+}
 
 function normalizeTask(task) {
   if (!task || typeof task !== 'object') return null;
@@ -66,6 +83,7 @@ function deriveTaskState(tasks) {
 
 const setState = (patch) => {
   state = { ...state, ...patch };
+  snapshot = buildSnapshot();
   emitChange();
 };
 
@@ -74,19 +92,7 @@ const subscribe = (listener) => {
   return () => listeners.delete(listener);
 };
 
-const getSnapshot = () => ({
-  ...state,
-  hydrateFromLocalStorage,
-  enqueue,
-  clearQueue,
-  cancelActive,
-  cancelTask,
-  retryActive,
-  retryTask,
-  stopTrackingActive,
-  startRunner,
-  refreshTasks,
-});
+const getSnapshot = () => snapshot ?? (snapshot = buildSnapshot());
 
 export const useUnclothyTasksStore = (selector = (value) => value) =>
   useSyncExternalStore(subscribe, () => selector(getSnapshot()), () => selector(getSnapshot()));
