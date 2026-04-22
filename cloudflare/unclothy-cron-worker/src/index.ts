@@ -4,6 +4,17 @@ export interface Env {
   WORKER_TARGET_URL?: string;
 }
 
+// Minimal runtime types so this file typechecks without relying on external
+// Cloudflare Workers type packages.
+type ScheduledEvent = {
+  cron: string;
+  scheduledTime: number;
+};
+
+type ExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 async function readResponseBody(response: Response) {
   const contentType = (response.headers.get('content-type') || '').toLowerCase();
   if (contentType.includes('application/json')) {
