@@ -231,6 +231,7 @@ model UnclothyGenerationTask {
   statusText      String?
   errorMessage    String?
   attempts        Int                          @default(0)
+  automaticRetryCount Int                      @default(0)
   nextRunAt       DateTime                     @default(now())
   lastErrorCode   String?
   lastErrorAt     DateTime?

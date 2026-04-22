@@ -6,11 +6,13 @@ export default function GalleryTasksInspectorPanel({
   active,
   activeTasks,
   failedTasks,
+  completedTasks,
   queue,
   onOpenTask,
   onCancelActive,
   onRetryActive,
   onDismissActive,
+  onCancelQueued,
   onClearQueue,
 }) {
   return (
@@ -30,11 +32,13 @@ export default function GalleryTasksInspectorPanel({
             active={active}
             activeTasks={activeTasks}
             failedTasks={failedTasks}
+            completedTasks={completedTasks}
             queue={queue}
             onOpenTask={onOpenTask}
             onCancelActive={onCancelActive}
             onRetryActive={onRetryActive}
             onDismissActive={onDismissActive}
+            onCancelQueued={onCancelQueued}
             onClearQueue={onClearQueue}
             hideWhenEmpty={false}
           />

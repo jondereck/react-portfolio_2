@@ -16,6 +16,7 @@ let state = {
   queue: [],
   activeTasks: [],
   failedTasks: [],
+  completedTasks: [],
   active: null,
   lastCompletedAt: null,
   lastCompletedAlbumId: null,
@@ -58,6 +59,7 @@ function deriveTaskState(tasks) {
     queue,
     activeTasks,
     failedTasks,
+    completedTasks,
     active: activeTasks[0] || failedTasks[0] || null,
   };
 }

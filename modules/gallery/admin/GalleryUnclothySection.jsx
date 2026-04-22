@@ -684,16 +684,6 @@ export default function GalleryUnclothySection({
         </div>
       </details>
 
-      <details className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <summary className="cursor-pointer text-sm font-semibold text-slate-900 dark:text-slate-50">Debug payload</summary>
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-          Exact settings payload that will be sent to <span className="font-semibold">/api/admin/integrations/unclothy/tasks</span>.
-        </p>
-        <pre className="mt-3 max-h-64 overflow-auto rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-200">
-          {JSON.stringify(settingsPayload, null, 2)}
-        </pre>
-      </details>
-
       <button
         type="button"
         className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-50 dark:text-slate-900"

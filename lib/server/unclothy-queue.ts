@@ -16,7 +16,19 @@ const WORKER_BATCH_SIZE = 24;
 const WORKER_ADVISORY_LOCK_ID = BigInt(924_641_903);
 const POLL_INTERVAL_MS = 60_000;
 
+const queueTaskInclude = {
+  album: { select: { name: true } },
+  sourcePhoto: { select: { id: true, caption: true, originalFilename: true } },
+} as const;
+
 type QueueTaskRecord = Prisma.UnclothyGenerationTaskGetPayload<Record<string, never>>;
+type QueueTaskListRecord = Prisma.UnclothyGenerationTaskGetPayload<{ include: typeof queueTaskInclude }>;
+type CreatedPhotoSummary = {
+  id: number;
+  imageUrl: string;
+  mimeType: string | null;
+  caption: string | null;
+};
 
 function readIntEnv(name: string, fallback: number) {
   const raw = process.env[name];
@@ -251,7 +263,46 @@ function mimeToExtension(mimeType: string | null) {
   }
 }
 
-export function serializeUnclothyQueueTask(task: QueueTaskRecord) {
+function getTaskDurationMs(task: Pick<QueueTaskRecord, 'startedAt' | 'completedAt'>) {
+  if (!(task.startedAt instanceof Date) || !(task.completedAt instanceof Date)) {
+    return null;
+  }
+
+  return Math.max(0, task.completedAt.getTime() - task.startedAt.getTime());
+}
+
+function resetTaskForRetryData(statusText = 'Queued') {
+  return {
+    status: UnclothyGenerationTaskStatus.queued,
+    phase: UnclothyGenerationTaskPhase.queued,
+    percent: 0,
+    statusText,
+    providerStatus: null,
+    errorMessage: null,
+    attempts: 0,
+    nextRunAt: new Date(),
+    providerTaskId: null,
+    settingsSent: null,
+    ingestRetries: 0,
+    startedAt: null,
+    completedAt: null,
+    failedAt: null,
+    canceledAt: null,
+    createdPhotoId: null,
+  };
+}
+
+function getSourcePhotoLabel(task: QueueTaskRecord | QueueTaskListRecord) {
+  const sourcePhoto = 'sourcePhoto' in task ? task.sourcePhoto : null;
+  return sourcePhoto?.caption || sourcePhoto?.originalFilename || (sourcePhoto?.id ? `Image ${sourcePhoto.id}` : `Image ${task.sourcePhotoId}`);
+}
+
+export function serializeUnclothyQueueTask(
+  task: QueueTaskRecord | QueueTaskListRecord,
+  createdPhoto?: CreatedPhotoSummary | null,
+) {
+  const albumName = 'album' in task ? task.album?.name ?? null : null;
+
   return {
     id: task.id,
     queueTaskId: task.id,
@@ -264,11 +315,14 @@ export function serializeUnclothyQueueTask(task: QueueTaskRecord) {
     providerStatus: task.providerStatus,
     errorMessage: task.errorMessage,
     attempts: typeof task.attempts === 'number' ? task.attempts : 0,
+    automaticRetryCount: typeof task.automaticRetryCount === 'number' ? task.automaticRetryCount : 0,
     nextRunAt: task.nextRunAt?.getTime?.() ?? null,
     lastErrorCode: task.lastErrorCode ?? null,
     lastErrorAt: task.lastErrorAt?.getTime?.() ?? null,
     albumId: task.albumId,
+    albumName,
     sourcePhotoId: task.sourcePhotoId,
+    sourcePhotoLabel: getSourcePhotoLabel(task),
     settingsSnapshot: task.settingsSnapshot,
     settingsSent: task.settingsSent,
     startedAt: task.startedAt?.getTime() ?? null,
@@ -276,7 +330,31 @@ export function serializeUnclothyQueueTask(task: QueueTaskRecord) {
     failedAt: task.failedAt?.getTime() ?? null,
     createdAt: task.createdAt.getTime(),
     createdPhotoId: task.createdPhotoId,
+    createdPhotoUrl: createdPhoto?.imageUrl ?? null,
+    createdPhotoMimeType: createdPhoto?.mimeType ?? null,
+    createdPhotoCaption: createdPhoto?.caption ?? null,
+    durationMs: getTaskDurationMs(task),
   };
+}
+
+async function serializeUnclothyQueueTasks(tasks: QueueTaskListRecord[]) {
+  const createdPhotoIds = [
+    ...new Set(
+      tasks
+        .map((task) => task.createdPhotoId)
+        .filter((id): id is number => Number.isInteger(id) && id > 0),
+    ),
+  ];
+
+  const createdPhotos = createdPhotoIds.length
+    ? await prisma.albumPhoto.findMany({
+        where: { id: { in: createdPhotoIds } },
+        select: { id: true, imageUrl: true, mimeType: true, caption: true },
+      })
+    : [];
+  const createdPhotoById = new Map(createdPhotos.map((photo) => [photo.id, photo]));
+
+  return tasks.map((task) => serializeUnclothyQueueTask(task, task.createdPhotoId ? createdPhotoById.get(task.createdPhotoId) ?? null : null));
 }
 
 export async function listUnclothyQueueTasksForUser(userId: string, profileId?: number) {
@@ -292,6 +370,7 @@ export async function listUnclothyQueueTasksForUser(userId: string, profileId?: 
         ],
       },
     },
+    include: queueTaskInclude,
     orderBy: [{ createdAt: 'asc' }],
     take: 100,
   });
@@ -302,11 +381,12 @@ export async function listUnclothyQueueTasksForUser(userId: string, profileId?: 
       ...(profileId ? { profileId } : {}),
       status: UnclothyGenerationTaskStatus.completed,
     },
+    include: queueTaskInclude,
     orderBy: [{ completedAt: 'desc' }],
     take: 20,
   });
 
-  return [...activeTasks, ...completedTasks].map(serializeUnclothyQueueTask);
+  return serializeUnclothyQueueTasks([...activeTasks, ...completedTasks]);
 }
 
 export async function getUnclothyQueueTaskForUser(taskId: string, userId: string) {
@@ -315,8 +395,11 @@ export async function getUnclothyQueueTaskForUser(taskId: string, userId: string
       id: taskId,
       userId,
     },
+    include: queueTaskInclude,
   });
-  return task ? serializeUnclothyQueueTask(task) : null;
+  if (!task) return null;
+  const [serialized] = await serializeUnclothyQueueTasks([task]);
+  return serialized;
 }
 
 export async function enqueueUnclothyGenerationTask(input: {
@@ -397,23 +480,10 @@ export async function retryUnclothyQueueTask(taskId: string, userId: string) {
   const updated = await prisma.unclothyGenerationTask.update({
     where: { id: task.id },
     data: {
-      status: UnclothyGenerationTaskStatus.queued,
-      phase: UnclothyGenerationTaskPhase.queued,
-      percent: 0,
-      statusText: 'Queued',
-      providerStatus: null,
-      errorMessage: null,
-      attempts: 0,
-      nextRunAt: new Date(),
+      ...resetTaskForRetryData('Queued'),
+      automaticRetryCount: 0,
       lastErrorCode: null,
       lastErrorAt: null,
-      failedAt: null,
-      providerTaskId: null,
-      settingsSent: null,
-      ingestRetries: 0,
-      startedAt: null,
-      completedAt: null,
-      createdPhotoId: null,
     },
   });
 
@@ -435,6 +505,29 @@ async function failTask(task: QueueTaskRecord, error: unknown, errorCodeOverride
       lastErrorAt: new Date(),
     },
   });
+}
+
+async function autoRetryTask(task: QueueTaskRecord, error: unknown, nextRetryCount: number, label: string, errorCodeOverride: string | null = null) {
+  const errorCode = errorCodeOverride || getErrorCode(error);
+
+  return prisma.unclothyGenerationTask.update({
+    where: { id: task.id },
+    data: {
+      ...resetTaskForRetryData(label),
+      automaticRetryCount: nextRetryCount,
+      lastErrorCode: errorCode,
+      lastErrorAt: new Date(),
+    },
+  });
+}
+
+async function failOrAutoRetryTask(task: QueueTaskRecord, error: unknown, errorCodeOverride: string | null = null) {
+  const currentRetryCount = typeof task.automaticRetryCount === 'number' ? task.automaticRetryCount : 0;
+  if (currentRetryCount < 1) {
+    return autoRetryTask(task, error, 1, 'Retrying once...', errorCodeOverride);
+  }
+
+  return failTask(task, error, errorCodeOverride);
 }
 
 async function createProviderTask(task: QueueTaskRecord) {
@@ -711,7 +804,7 @@ async function rescheduleAfterError(task: QueueTaskRecord, error: unknown) {
   const nextAttempts = (typeof task.attempts === 'number' ? task.attempts : 0) + 1;
   const maxAttempts = getMaxAttempts();
   if (nextAttempts >= maxAttempts) {
-    return failTask(task, new Error(`Timed out after ${nextAttempts} retries. Please retry.`), code);
+    return failOrAutoRetryTask(task, new Error(`Timed out after ${nextAttempts} retries. Please retry.`), code);
   }
 
   const backoffMs = computeBackoffMs(nextAttempts);
@@ -787,6 +880,49 @@ async function startQueuedTasks() {
   return started;
 }
 
+async function requeueFinalRetriesAfterQueueDrain() {
+  const failedCandidates = await prisma.unclothyGenerationTask.findMany({
+    where: {
+      status: UnclothyGenerationTaskStatus.failed,
+      automaticRetryCount: 1,
+    },
+    orderBy: [{ failedAt: 'asc' }, { createdAt: 'asc' }],
+    take: WORKER_BATCH_SIZE,
+  });
+
+  let requeued = 0;
+  for (const task of failedCandidates) {
+    const activeSiblingCount = await prisma.unclothyGenerationTask.count({
+      where: {
+        userId: task.userId,
+        profileId: task.profileId,
+        status: {
+          in: [UnclothyGenerationTaskStatus.queued, UnclothyGenerationTaskStatus.running],
+        },
+      },
+    });
+
+    if (activeSiblingCount > 0) {
+      continue;
+    }
+
+    const updated = await prisma.unclothyGenerationTask.updateMany({
+      where: {
+        id: task.id,
+        status: UnclothyGenerationTaskStatus.failed,
+        automaticRetryCount: 1,
+      },
+      data: {
+        ...resetTaskForRetryData('Final retry queued...'),
+        automaticRetryCount: 2,
+      },
+    });
+    requeued += updated.count;
+  }
+
+  return requeued;
+}
+
 export async function processUnclothyQueueOnce() {
   const lockRows = await prisma.$queryRaw<{ locked: boolean }[]>`
     SELECT pg_try_advisory_lock(${WORKER_ADVISORY_LOCK_ID}) AS locked
@@ -814,12 +950,18 @@ export async function processUnclothyQueueOnce() {
 
     let advanced = 0;
     let failed = 0;
+    let autoRequeued = 0;
+    let finalRequeued = 0;
 
     for (const task of running) {
       try {
         if (task.startedAt && task.startedAt < staleBefore) {
-          await failTask(task, new Error(`Timed out after ${staleMinutes} minutes. Please retry.`), 'UNCLOTHY_TASK_STALE');
-          failed += 1;
+          const updated = await failOrAutoRetryTask(task, new Error(`Timed out after ${staleMinutes} minutes. Please retry.`), 'UNCLOTHY_TASK_STALE');
+          if (updated.status === UnclothyGenerationTaskStatus.queued) {
+            autoRequeued += 1;
+          } else {
+            failed += 1;
+          }
           continue;
         }
 
@@ -831,10 +973,16 @@ export async function processUnclothyQueueOnce() {
           continue;
         }
 
-        await failTask(task, error);
-        failed += 1;
+        const updated = await failOrAutoRetryTask(task, error);
+        if (updated.status === UnclothyGenerationTaskStatus.queued) {
+          autoRequeued += 1;
+        } else {
+          failed += 1;
+        }
       }
     }
+
+    finalRequeued = await requeueFinalRetriesAfterQueueDrain();
 
     const activeCounts = await prisma.unclothyGenerationTask.groupBy({
       by: ['status'],
@@ -850,6 +998,8 @@ export async function processUnclothyQueueOnce() {
       started: started.length,
       advanced,
       failed,
+      autoRequeued,
+      finalRequeued,
       counts: Object.fromEntries(activeCounts.map((entry) => [entry.status, entry._count._all])),
     };
   } finally {

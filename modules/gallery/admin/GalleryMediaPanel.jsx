@@ -100,6 +100,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const unclothyActive = useUnclothyTasksStore((state) => state.active);
   const unclothyActiveTasks = useUnclothyTasksStore((state) => state.activeTasks);
   const unclothyFailedTasks = useUnclothyTasksStore((state) => state.failedTasks);
+  const unclothyCompletedTasks = useUnclothyTasksStore((state) => state.completedTasks);
   const startUnclothyRunner = useUnclothyTasksStore((state) => state.startRunner);
   const clearUnclothyQueue = useUnclothyTasksStore((state) => state.clearQueue);
   const cancelUnclothyTask = useUnclothyTasksStore((state) => state.cancelTask);
@@ -110,7 +111,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     Boolean(unclothyActive) ||
     (Array.isArray(unclothyActiveTasks) && unclothyActiveTasks.length > 0) ||
     (Array.isArray(unclothyFailedTasks) && unclothyFailedTasks.length > 0) ||
-    (Array.isArray(unclothyQueue) && unclothyQueue.length > 0);
+    (Array.isArray(unclothyQueue) && unclothyQueue.length > 0) ||
+    (Array.isArray(unclothyCompletedTasks) && unclothyCompletedTasks.length > 0);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined;
@@ -657,11 +659,13 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   active={unclothyActive}
                   activeTasks={unclothyActiveTasks}
                   failedTasks={unclothyFailedTasks}
+                  completedTasks={unclothyCompletedTasks}
                   queue={unclothyQueue}
                   onOpenTask={openTask}
                   onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
                   onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
                   onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
+                  onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
                   onClearQueue={clearUnclothyQueue}
                   hideWhenEmpty={Boolean(selectedPhoto)}
                 />
@@ -683,11 +687,13 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   active={unclothyActive}
                   activeTasks={unclothyActiveTasks}
                   failedTasks={unclothyFailedTasks}
+                  completedTasks={unclothyCompletedTasks}
                   queue={unclothyQueue}
                   onOpenTask={openTask}
                   onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
                   onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
                   onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
+                  onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
                   onClearQueue={clearUnclothyQueue}
                   hideWhenEmpty={false}
                 />
@@ -698,11 +704,13 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
               active={unclothyActive}
               activeTasks={unclothyActiveTasks}
               failedTasks={unclothyFailedTasks}
+              completedTasks={unclothyCompletedTasks}
               queue={unclothyQueue}
               onOpenTask={openTask}
               onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
               onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
               onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
+              onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
               onClearQueue={clearUnclothyQueue}
             />
           ) : null
