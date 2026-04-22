@@ -1,0 +1,12 @@
+name = "unclothy-cron-worker"
+main = "src/index.ts"
+compatibility_date = "2026-04-22"
+
+[triggers]
+crons = ["* * * * *"]
+
+# Public, deployed Next.js endpoint (NOT localhost).
+[vars]
+TARGET_URL = "https://jdnifas.vercel.app/api/admin/integrations/unclothy/worker"
+# Back-compat alias (some setups use WORKER_TARGET_URL).
+WORKER_TARGET_URL = "https://jdnifas.vercel.app/api/admin/integrations/unclothy/worker"
