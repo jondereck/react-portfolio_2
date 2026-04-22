@@ -1,4 +1,4 @@
-const CACHE_NAME = 'portfolio-shell-v3';
+const CACHE_NAME = 'portfolio-shell-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
@@ -36,7 +36,12 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(request.url);
 
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
+  // Never interfere with Next.js assets or APIs.
+  if (
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith('/api/') ||
+    url.pathname.startsWith('/_next/')
+  ) {
     return;
   }
 

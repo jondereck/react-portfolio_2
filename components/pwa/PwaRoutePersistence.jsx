@@ -1,18 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 const LAST_ROUTE_KEY = 'portfolio:last-route';
-const DID_RESTORE_KEY = 'portfolio:did-restore';
-
-const isStandaloneDisplay = () => {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-};
+const RESTORE_GUARD_KEY = 'portfolio:restore-timeOrigin';
 
 const getNavigationType = () => {
   if (typeof window === 'undefined') {
@@ -47,6 +39,7 @@ const isSafeInternalPath = (value) => typeof value === 'string' && value.startsW
 export default function PwaRoutePersistence() {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -55,58 +48,44 @@ export default function PwaRoutePersistence() {
 
     const saveCurrentLocation = () => {
       const currentPath = `${window.location.pathname}${window.location.search || ''}`;
-      if (!isSafeInternalPath(currentPath)) {
+      if (!isSafeInternalPath(currentPath) || currentPath === '/') {
         return;
       }
 
       window.localStorage.setItem(LAST_ROUTE_KEY, currentPath);
     };
 
-    saveCurrentLocation();
-
-    const handlePopState = () => saveCurrentLocation();
     const handleVisibility = () => {
       if (document.visibilityState === 'hidden') {
         saveCurrentLocation();
       }
     };
 
-    const originalPushState = window.history.pushState;
-    const originalReplaceState = window.history.replaceState;
-
-    window.history.pushState = function pushStateWrapper(...args) {
-      // @ts-ignore - history typings don't match rest args in JS
-      const result = originalPushState.apply(this, args);
-      saveCurrentLocation();
-      return result;
-    };
-
-    window.history.replaceState = function replaceStateWrapper(...args) {
-      // @ts-ignore - history typings don't match rest args in JS
-      const result = originalReplaceState.apply(this, args);
-      saveCurrentLocation();
-      return result;
-    };
-
-    window.addEventListener('popstate', handlePopState);
     window.addEventListener('pagehide', saveCurrentLocation);
     document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      window.history.pushState = originalPushState;
-      window.history.replaceState = originalReplaceState;
-      window.removeEventListener('popstate', handlePopState);
       window.removeEventListener('pagehide', saveCurrentLocation);
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
 
-    if (window.sessionStorage.getItem(DID_RESTORE_KEY) === 'true') {
+    const search = typeof searchParams?.toString === 'function' ? searchParams.toString() : '';
+    const currentPath = `${pathname || ''}${search ? `?${search}` : ''}`;
+    if (!isSafeInternalPath(currentPath) || currentPath === '/') {
+      return;
+    }
+
+    window.localStorage.setItem(LAST_ROUTE_KEY, currentPath);
+  }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
       return;
     }
 
@@ -124,13 +103,19 @@ export default function PwaRoutePersistence() {
       return;
     }
 
-    const isStandalone = isStandaloneDisplay();
     const navType = getNavigationType();
-
-    if (isStandalone || navType === 'reload') {
-      window.sessionStorage.setItem(DID_RESTORE_KEY, 'true');
-      router.replace(lastRoute);
+    if (navType !== 'navigate' && navType !== 'reload') {
+      return;
     }
+
+    const perf = window.performance;
+    const timeOrigin = String(perf?.timeOrigin ?? perf?.timing?.navigationStart ?? 0);
+    if (window.sessionStorage.getItem(RESTORE_GUARD_KEY) === timeOrigin) {
+      return;
+    }
+
+    window.sessionStorage.setItem(RESTORE_GUARD_KEY, timeOrigin);
+    router.replace(lastRoute);
   }, [router]);
 
   return null;

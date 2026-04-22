@@ -289,6 +289,7 @@ function CinematicGalleryView({
   previewAlbums,
   activeIndex,
   albumsLength,
+  blurUnclothyGenerated,
   onSelectAlbum,
   onPauseAutoplay,
   onResumeAutoplay,
@@ -402,6 +403,7 @@ function CompactGalleryView({
   activeIndex,
   albums,
   searchQuery,
+  blurUnclothyGenerated,
   onSearchChange,
   onSelectAlbum,
 }) {
@@ -842,6 +844,7 @@ export default function GalleryPage() {
               activeIndex={activeIndex}
               albums={compactAlbumEntries}
               searchQuery={compactSearchQuery}
+              blurUnclothyGenerated={blurUnclothyGenerated}
               onSearchChange={setCompactSearchQuery}
               onSelectAlbum={selectAlbum}
             />
@@ -854,6 +857,7 @@ export default function GalleryPage() {
               previewAlbums={previewAlbums}
               activeIndex={activeIndex}
               albumsLength={albums.length}
+              blurUnclothyGenerated={blurUnclothyGenerated}
               onSelectAlbum={selectAlbum}
               onPauseAutoplay={() => setIsAutoplayPaused(true)}
               onResumeAutoplay={() => setIsAutoplayPaused(false)}
