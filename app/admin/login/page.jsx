@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -365,9 +366,13 @@ export default function AdminLoginPage() {
 
   return (
     <AuthShell
+      hideBrandBadge
+      headerVisual={
+        <Image src="/jdn_logo.png" alt="JDN" width={280} height={92} className="h-20 w-auto object-contain sm:h-24" priority />
+      }
       eyebrow="Admin Access"
       title="Welcome back"
-      description="Sign in to your workspace with Neon password, Google, or an email code."
+      description="Sign in to your admin account."
       footer={
         <AuthFooterLinks
           secondaryHref="/"

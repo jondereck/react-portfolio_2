@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { ShieldCheck, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -8,6 +9,9 @@ export function AuthShell({
   title,
   description,
   eyebrow = 'Neon Auth',
+  brandLogoSrc,
+  headerVisual,
+  hideBrandBadge = false,
   footer,
   children,
   className,
@@ -28,15 +32,24 @@ export function AuthShell({
         )}
       >
         <div className="mx-auto flex w-full max-w-[440px] flex-col">
-          <div className="mx-auto flex items-center gap-3 rounded-full border border-blue-100 bg-blue-50/80 px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/30">
-              <ShieldCheck className="h-5 w-5" />
-            </span>
-            <span>JDN Control</span>
-          </div>
+          {hideBrandBadge ? null : (
+            <div className="mx-auto flex items-center gap-3 rounded-full border border-blue-100 bg-blue-50/80 px-4 py-2 text-sm font-semibold text-blue-700 shadow-sm">
+              {brandLogoSrc ? (
+                <Image src={brandLogoSrc} alt="JDN" width={140} height={40} className="h-9 w-auto object-contain" priority />
+              ) : (
+                <>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 text-white shadow-lg shadow-blue-500/30">
+                    <ShieldCheck className="h-5 w-5" />
+                  </span>
+                  <span>JDN Control</span>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="mt-8 text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.34em] text-blue-500">{eyebrow}</p>
+            {headerVisual ? <div className="mb-5 flex justify-center">{headerVisual}</div> : null}
+            {eyebrow ? <p className="text-xs font-semibold uppercase tracking-[0.34em] text-blue-500">{eyebrow}</p> : null}
             <h1 className="mt-4 text-5xl font-black tracking-[-0.06em] text-slate-900 sm:text-6xl">{title}</h1>
             <p className="mx-auto mt-4 max-w-md text-base leading-7 text-slate-500 sm:text-lg">{description}</p>
           </div>
