@@ -43,6 +43,9 @@ export default function AdminShell({ children }) {
     startGlobalLoading('Signing out from admin');
 
     try {
+      await fetch('/api/neon/session/sign-out', {
+        method: 'POST',
+      }).catch(() => null);
       await signOut({ callbackUrl: '/admin/login' });
     } finally {
       stopGlobalLoading();

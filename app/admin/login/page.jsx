@@ -1,49 +1,47 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getSession, signIn } from 'next-auth/react';
+import { signIn } from 'next-auth/react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Button } from '@/src/components/ui/button';
-import { Input } from '@/src/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { normalizeProtectedPath } from '@/lib/auth/redirects';
 
 const adminLastVisitedPathStorageKey = 'admin:lastVisitedPath';
 const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
 
-const normalizeProtectedPath = (value) => {
-  if (!value || typeof value !== 'string') return null;
-
-  try {
-    const resolved = new URL(value, window.location.origin);
-    if (resolved.origin !== window.location.origin) {
-      return null;
-    }
-    const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
-    if (!path.startsWith('/admin') && !path.startsWith('/gallery')) {
-      return null;
-    }
-    if (resolved.pathname === '/admin/login') {
-      return null;
-    }
-    return path;
-  } catch {
-    return null;
+function getStoredCallbackTarget(callbackUrl) {
+  if (typeof window === 'undefined') {
+    return '/admin';
   }
-};
+
+  const safeCallbackFromQuery = normalizeProtectedPath(callbackUrl, window.location.origin);
+  const safeLastVisitedAuth = normalizeProtectedPath(
+    window.localStorage.getItem(authLastVisitedPathStorageKey) || '',
+    window.location.origin,
+  );
+  const safeLastVisitedAdmin = normalizeProtectedPath(
+    window.localStorage.getItem(adminLastVisitedPathStorageKey) || '',
+    window.location.origin,
+  );
+  const safeReferrer = normalizeProtectedPath(document.referrer || '', window.location.origin);
+
+  return safeCallbackFromQuery || safeLastVisitedAuth || safeLastVisitedAdmin || safeReferrer || '/admin';
+}
 
 export default function AdminLoginPage() {
   const searchParams = useSearchParams();
-  const callbackUrl = useMemo(
-    () => searchParams.get('callbackUrl') || '/admin',
-    [searchParams],
-  );
+  const callbackUrl = useMemo(() => searchParams.get('callbackUrl') || '/admin', [searchParams]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [blockedUntil, setBlockedUntil] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingMode, setSubmittingMode] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
+  const [neonConfigured, setNeonConfigured] = useState(false);
 
   useEffect(() => {
     if (!blockedUntil || typeof blockedUntil !== 'number') {
@@ -68,27 +66,30 @@ export default function AdminLoginPage() {
 
     const checkSession = async () => {
       try {
-        const session = await getSession();
-        if (!active || !session?.user) return;
-        if (typeof window === 'undefined') return;
+        const response = await fetch('/api/session/status', {
+          cache: 'no-store',
+        });
+        const payload = response.ok ? await response.json().catch(() => null) : null;
+        if (!active || !payload) {
+          return;
+        }
 
-        const safeCallback = normalizeProtectedPath(callbackUrl);
-        const safeLastVisitedAuth = normalizeProtectedPath(
-          window.localStorage.getItem(authLastVisitedPathStorageKey) || '',
-        );
-        const safeLastVisitedAdmin = normalizeProtectedPath(
-          window.localStorage.getItem(adminLastVisitedPathStorageKey) || '',
-        );
-        const safeReferrer = normalizeProtectedPath(document.referrer || '');
-        const target =
-          safeCallback ||
-          safeLastVisitedAuth ||
-          safeLastVisitedAdmin ||
-          safeReferrer ||
-          '/admin';
+        setNeonConfigured(Boolean(payload.neonConfigured));
 
-        setRedirecting(true);
-        window.location.assign(target);
+        if (payload.authenticated) {
+          const target = getStoredCallbackTarget(callbackUrl);
+          setRedirecting(true);
+          window.location.assign(target);
+          return;
+        }
+
+        if (payload.state === 'pending') {
+          setInfo('Neon sign-in succeeded, but your local admin access is still pending approval.');
+        } else if (payload.state === 'suspended') {
+          setInfo('Your Neon identity is linked, but this local account is currently suspended.');
+        } else if (payload.state === 'conflict') {
+          setError('This Neon user cannot be linked automatically. Run the Neon auth audit/backfill scripts before cutting over.');
+        }
       } finally {
         if (active) {
           setCheckingSession(false);
@@ -102,30 +103,47 @@ export default function AdminLoginPage() {
     };
   }, [callbackUrl]);
 
-  const handleSubmit = async (event) => {
+  const handleNeonSubmit = async (event) => {
     event.preventDefault();
+    setSubmittingMode('neon');
+    setError('');
+    setInfo('');
+
+    const response = await fetch('/api/neon/session/sign-in', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        callbackUrl: getStoredCallbackTarget(callbackUrl),
+        email,
+        password,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    setSubmittingMode(null);
+
+    if (!response.ok) {
+      setError(payload.error || 'Unable to sign in with Neon.');
+      return;
+    }
+
+    setRedirecting(true);
+    window.location.assign(normalizeProtectedPath(payload.redirectTo || '', window.location.origin) || '/admin');
+  };
+
+  const handleLegacySubmit = async () => {
     if (blockedUntil && typeof blockedUntil === 'number' && blockedUntil > Date.now()) {
       setError(`Too many attempts. Try again at ${formatRetryTime(blockedUntil)}.`);
       return;
     }
-    setSubmitting(true);
+
+    setSubmittingMode('legacy');
     setError('');
+    setInfo('');
 
-    const safeCallbackFromQuery = normalizeProtectedPath(callbackUrl);
-    const safeLastVisitedAuth = normalizeProtectedPath(
-      window.localStorage.getItem(authLastVisitedPathStorageKey) || '',
-    );
-    const safeLastVisitedAdmin = normalizeProtectedPath(
-      window.localStorage.getItem(adminLastVisitedPathStorageKey) || '',
-    );
-    const safeReferrer = normalizeProtectedPath(document.referrer || '');
-    const safeCallback =
-      safeCallbackFromQuery ||
-      safeLastVisitedAuth ||
-      safeLastVisitedAdmin ||
-      safeReferrer ||
-      '/admin';
-
+    const safeCallback = getStoredCallbackTarget(callbackUrl);
     const result = await signIn('credentials', {
       email,
       password,
@@ -133,7 +151,7 @@ export default function AdminLoginPage() {
       callbackUrl: safeCallback,
     });
 
-    setSubmitting(false);
+    setSubmittingMode(null);
     if (!result || result.error) {
       const code = typeof result?.code === 'string' ? result.code : '';
       if (code.startsWith('lock_')) {
@@ -158,20 +176,23 @@ export default function AdminLoginPage() {
     }
 
     setBlockedUntil(null);
-    window.location.assign(normalizeProtectedPath(result.url || '') || safeCallback);
+    setRedirecting(true);
+    window.location.assign(normalizeProtectedPath(result.url || '', window.location.origin) || safeCallback);
   };
 
   const isLocked = blockedUntil && typeof blockedUntil === 'number' && blockedUntil > Date.now();
-  const disableInputs = submitting || redirecting || checkingSession || isLocked;
+  const disableInputs = Boolean(submittingMode) || redirecting || checkingSession || isLocked;
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-12 text-slate-100">
       <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/90 p-8 shadow-2xl">
         <p className="text-xs uppercase tracking-[0.22em] text-cyan-300">Admin Access</p>
         <h1 className="mt-3 text-3xl font-bold">Sign in</h1>
-        <p className="mt-2 text-sm text-slate-400">Use your email and password to access the admin workspace.</p>
+        <p className="mt-2 text-sm text-slate-400">
+          Neon auth is the primary path. The legacy local password login stays available during migration.
+        </p>
 
-        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
+        <form className="mt-8 space-y-4" onSubmit={handleNeonSubmit}>
           <Input
             type="email"
             value={email}
@@ -189,11 +210,32 @@ export default function AdminLoginPage() {
             onChange={(event) => setPassword(event.target.value)}
           />
           {error ? <p className="text-sm text-rose-400">{error}</p> : null}
-          <Button type="submit" className="w-full" disabled={disableInputs}>
-            {redirecting ? 'Redirecting...' : submitting ? 'Signing in...' : checkingSession ? 'Checking session...' : 'Sign in'}
+          {info ? <p className="text-sm text-amber-300">{info}</p> : null}
+          <Button type="submit" className="w-full" disabled={disableInputs || !neonConfigured}>
+            {redirecting
+              ? 'Redirecting...'
+              : submittingMode === 'neon'
+                ? 'Signing in with Neon...'
+                : checkingSession
+                  ? 'Checking session...'
+                  : neonConfigured
+                    ? 'Continue with Neon'
+                    : 'Neon auth not configured'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full border-slate-700 bg-transparent text-slate-100 hover:bg-slate-800"
+            disabled={disableInputs}
+            onClick={handleLegacySubmit}
+          >
+            {submittingMode === 'legacy' ? 'Signing in with legacy auth...' : 'Use legacy password login'}
           </Button>
         </form>
 
+        <p className="mt-3 text-xs text-slate-500">
+          Existing users can keep using the legacy password flow until their Neon identity is linked.
+        </p>
         <p className="mt-6 text-xs text-slate-500">
           Public site:{' '}
           <Link href="/" className="text-cyan-300 hover:text-cyan-200">

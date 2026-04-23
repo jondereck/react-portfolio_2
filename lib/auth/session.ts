@@ -2,6 +2,8 @@ import { auth } from '@/auth';
 import { hasValidAdminSession } from '@/lib/server/admin-session';
 import { prisma } from '@/lib/prisma';
 import { LEGACY_PRIMARY_USER_ID } from '@/lib/auth/constants';
+import { isNeonAuthConfigured } from '@/lib/auth/neon-server';
+import { syncNeonSessionToLocalUser } from '@/lib/auth/neon-sync';
 import { hasRequiredRole, isSuperAdmin } from '@/lib/auth/roles';
 import type { Profile, User, UserRole } from '@prisma/client';
 import { redirect } from 'next/navigation';
@@ -9,10 +11,10 @@ import { redirect } from 'next/navigation';
 export type AuthenticatedActor = {
   user: User;
   profile: Profile | null;
-  source: 'authjs' | 'legacy';
+  source: 'authjs' | 'legacy' | 'neon';
 };
 
-export async function getCurrentUser() {
+async function getCurrentAuthJsUser() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) {
@@ -25,17 +27,117 @@ export async function getCurrentUser() {
   });
 }
 
+async function getResolvedNeonLocalUser() {
+  if (!isNeonAuthConfigured()) {
+    return null;
+  }
+
+  try {
+    return await syncNeonSessionToLocalUser();
+  } catch (error) {
+    if (error instanceof Error && error.message === 'NEON_AUTH_LINK_CONFLICT') {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+export async function getCurrentUser() {
+  const actor = await resolveRequestActor();
+  return actor?.user ?? null;
+}
+
 export async function getCurrentProfile() {
-  const user = await getCurrentUser();
-  return user?.profile ?? null;
+  const actor = await resolveRequestActor();
+  return actor?.profile ?? null;
+}
+
+export async function getCurrentAuthStatus(request?: Request) {
+  if (isNeonAuthConfigured()) {
+    try {
+      const neonUser = await syncNeonSessionToLocalUser();
+      if (neonUser) {
+        return {
+          authenticated: neonUser.state === 'active',
+          errorCode: null,
+          neonConfigured: true,
+          source: 'neon' as const,
+          state: neonUser.state,
+          user: neonUser.user,
+        };
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'NEON_AUTH_LINK_CONFLICT') {
+        return {
+          authenticated: false,
+          errorCode: 'NEON_AUTH_LINK_CONFLICT',
+          neonConfigured: true,
+          source: 'neon' as const,
+          state: 'conflict' as const,
+          user: null,
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  const authJsUser = await getCurrentAuthJsUser();
+  if (authJsUser?.isActive) {
+    return {
+      authenticated: true,
+      errorCode: null,
+      neonConfigured: isNeonAuthConfigured(),
+      source: 'authjs' as const,
+      state: 'active' as const,
+      user: authJsUser,
+    };
+  }
+
+  if (request && (await hasValidAdminSession(request))) {
+    const legacyUser = await prisma.user.findUnique({
+      where: { id: LEGACY_PRIMARY_USER_ID },
+      include: { profile: true },
+    });
+
+    if (legacyUser) {
+      return {
+        authenticated: true,
+        errorCode: null,
+        neonConfigured: isNeonAuthConfigured(),
+        source: 'legacy' as const,
+        state: 'active' as const,
+        user: legacyUser,
+      };
+    }
+  }
+
+  return {
+    authenticated: false,
+    errorCode: null,
+    neonConfigured: isNeonAuthConfigured(),
+    source: null,
+    state: 'anonymous' as const,
+    user: null,
+  };
 }
 
 export async function resolveRequestActor(request?: Request): Promise<AuthenticatedActor | null> {
-  const user = await getCurrentUser();
-  if (user?.isActive) {
+  const neonUser = await getResolvedNeonLocalUser();
+  if (neonUser?.state === 'active') {
     return {
-      user,
-      profile: user.profile ?? null,
+      user: neonUser.user,
+      profile: neonUser.profile ?? null,
+      source: 'neon',
+    };
+  }
+
+  const authJsUser = await getCurrentAuthJsUser();
+  if (authJsUser?.isActive) {
+    return {
+      user: authJsUser,
+      profile: authJsUser.profile ?? null,
       source: 'authjs',
     };
   }

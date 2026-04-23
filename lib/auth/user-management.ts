@@ -1,9 +1,8 @@
 import type { Profile, UserRole } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { writeAuditEvent } from '@/lib/audit/audit';
+import { ensureUserProfile } from '@/lib/auth/user-profiles';
 import { hashPassword } from '@/lib/password/password';
-import { ensureSiteConfigForProfile, ensureSiteContentForProfile } from '@/lib/profile/site-data';
-import { slugify } from '@/src/modules/gallery/domain/slug';
 
 export const MANAGEABLE_ROLES: UserRole[] = ['admin', 'editor', 'viewer'];
 export const REGISTRATION_DEFAULT_ROLE: UserRole = 'viewer';
@@ -34,43 +33,6 @@ function assertManageableRole(role: string): asserts role is UserRole {
   if (!MANAGEABLE_ROLES.includes(role as UserRole)) {
     throw new Error('INVALID_ROLE');
   }
-}
-
-async function generateUniqueProfileSlug(seed: string) {
-  const base = slugify(seed) || `user-${Date.now()}`;
-  let slug = base;
-  let counter = 2;
-
-  while (await prisma.profile.findUnique({ where: { slug } })) {
-    slug = `${base}-${counter}`;
-    counter += 1;
-  }
-
-  return slug;
-}
-
-async function ensureUserProfile(userId: string, displayName: string, slugSeed: string) {
-  const existing = await prisma.profile.findUnique({ where: { userId } });
-  if (existing) {
-    await ensureSiteContentForProfile(existing.id);
-    await ensureSiteConfigForProfile(existing.id);
-    return existing;
-  }
-
-  const slug = await generateUniqueProfileSlug(slugSeed);
-  const profile = await prisma.profile.create({
-    data: {
-      userId,
-      slug,
-      displayName,
-      isPublic: true,
-      isPrimary: false,
-    },
-  });
-
-  await ensureSiteContentForProfile(profile.id);
-  await ensureSiteConfigForProfile(profile.id);
-  return profile;
 }
 
 function mapManagedUser(user: ManagedUserRecord) {
@@ -173,7 +135,7 @@ export async function registerPendingUser(input: {
         },
       });
 
-  const profile = await ensureUserProfile(user.id, name, name || email.split('@')[0] || email);
+  const profile = await ensureUserProfile(prisma, user.id, name, name || email.split('@')[0] || email);
 
   await writeAuditEvent({
     actorUserId: user.id,
@@ -232,7 +194,7 @@ export async function createManagedUser(input: {
     },
   });
 
-  const profile = await ensureUserProfile(user.id, name, name || email.split('@')[0] || email);
+  const profile = await ensureUserProfile(prisma, user.id, name, name || email.split('@')[0] || email);
 
   await writeAuditEvent({
     actorUserId: input.actorUserId,
