@@ -60,11 +60,16 @@ export async function syncNeonSessionToLocalUser() {
         byNeonId.profile ??
         (await ensureUserProfile(tx, byNeonId.id, byNeonId.name ?? displayName, byNeonId.name ?? displayName));
 
+      const shouldBackfillVerifiedAt = byNeonId.isActive && !byNeonId.emailVerified;
+      const shouldBackfillImage = Boolean(image && !byNeonId.image);
       const updatedUser =
-        image && !byNeonId.image
+        shouldBackfillVerifiedAt || shouldBackfillImage
           ? await tx.user.update({
               where: { id: byNeonId.id },
-              data: { image },
+              data: {
+                ...(shouldBackfillImage ? { image } : {}),
+                ...(shouldBackfillVerifiedAt ? { emailVerified: new Date() } : {}),
+              },
               include: { profile: true },
             })
           : byNeonId;
@@ -85,11 +90,13 @@ export async function syncNeonSessionToLocalUser() {
         throw new Error('NEON_AUTH_LINK_CONFLICT');
       }
 
+      const shouldBackfillVerifiedAt = byEmail.isActive && !byEmail.emailVerified;
       const updatedUser = await tx.user.update({
         where: { id: byEmail.id },
         data: {
           neonAuthUserId,
           ...(image && !byEmail.image ? { image } : {}),
+          ...(shouldBackfillVerifiedAt ? { emailVerified: new Date() } : {}),
         },
         include: { profile: true },
       });

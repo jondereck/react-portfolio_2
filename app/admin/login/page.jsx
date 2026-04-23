@@ -166,8 +166,22 @@ export default function AdminLoginPage() {
     setMode(nextMode);
   };
 
-  const startRedirect = (target) => {
+  const startRedirect = (target, options = {}) => {
+    const { allowExternal = false } = options;
     setRedirecting(true);
+
+    if (allowExternal) {
+      try {
+        const resolved = new URL(target, window.location.origin);
+        if (resolved.protocol === 'http:' || resolved.protocol === 'https:') {
+          window.location.assign(resolved.toString());
+          return;
+        }
+      } catch {
+        // Fall back to protected internal routes if the OAuth target is malformed.
+      }
+    }
+
     window.location.assign(normalizeProtectedPath(target || '', window.location.origin) || '/admin');
   };
 
@@ -219,7 +233,7 @@ export default function AdminLoginPage() {
       return;
     }
 
-    startRedirect(payload.redirectTo);
+    startRedirect(payload.redirectTo, { allowExternal: true });
   };
 
   const requestSignInCode = async () => {
