@@ -24,30 +24,59 @@ export async function POST(request: Request) {
   }
 
   const origin = new URL(request.url).origin;
-  const callbackUrl = normalizeProtectedPath(parsed.data.callbackUrl, origin) ?? '/admin';
+  const callbackPath = normalizeProtectedPath(parsed.data.callbackUrl, origin) ?? '/admin';
+  const callbackURL = new URL(callbackPath, origin).toString();
 
   try {
-    const result = await auth.signIn.social({
-      provider: 'google',
-      callbackURL: callbackUrl,
-      disableRedirect: true,
-      requestSignUp: parsed.data.mode === 'sign-up',
+    // Use the Neon Auth proxy handler and forward Set-Cookie headers.
+    // OAuth flows often rely on state/PKCE cookies; dropping them prevents the
+    // redirect/callback from completing.
+    const handler = auth.handler();
+    const proxyHeaders = new Headers(request.headers);
+    proxyHeaders.set('content-type', 'application/json');
+
+    const proxyRequest = new Request(new URL('/api/neon-auth/sign-in/social', request.url), {
+      method: 'POST',
+      headers: proxyHeaders,
+      body: JSON.stringify({
+        provider: 'google',
+        callbackURL,
+        disableRedirect: true,
+        requestSignUp: parsed.data.mode === 'sign-up',
+      }),
     });
 
-    if (result?.error) {
-      const mapped = mapNeonAuthError(result.error, 'google');
-      return NextResponse.json(mapped.body, { status: mapped.status });
+    const proxyResponse = await handler.POST(proxyRequest, {
+      params: Promise.resolve({ path: ['sign-in', 'social'] }),
+    });
+
+    const proxyPayload = await proxyResponse.json().catch(() => null);
+    if (!proxyResponse.ok) {
+      const mapped = mapNeonAuthError(proxyPayload, 'google');
+      const outgoing = NextResponse.json(mapped.body, { status: mapped.status });
+      for (const setCookie of proxyResponse.headers.getSetCookie()) {
+        outgoing.headers.append('set-cookie', setCookie);
+      }
+      return outgoing;
     }
 
-    const data = getNeonResultData<{ url?: string }>(result);
+    const data = getNeonResultData<{ url?: string }>({ data: proxyPayload, error: null });
     if (!data?.url) {
-      return NextResponse.json(
+      const outgoing = NextResponse.json(
         { error: 'Unable to start Google sign-in.', errorCode: 'GOOGLE_REDIRECT_MISSING' },
         { status: 400 },
       );
+      for (const setCookie of proxyResponse.headers.getSetCookie()) {
+        outgoing.headers.append('set-cookie', setCookie);
+      }
+      return outgoing;
     }
 
-    return NextResponse.json({ ok: true, redirectTo: data.url });
+    const outgoing = NextResponse.json({ ok: true, redirectTo: data.url });
+    for (const setCookie of proxyResponse.headers.getSetCookie()) {
+      outgoing.headers.append('set-cookie', setCookie);
+    }
+    return outgoing;
   } catch (error) {
     const mapped = mapNeonAuthError(error, 'google');
     return NextResponse.json(mapped.body, { status: mapped.status });

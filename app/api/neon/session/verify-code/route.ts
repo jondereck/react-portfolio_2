@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getNeonAuth, getNeonAuthConfigError } from '@/lib/auth/neon-server';
-import { mapNeonAuthError, normalizeEmail } from '@/lib/auth/neon-route-helpers';
+import { mapNeonAuthError, normalizeEmail, normalizeOtp } from '@/lib/auth/neon-route-helpers';
 import { normalizeProtectedPath } from '@/lib/auth/redirects';
 
 const verifyCodeSchema = z.object({
@@ -28,19 +28,38 @@ export async function POST(request: Request) {
   const redirectTo = normalizeProtectedPath(parsed.data.callbackUrl, origin) ?? '/admin';
 
   try {
-    // @neondatabase/auth exposes this endpoint, but the `signIn` typings currently
-    // don't include `emailOtp` on the server client.
-    const result = await (auth as any).signIn.emailOtp({
-      email: normalizeEmail(parsed.data.email),
-      otp: parsed.data.otp.trim(),
+    const handler = auth.handler();
+    const proxyHeaders = new Headers(request.headers);
+    proxyHeaders.set('content-type', 'application/json');
+
+    const proxyRequest = new Request(new URL('/api/neon-auth/sign-in/email-otp', request.url), {
+      method: 'POST',
+      headers: proxyHeaders,
+      body: JSON.stringify({
+        email: normalizeEmail(parsed.data.email),
+        otp: normalizeOtp(parsed.data.otp),
+      }),
     });
 
-    if (result?.error) {
-      const mapped = mapNeonAuthError(result.error, 'verify-code');
-      return NextResponse.json(mapped.body, { status: mapped.status });
+    const proxyResponse = await handler.POST(proxyRequest, {
+      params: Promise.resolve({ path: ['sign-in', 'email-otp'] }),
+    });
+
+    const proxyPayload = await proxyResponse.json().catch(() => null);
+    if (!proxyResponse.ok) {
+      const mapped = mapNeonAuthError(proxyPayload, 'verify-code');
+      const outgoing = NextResponse.json(mapped.body, { status: mapped.status });
+      for (const setCookie of proxyResponse.headers.getSetCookie()) {
+        outgoing.headers.append('set-cookie', setCookie);
+      }
+      return outgoing;
     }
 
-    return NextResponse.json({ ok: true, redirectTo });
+    const outgoing = NextResponse.json({ ok: true, redirectTo });
+    for (const setCookie of proxyResponse.headers.getSetCookie()) {
+      outgoing.headers.append('set-cookie', setCookie);
+    }
+    return outgoing;
   } catch (error) {
     const mapped = mapNeonAuthError(error, 'verify-code');
     return NextResponse.json(mapped.body, { status: mapped.status });

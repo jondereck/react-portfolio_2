@@ -24,6 +24,11 @@ export function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+export function normalizeOtp(value: string) {
+  // UI inputs sometimes insert spaces (e.g. "1 2 3 4 5 6") or hyphens.
+  return value.trim().replace(/[\s-]+/g, '');
+}
+
 export async function resolveNeonSignInEmail(identifier: string) {
   const normalized = identifier.trim().toLowerCase();
   if (!normalized) {
@@ -64,6 +69,25 @@ export async function resolveNeonSignInEmail(identifier: string) {
 }
 
 function getErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object') {
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === 'string' && maybeMessage.trim()) {
+      return maybeMessage;
+    }
+
+    const maybeError = (error as { error?: unknown }).error;
+    if (typeof maybeError === 'string' && maybeError.trim()) {
+      return maybeError;
+    }
+
+    const maybeCode = (error as { code?: unknown }).code;
+    if (typeof maybeCode === 'string' && maybeCode.trim()) {
+      // Prefer a human message when present, but fall back to the code so the UI
+      // at least shows something actionable.
+      return maybeCode;
+    }
+  }
+
   if (typeof error === 'string' && error.trim()) {
     return error;
   }
@@ -77,6 +101,23 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 export function mapNeonAuthError(error: unknown, action: NeonAction) {
   const message = getErrorMessage(error, 'Neon auth request failed.');
+
+  if (/^not found$/i.test(message)) {
+    if (action === 'forgot-password') {
+      return {
+        body: {
+          ok: true,
+          message: 'If that email exists, a reset code has been sent.',
+        },
+        status: 200,
+      };
+    }
+
+    return {
+      body: { error: 'Unable to find that account or code.', errorCode: 'ACCOUNT_NOT_FOUND' },
+      status: 404,
+    };
+  }
 
   if (/too many attempts|rate limit|try again later/i.test(message)) {
     return {

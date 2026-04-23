@@ -30,13 +30,14 @@ export async function POST(request: Request) {
 
   const origin = new URL(request.url).origin;
   const redirectTo = normalizeProtectedPath(parsed.data.callbackUrl, origin) ?? '/admin/login';
+  const callbackURL = new URL(redirectTo, origin).toString();
 
   try {
     const result = await auth.signUp.email({
       email: normalizeEmail(parsed.data.email),
       name: parsed.data.name.trim(),
       password: parsed.data.password,
-      callbackURL: redirectTo,
+      callbackURL,
     });
 
     if (result?.error) {

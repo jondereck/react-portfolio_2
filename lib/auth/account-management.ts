@@ -132,3 +132,86 @@ export async function updateSelfAccount(input: {
     passwordChanged: Boolean(newPassword),
   };
 }
+
+export async function updateSelfAccountNeon(input: {
+  userId: string;
+  name: string;
+  email: string;
+  passwordChanged?: boolean;
+}) {
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+
+  if (!name || !email) {
+    throw new Error('INVALID_INPUT');
+  }
+
+  const existing = await prisma.user.findUnique({
+    where: { id: input.userId },
+    include: {
+      profile: true,
+    },
+  });
+
+  if (!existing) {
+    throw new Error('USER_NOT_FOUND');
+  }
+
+  const emailOwner = await prisma.user.findUnique({
+    where: { email },
+  });
+
+  if (emailOwner && emailOwner.id !== existing.id) {
+    throw new Error('EMAIL_IN_USE');
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: existing.id },
+    data: {
+      name,
+      email,
+      profile: existing.profile
+        ? {
+            update: {
+              displayName: name,
+            },
+          }
+        : undefined,
+    },
+    include: {
+      profile: {
+        select: {
+          id: true,
+          slug: true,
+          displayName: true,
+        },
+      },
+    },
+  });
+
+  await writeAuditEvent({
+    actorUserId: existing.id,
+    targetProfileId: updated.profile?.id ?? null,
+    action: 'self_account_updated',
+    targetType: 'user',
+    targetId: updated.id,
+    metadata: {
+      emailChanged: email !== existing.email,
+      passwordChanged: Boolean(input.passwordChanged),
+      nameChanged: name !== (existing.name ?? ''),
+      source: 'neon',
+    },
+  });
+
+  return {
+    id: updated.id,
+    name: updated.name ?? '',
+    email: updated.email,
+    role: updated.role,
+    isActive: updated.isActive,
+    profile: updated.profile,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
+    passwordChanged: Boolean(input.passwordChanged),
+  };
+}

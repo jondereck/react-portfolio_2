@@ -22,17 +22,39 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await auth.emailOtp.sendVerificationOtp({
-      email: normalizeEmail(parsed.data.email),
-      type: 'forget-password',
+    const handler = auth.handler();
+    const origin = new URL(request.url).origin;
+    const proxyHeaders = new Headers(request.headers);
+    proxyHeaders.set('content-type', 'application/json');
+    proxyHeaders.set('origin', origin);
+
+    const proxyRequest = new Request(new URL('/api/neon-auth/forget-password/email-otp', request.url), {
+      method: 'POST',
+      headers: proxyHeaders,
+      body: JSON.stringify({
+        email: normalizeEmail(parsed.data.email),
+      }),
     });
 
-    if (result?.error) {
-      const mapped = mapNeonAuthError(result.error, 'forgot-password');
-      return NextResponse.json(mapped.body, { status: mapped.status });
+    const proxyResponse = await handler.POST(proxyRequest, {
+      params: Promise.resolve({ path: ['forget-password', 'email-otp'] }),
+    });
+
+    const proxyPayload = await proxyResponse.json().catch(() => null);
+    if (!proxyResponse.ok) {
+      const mapped = mapNeonAuthError(proxyPayload ?? proxyResponse.statusText, 'forgot-password');
+      const outgoing = NextResponse.json(mapped.body, { status: mapped.status });
+      for (const setCookie of proxyResponse.headers.getSetCookie()) {
+        outgoing.headers.append('set-cookie', setCookie);
+      }
+      return outgoing;
     }
 
-    return NextResponse.json({ ok: true, message: 'If that email exists, a reset code has been sent.' });
+    const outgoing = NextResponse.json({ ok: true, message: 'If that email exists, a reset code has been sent.' });
+    for (const setCookie of proxyResponse.headers.getSetCookie()) {
+      outgoing.headers.append('set-cookie', setCookie);
+    }
+    return outgoing;
   } catch (error) {
     const mapped = mapNeonAuthError(error, 'forgot-password');
     return NextResponse.json(mapped.body, { status: mapped.status });

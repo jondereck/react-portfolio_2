@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getNeonAuth, getNeonAuthConfigError } from '@/lib/auth/neon-server';
-import { mapNeonAuthError, normalizeEmail } from '@/lib/auth/neon-route-helpers';
+import { mapNeonAuthError, normalizeEmail, normalizeOtp } from '@/lib/auth/neon-route-helpers';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 
 const resetPasswordSchema = z.object({
@@ -28,18 +28,42 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await auth.emailOtp.resetPassword({
-      email: normalizeEmail(parsed.data.email),
-      otp: parsed.data.otp.trim(),
-      password: parsed.data.password,
+    // Use the Neon Auth handler proxy so required headers/cookies are preserved.
+    const handler = auth.handler();
+    const origin = new URL(request.url).origin;
+    const proxyHeaders = new Headers(request.headers);
+    proxyHeaders.set('content-type', 'application/json');
+    proxyHeaders.set('origin', origin);
+
+    const proxyRequest = new Request(new URL('/api/neon-auth/email-otp/reset-password', request.url), {
+      method: 'POST',
+      headers: proxyHeaders,
+      body: JSON.stringify({
+        email: normalizeEmail(parsed.data.email),
+        otp: normalizeOtp(parsed.data.otp),
+        password: parsed.data.password,
+      }),
     });
 
-    if (result?.error) {
-      const mapped = mapNeonAuthError(result.error, 'reset-password');
-      return NextResponse.json(mapped.body, { status: mapped.status });
+    const proxyResponse = await handler.POST(proxyRequest, {
+      params: Promise.resolve({ path: ['email-otp', 'reset-password'] }),
+    });
+
+    const proxyPayload = await proxyResponse.json().catch(() => null);
+    if (!proxyResponse.ok) {
+      const mapped = mapNeonAuthError(proxyPayload ?? proxyResponse.statusText, 'reset-password');
+      const outgoing = NextResponse.json(mapped.body, { status: mapped.status });
+      for (const setCookie of proxyResponse.headers.getSetCookie()) {
+        outgoing.headers.append('set-cookie', setCookie);
+      }
+      return outgoing;
     }
 
-    return NextResponse.json({ ok: true, message: 'Password updated. You can sign in now.' });
+    const outgoing = NextResponse.json({ ok: true, message: 'Password updated. You can sign in now.' });
+    for (const setCookie of proxyResponse.headers.getSetCookie()) {
+      outgoing.headers.append('set-cookie', setCookie);
+    }
+    return outgoing;
   } catch (error) {
     const mapped = mapNeonAuthError(error, 'reset-password');
     return NextResponse.json(mapped.body, { status: mapped.status });
