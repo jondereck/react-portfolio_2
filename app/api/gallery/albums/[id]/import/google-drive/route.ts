@@ -44,20 +44,66 @@ export async function POST(request: Request, context: RouteContext) {
     }
     const parsed = driveImportSchema.parse(body);
     const accessToken = await getGoogleDriveAccessTokenForUser(actor.user.id);
-    const result = await galleryService.importGoogleDriveFolder(albumId, {
-      folderId: String(parsed.folderId),
-      accessToken,
+    const shouldStream = new URL(request.url).searchParams.get('stream') === '1';
+    if (!shouldStream) {
+      const result = await galleryService.importGoogleDriveFolder(albumId, {
+        folderId: String(parsed.folderId),
+        accessToken,
+      });
+
+      return NextResponse.json(
+        {
+          importedCount: result.created.length,
+          skippedCount: result.skipped.length,
+          photos: result.created,
+          skipped: result.skipped,
+        },
+        { status: 201 },
+      );
+    }
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: string, payload: Record<string, unknown>) => {
+          const message = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+          controller.enqueue(encoder.encode(message));
+        };
+
+        try {
+          send('start', { ok: true });
+          const result = await galleryService.importGoogleDriveFolder(albumId, {
+            folderId: String(parsed.folderId),
+            accessToken,
+            onProgress: (progress) => {
+              send('progress', progress);
+            },
+          });
+
+          send('complete', {
+            importedCount: result.created.length,
+            skippedCount: result.skipped.length,
+            photos: result.created,
+            skipped: result.skipped,
+          });
+          controller.close();
+        } catch (streamError) {
+          send('error', {
+            error: streamError instanceof Error ? streamError.message : 'Unable to import Google Drive folder.',
+          });
+          controller.close();
+        }
+      },
     });
 
-    return NextResponse.json(
-      {
-        importedCount: result.created.length,
-        skippedCount: result.skipped.length,
-        photos: result.created,
-        skipped: result.skipped,
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
       },
-      { status: 201 },
-    );
+    });
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) {

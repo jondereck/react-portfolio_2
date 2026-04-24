@@ -561,37 +561,95 @@ export function useGalleryAdminController() {
     setImportSummary(null);
     driveImportAbortControllerRef.current = new AbortController();
 
-    let importProgressInterval = null;
-
     try {
-      importProgressInterval = window.setInterval(() => {
-        setImportProgress((current) => {
-          if (!current) {
-            return current;
-          }
-
-          const nextPercent = Math.min(92, current.percent + (current.percent < 40 ? 7 : current.percent < 75 ? 4 : 2));
-          const nextIndex = Math.min(
-            current.totalFiles,
-            Math.max(1, Math.round((nextPercent / 100) * current.totalFiles)),
-          );
-
-          return {
-            ...current,
-            percent: nextPercent,
-            currentFileIndex: nextIndex,
-          };
-        });
-      }, 350);
-
-      const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/import/google-drive`, {
+      const response = await fetch(`/api/gallery/albums/${selectedAlbumId}/import/google-drive?stream=1`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: driveImportAbortControllerRef.current.signal,
+        cache: 'no-store',
         body: JSON.stringify({
           folderId: driveForm.folderId,
         }),
       });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || 'Unable to import Google Drive folder.');
+      }
+
+      if (!response.body) {
+        throw new Error('Import stream is unavailable.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let result = null;
+
+      const applyProgress = (progressPayload = {}) => {
+        const totalCount = Number(progressPayload.totalCount);
+        const checkedCount = Number(progressPayload.checkedCount) || 0;
+        const importedCount = Number(progressPayload.importedCount) || 0;
+        const duplicateCount = Number(progressPayload.duplicateCount) || 0;
+        const resolvedTotal = Number.isFinite(totalCount) && totalCount > 0 ? totalCount : Math.max(expectedTotal, checkedCount, 1);
+        const percent = Math.min(99, Math.round((checkedCount / resolvedTotal) * 100));
+
+        setImportProgress({
+          percent,
+          currentFileName: progressPayload.currentFileName || importTargetName,
+          currentFileIndex: checkedCount,
+          totalFiles: resolvedTotal,
+          uploadedCount: importedCount,
+          skippedCount: duplicateCount,
+          failedCount: 0,
+          lastResult: null,
+        });
+      };
+
+      const processSseChunk = (chunkText) => {
+        buffer += chunkText;
+        const messages = buffer.split('\n\n');
+        buffer = messages.pop() || '';
+
+        for (const message of messages) {
+          const lines = message.split('\n');
+          let eventName = 'message';
+          let dataText = '';
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventName = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              dataText += line.slice(5).trim();
+            }
+          }
+
+          if (!dataText) {
+            continue;
+          }
+
+          const payload = JSON.parse(dataText);
+          if (eventName === 'progress') {
+            applyProgress(payload);
+          } else if (eventName === 'complete') {
+            result = payload;
+          } else if (eventName === 'error') {
+            throw new Error(payload?.error || 'Unable to import Google Drive folder.');
+          }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        processSseChunk(decoder.decode(value, { stream: true }));
+      }
+      processSseChunk(decoder.decode());
+
+      if (!result) {
+        throw new Error('Import finished without a final result.');
+      }
 
       const importedCount = Number(result.importedCount) || 0;
       const skippedCount = Number(result.skippedCount) || 0;
@@ -643,9 +701,6 @@ export function useGalleryAdminController() {
       setImportProgress(null);
     } finally {
       driveImportAbortControllerRef.current = null;
-      if (importProgressInterval !== null) {
-        window.clearInterval(importProgressInterval);
-      }
       setImportingDrive(false);
       window.setTimeout(() => {
         setImportProgress((current) => (current?.percent === 100 ? null : current));

@@ -656,20 +656,50 @@ export class GalleryService {
     return this.repo.reorderAlbumPhotos(albumId, photoIds);
   }
 
-  async importGoogleDriveFolder(albumId: number, args: { accessToken: string; folderId: string }) {
+  async importGoogleDriveFolder(
+    albumId: number,
+    args: {
+      accessToken: string;
+      folderId: string;
+      onProgress?: (event: {
+        totalCount: number;
+        checkedCount: number;
+        importedCount: number;
+        duplicateCount: number;
+        currentFileName: string | null;
+      }) => void;
+    },
+  ) {
     const drivePhotos = await this.driveAdapter.listFolderMedia(args);
 
     const created = [];
     const skipped = [];
+    let checkedCount = 0;
+    let importedCount = 0;
+    let duplicateCount = 0;
+
+    const emitProgress = (photoCaption?: string) => {
+      args.onProgress?.({
+        totalCount: drivePhotos.length,
+        checkedCount,
+        importedCount,
+        duplicateCount,
+        currentFileName: photoCaption || null,
+      });
+    };
+
     for (const photo of drivePhotos) {
       const existing = await this.repo.findAlbumPhotoBySourceId(albumId, PhotoSourceType.gdrive, photo.sourceId);
       if (existing) {
+        checkedCount += 1;
+        duplicateCount += 1;
         skipped.push({
           sourceId: photo.sourceId,
           caption: photo.caption,
           reason: 'Already imported into this album.',
           duplicateId: existing.id,
         });
+        emitProgress(photo.caption);
         continue;
       }
 
@@ -680,12 +710,15 @@ export class GalleryService {
 
       const duplicateByHash = await this.repo.findAlbumPhotoByContentHash(albumId, contentHash);
       if (duplicateByHash) {
+        checkedCount += 1;
+        duplicateCount += 1;
         skipped.push({
           sourceId: photo.sourceId,
           caption: photo.caption,
           reason: 'Duplicate media already exists in this album.',
           duplicateId: duplicateByHash.id,
         });
+        emitProgress(photo.caption);
         continue;
       }
 
@@ -701,26 +734,35 @@ export class GalleryService {
           sourceId: photo.sourceId,
         });
         created.push(row);
+        checkedCount += 1;
+        importedCount += 1;
+        emitProgress(photo.caption);
       } catch (error) {
         if (error instanceof RequestValidationError && error.errorCode === 'DUPLICATE_MEDIA') {
           const duplicate = error.meta as { duplicate?: { id?: number } } | undefined;
+          checkedCount += 1;
+          duplicateCount += 1;
           skipped.push({
             sourceId: photo.sourceId,
             caption: photo.caption,
             reason: 'Duplicate media already exists in this album.',
             duplicateId: duplicate?.duplicate?.id,
           });
+          emitProgress(photo.caption);
           continue;
         }
 
         if (error instanceof RequestValidationError && error.errorCode === 'DUPLICATE_SOURCE_MEDIA') {
           const duplicate = error.meta as { duplicate?: { id?: number } } | undefined;
+          checkedCount += 1;
+          duplicateCount += 1;
           skipped.push({
             sourceId: photo.sourceId,
             caption: photo.caption,
             reason: 'Already imported into this album.',
             duplicateId: duplicate?.duplicate?.id,
           });
+          emitProgress(photo.caption);
           continue;
         }
 
