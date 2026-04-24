@@ -79,11 +79,11 @@ export function useGalleryAdminController() {
     folderName: '',
     breadcrumbs: [],
     mediaCount: null,
-    limit: 50,
   });
   const [importingDrive, setImportingDrive] = useState(false);
   const [importProgress, setImportProgress] = useState(null);
   const [importSummary, setImportSummary] = useState(null);
+  const driveImportAbortControllerRef = useRef(null);
 
   const selectedAlbum = useMemo(
     () => albums.find((album) => album.id === selectedAlbumId) ?? null,
@@ -545,10 +545,7 @@ export function useGalleryAdminController() {
     }
 
     setImportingDrive(true);
-    const limitValue = Math.max(1, Number(driveForm.limit) || 50);
-    const expectedTotal = typeof driveForm.mediaCount === 'number'
-      ? Math.min(Math.max(0, driveForm.mediaCount), limitValue)
-      : limitValue;
+    const expectedTotal = typeof driveForm.mediaCount === 'number' ? Math.max(0, driveForm.mediaCount) : 0;
     const importTargetName =
       driveForm.folderName?.trim() || driveForm.folderId?.trim() || 'Google Drive folder';
     setImportProgress({
@@ -562,38 +559,97 @@ export function useGalleryAdminController() {
       lastResult: null,
     });
     setImportSummary(null);
-
-    let importProgressInterval = null;
+    driveImportAbortControllerRef.current = new AbortController();
 
     try {
-      importProgressInterval = window.setInterval(() => {
-        setImportProgress((current) => {
-          if (!current) {
-            return current;
-          }
-
-          const nextPercent = Math.min(92, current.percent + (current.percent < 40 ? 7 : current.percent < 75 ? 4 : 2));
-          const nextIndex = Math.min(
-            current.totalFiles,
-            Math.max(1, Math.round((nextPercent / 100) * current.totalFiles)),
-          );
-
-          return {
-            ...current,
-            percent: nextPercent,
-            currentFileIndex: nextIndex,
-          };
-        });
-      }, 350);
-
-      const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/import/google-drive`, {
+      const response = await fetch(`/api/gallery/albums/${selectedAlbumId}/import/google-drive?stream=1`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        signal: driveImportAbortControllerRef.current.signal,
+        cache: 'no-store',
+        body: JSON.stringify({
           folderId: driveForm.folderId,
-          limit: limitValue,
         }),
       });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || 'Unable to import Google Drive folder.');
+      }
+
+      if (!response.body) {
+        throw new Error('Import stream is unavailable.');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let result = null;
+
+      const applyProgress = (progressPayload = {}) => {
+        const totalCount = Number(progressPayload.totalCount);
+        const checkedCount = Number(progressPayload.checkedCount) || 0;
+        const importedCount = Number(progressPayload.importedCount) || 0;
+        const duplicateCount = Number(progressPayload.duplicateCount) || 0;
+        const resolvedTotal = Number.isFinite(totalCount) && totalCount > 0 ? totalCount : Math.max(expectedTotal, checkedCount, 1);
+        const percent = Math.min(99, Math.round((checkedCount / resolvedTotal) * 100));
+
+        setImportProgress({
+          percent,
+          currentFileName: progressPayload.currentFileName || importTargetName,
+          currentFileIndex: checkedCount,
+          totalFiles: resolvedTotal,
+          uploadedCount: importedCount,
+          skippedCount: duplicateCount,
+          failedCount: 0,
+          lastResult: null,
+        });
+      };
+
+      const processSseChunk = (chunkText) => {
+        buffer += chunkText;
+        const messages = buffer.split('\n\n');
+        buffer = messages.pop() || '';
+
+        for (const message of messages) {
+          const lines = message.split('\n');
+          let eventName = 'message';
+          let dataText = '';
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              eventName = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              dataText += line.slice(5).trim();
+            }
+          }
+
+          if (!dataText) {
+            continue;
+          }
+
+          const payload = JSON.parse(dataText);
+          if (eventName === 'progress') {
+            applyProgress(payload);
+          } else if (eventName === 'complete') {
+            result = payload;
+          } else if (eventName === 'error') {
+            throw new Error(payload?.error || 'Unable to import Google Drive folder.');
+          }
+        }
+      };
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        processSseChunk(decoder.decode(value, { stream: true }));
+      }
+      processSseChunk(decoder.decode());
+
+      if (!result) {
+        throw new Error('Import finished without a final result.');
+      }
 
       const importedCount = Number(result.importedCount) || 0;
       const skippedCount = Number(result.skippedCount) || 0;
@@ -637,17 +693,29 @@ export function useGalleryAdminController() {
       await loadPhotos(selectedAlbumId, sortMode);
       await loadAlbums();
     } catch (error) {
-      toast.error(error.message);
+      if (error?.name === 'AbortError') {
+        toast.message('Google Drive import cancelled.');
+      } else {
+        toast.error(error.message);
+      }
       setImportProgress(null);
     } finally {
-      if (importProgressInterval !== null) {
-        window.clearInterval(importProgressInterval);
-      }
+      driveImportAbortControllerRef.current = null;
       setImportingDrive(false);
       window.setTimeout(() => {
         setImportProgress((current) => (current?.percent === 100 ? null : current));
       }, 1200);
     }
+  };
+
+  const cancelDriveImport = () => {
+    if (!importingDrive) {
+      return;
+    }
+
+    driveImportAbortControllerRef.current?.abort();
+    setImportingDrive(false);
+    setImportProgress(null);
   };
 
   const reorderChange = (nextItems) => {
@@ -858,6 +926,7 @@ export function useGalleryAdminController() {
     moveSelectedPhotos,
     setCoverPhoto,
     handleDriveImport,
+    cancelDriveImport,
     reorderChange,
     arrangeAction,
     togglePhotoSelect,

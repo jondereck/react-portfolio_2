@@ -8,7 +8,6 @@ import { toast } from 'sonner';
 import {
   buttonStyles,
   ghostButtonStyles,
-  inputStyles,
 } from './galleryAdminShared';
 import GalleryBatchProgressCard from './GalleryBatchProgressCard';
 import GalleryBatchResultSummary from './GalleryBatchResultSummary';
@@ -34,6 +33,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
     importProgress,
     importSummary,
     handleDriveImport,
+    cancelDriveImport,
   } = controller;
   const [driveConnection, setDriveConnection] = useState(emptyDriveConnection);
   const [connectionBusy, setConnectionBusy] = useState(false);
@@ -201,10 +201,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
   const folderPathPreview = Array.isArray(driveForm.breadcrumbs)
     ? driveForm.breadcrumbs.map((entry) => entry?.name).filter(Boolean).join(' / ')
     : '';
-  const effectiveImportTotal = Math.min(
-    Math.max(1, Number(driveForm.limit) || 50),
-    typeof driveForm.mediaCount === 'number' ? driveForm.mediaCount : Number(driveForm.limit) || 50,
-  );
+  const effectiveImportTotal = typeof driveForm.mediaCount === 'number' ? Math.max(0, driveForm.mediaCount) : null;
 
   return (
     <div className="space-y-4">
@@ -282,18 +279,14 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
               </p>
               <div className="mt-3 grid gap-2">
                 <form className="grid gap-2" onSubmit={handleDriveImport}>
-                  <input
-                    className={inputStyles}
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={driveForm.limit}
-                    onChange={(event) => setDriveForm((previous) => ({ ...previous, limit: event.target.value }))}
-                    disabled={importDisabled}
-                  />
                   <button className={buttonStyles} disabled={importDisabled}>
                     {importingDrive ? 'Importing…' : 'Import folder'}
                   </button>
+                  {importingDrive ? (
+                    <button type="button" className={ghostButtonStyles} onClick={cancelDriveImport}>
+                      Cancel import
+                    </button>
+                  ) : null}
                 </form>
               </div>
             </div>
@@ -318,7 +311,9 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
               <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
                 <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Last import summary</p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  Imported against an effective total of {effectiveImportTotal} item{effectiveImportTotal === 1 ? '' : 's'}.
+                  {effectiveImportTotal === null
+                    ? 'Imported from the selected folder.'
+                    : `Imported against ${effectiveImportTotal} discovered item${effectiveImportTotal === 1 ? '' : 's'}.`}
                 </p>
               </div>
 
@@ -446,30 +441,20 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
                       ? `Exact media in folder: ${driveForm.mediaCount}`
                       : 'Media count is unavailable until the folder selection finishes loading.'}
                   </p>
-                  <p className="mt-1">Importing this run: {effectiveImportTotal}</p>
+                  <p className="mt-1">Import mode: include selected folder and all subfolders.</p>
                 </details>
               </div>
             ) : null}
 
-            <form className="mt-4 grid gap-3 md:grid-cols-[120px_auto]" onSubmit={handleDriveImport}>
-              <input
-                className={inputStyles}
-                type="number"
-                min={1}
-                max={200}
-                value={driveForm.limit}
-                onChange={(event) => setDriveForm((previous) => ({ ...previous, limit: event.target.value }))}
-                disabled={
-                  importingDrive ||
-                  driveConnection.loading ||
-                  !driveConnection.featureEnabled ||
-                  !driveConnection.oauthConfigured ||
-                  !driveConnection.connected
-                }
-              />
+            <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleDriveImport}>
               <button className={buttonStyles} disabled={importDisabled}>
                 {importingDrive ? 'Importing...' : 'Import Folder'}
               </button>
+              {importingDrive ? (
+                <button type="button" className={ghostButtonStyles} onClick={cancelDriveImport}>
+                  Cancel import
+                </button>
+              ) : null}
             </form>
 
             {importingDrive && importProgress ? (
@@ -491,7 +476,9 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
                 <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40">
                   <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Last import summary</p>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Imported against an effective total of {effectiveImportTotal} item{effectiveImportTotal === 1 ? '' : 's'}.
+                    {effectiveImportTotal === null
+                      ? 'Imported from the selected folder.'
+                      : `Imported against ${effectiveImportTotal} discovered item${effectiveImportTotal === 1 ? '' : 's'}.`}
                   </p>
                 </div>
 

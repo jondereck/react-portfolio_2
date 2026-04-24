@@ -1,8 +1,10 @@
 import { PassThrough, Readable } from 'node:stream';
 import { v2 as cloudinary } from 'cloudinary';
+import { PhotoSourceType } from '@prisma/client';
 import archiver from 'archiver';
 import type { AlbumPhotoRecord } from '@/src/modules/gallery/repositories/galleryRepository';
 import { RequestValidationError } from '@/lib/server/uploads';
+import { getGoogleDriveAccessTokenForUserOrAny } from '@/lib/auth/google-drive';
 
 type FetchResult = {
   response: Response;
@@ -108,7 +110,11 @@ export const buildPhotoDownloadFilename = (photo: AlbumPhotoRecord) => {
   return `${safeBase}.${extension}`;
 };
 
-const fetchWithTimeoutAndRetry = async (url: string, attempts = DOWNLOAD_RETRY_ATTEMPTS): Promise<Response> => {
+const fetchWithTimeoutAndRetry = async (
+  url: string,
+  attempts = DOWNLOAD_RETRY_ATTEMPTS,
+  headers?: Record<string, string>,
+): Promise<Response> => {
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
@@ -117,6 +123,7 @@ const fetchWithTimeoutAndRetry = async (url: string, attempts = DOWNLOAD_RETRY_A
     try {
       const response = await fetch(url, {
         cache: 'no-store',
+        headers,
         signal: controller.signal,
       });
       if (!response.ok || !response.body) {
@@ -139,9 +146,9 @@ const fetchWithTimeoutAndRetry = async (url: string, attempts = DOWNLOAD_RETRY_A
 };
 
 export const assertDownloadablePhoto = (photo: AlbumPhotoRecord) => {
-  if (photo.sourceType !== 'upload') {
+  if (photo.sourceType !== PhotoSourceType.upload && photo.sourceType !== PhotoSourceType.gdrive) {
     throw new RequestValidationError(
-      'This media cannot be downloaded in v1 because it was imported from Google Drive.',
+      'This media cannot be downloaded.',
       422,
       undefined,
       'NON_DOWNLOADABLE_MEDIA',
@@ -150,7 +157,7 @@ export const assertDownloadablePhoto = (photo: AlbumPhotoRecord) => {
 };
 
 export const resolvePhotoDownloadSourceUrl = (photo: AlbumPhotoRecord) => {
-  if (photo.sourceType !== 'upload') {
+  if (photo.sourceType !== PhotoSourceType.upload) {
     return null;
   }
 
@@ -159,6 +166,19 @@ export const resolvePhotoDownloadSourceUrl = (photo: AlbumPhotoRecord) => {
 };
 
 export const fetchPhotoDownload = async (photo: AlbumPhotoRecord): Promise<FetchResult> => {
+  if (photo.sourceType === PhotoSourceType.gdrive) {
+    if (!photo.sourceId) {
+      throw new RequestValidationError('Media is not downloadable.', 422, undefined, 'NON_DOWNLOADABLE_MEDIA');
+    }
+
+    const accessToken = await getGoogleDriveAccessTokenForUserOrAny(null);
+    const sourceUrl = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(photo.sourceId)}?alt=media&supportsAllDrives=true`;
+    const response = await fetchWithTimeoutAndRetry(sourceUrl, DOWNLOAD_RETRY_ATTEMPTS + 1, {
+      Authorization: `Bearer ${accessToken}`,
+    });
+    return { response, sourceUrl };
+  }
+
   const sourceUrl = resolvePhotoDownloadSourceUrl(photo);
   if (!sourceUrl) {
     throw new RequestValidationError('Media is not downloadable.', 422, undefined, 'NON_DOWNLOADABLE_MEDIA');
