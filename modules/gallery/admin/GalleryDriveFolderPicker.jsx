@@ -680,8 +680,8 @@ export default function GalleryDriveFolderPicker({
                       >
                         <Upload className="h-4 w-4" />
                         <span>
-                          Select this folder
-                          {selectedMediaIds.length > 0 ? ` (${selectedMediaIds.length} picked)` : ''}
+                          Select this media
+                          {selectedMediaIds.length > 0 ? ` (${selectedMediaIds.length})` : ''}
                         </span>
                       </button>
                     </div>
