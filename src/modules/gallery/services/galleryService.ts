@@ -275,8 +275,12 @@ export class GalleryService {
     }
 
     const manuallySortedPhotos = this.sortPhotosByManualArrangement(albumWithPhotos.photos);
-    const downloadablePhotos = manuallySortedPhotos.filter((photo) => photo.sourceType === PhotoSourceType.upload);
-    const skippedPhotos = manuallySortedPhotos.filter((photo) => photo.sourceType !== PhotoSourceType.upload);
+    const downloadablePhotos = manuallySortedPhotos.filter(
+      (photo) => photo.sourceType === PhotoSourceType.upload || photo.sourceType === PhotoSourceType.gdrive,
+    );
+    const skippedPhotos = manuallySortedPhotos.filter(
+      (photo) => photo.sourceType !== PhotoSourceType.upload && photo.sourceType !== PhotoSourceType.gdrive,
+    );
 
     return {
       album: albumWithPhotos,
@@ -652,7 +656,7 @@ export class GalleryService {
     return this.repo.reorderAlbumPhotos(albumId, photoIds);
   }
 
-  async importGoogleDriveFolder(albumId: number, args: { accessToken: string; folderId: string; limit: number }) {
+  async importGoogleDriveFolder(albumId: number, args: { accessToken: string; folderId: string }) {
     const drivePhotos = await this.driveAdapter.listFolderMedia(args);
 
     const created = [];

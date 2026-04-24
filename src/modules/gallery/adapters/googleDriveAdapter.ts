@@ -305,34 +305,65 @@ export class GoogleDriveAdapter {
     };
   }
 
-  async listFolderMedia(args: { accessToken: string; folderId: string; limit: number }): Promise<ImportedDrivePhoto[]> {
-    const query = `'${args.folderId}' in parents and trashed = false and (mimeType contains 'image/' or mimeType contains 'video/')`;
-    const params = new URLSearchParams({
-      q: query,
-      pageSize: String(args.limit),
-      fields: 'files(id,name,mimeType,imageMediaMetadata(time),createdTime)',
-      orderBy: 'createdTime desc',
-      supportsAllDrives: 'true',
-      includeItemsFromAllDrives: 'true',
-    });
+  async listFolderMedia(args: { accessToken: string; folderId: string }): Promise<ImportedDrivePhoto[]> {
+    const queue: string[] = [args.folderId];
+    const visited = new Set<string>();
+    const media: ImportedDrivePhoto[] = [];
 
-    const data = await this.fetchFilesList({ accessToken: args.accessToken, params });
-    const files = Array.isArray(data.files) ? data.files : [];
+    while (queue.length > 0) {
+      const folderId = queue.shift();
+      if (!folderId || visited.has(folderId)) {
+        continue;
+      }
 
-    return files
-      .filter(
-        (file) =>
-          file?.id &&
-          typeof file?.mimeType === 'string' &&
-          ALLOWED_MEDIA_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix)),
-      )
-      .map((file) => ({
-        sourceId: file.id,
-        imageUrl: `https://drive.google.com/thumbnail?id=${encodeURIComponent(file.id)}&sz=w2000`,
-        caption: file.name,
-        dateTaken: file.imageMediaMetadata?.time || file.createdTime,
-        mimeType: file.mimeType,
-      }));
+      visited.add(folderId);
+
+      let pageToken: string | null = null;
+      do {
+        const query = `'${folderId}' in parents and trashed = false and (mimeType = '${GOOGLE_FOLDER_MIME_TYPE}' or mimeType contains 'image/' or mimeType contains 'video/')`;
+        const params = new URLSearchParams({
+          q: query,
+          pageSize: '1000',
+          fields: 'files(id,name,mimeType,imageMediaMetadata(time),createdTime),nextPageToken',
+          orderBy: 'createdTime desc,name_natural',
+          supportsAllDrives: 'true',
+          includeItemsFromAllDrives: 'true',
+        });
+
+        if (pageToken) {
+          params.set('pageToken', pageToken);
+        }
+
+        const data = await this.fetchFilesList({ accessToken: args.accessToken, params });
+        const files = Array.isArray(data.files) ? data.files : [];
+        for (const file of files) {
+          if (!file?.id || typeof file?.mimeType !== 'string') {
+            continue;
+          }
+
+          if (file.mimeType === GOOGLE_FOLDER_MIME_TYPE) {
+            queue.push(file.id);
+            continue;
+          }
+
+          if (!ALLOWED_MEDIA_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix))) {
+            continue;
+          }
+
+          media.push({
+            sourceId: file.id,
+            imageUrl: `https://drive.google.com/thumbnail?id=${encodeURIComponent(file.id)}&sz=w2000`,
+            caption: file.name,
+            dateTaken: file.imageMediaMetadata?.time || file.createdTime,
+            mimeType: file.mimeType,
+          });
+        }
+
+        pageToken = data.nextPageToken || null;
+      } while (pageToken);
+    }
+
+    return media;
   }
 
   async getFileContentHash(args: { accessToken: string; fileId: string }): Promise<string> {

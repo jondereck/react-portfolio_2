@@ -35,6 +35,13 @@ const getNavigationType = () => {
 };
 
 const isSafeInternalPath = (value) => typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+const isPersistentRoute = (value) => {
+  if (!isSafeInternalPath(value)) {
+    return false;
+  }
+
+  return !value.startsWith('/admin') && !value.startsWith('/api') && !value.startsWith('/register');
+};
 
 export default function PwaRoutePersistence() {
   const router = useRouter();
@@ -48,7 +55,7 @@ export default function PwaRoutePersistence() {
 
     const saveCurrentLocation = () => {
       const currentPath = `${window.location.pathname}${window.location.search || ''}`;
-      if (!isSafeInternalPath(currentPath) || currentPath === '/') {
+      if (!isPersistentRoute(currentPath) || currentPath === '/') {
         return;
       }
 
@@ -77,7 +84,7 @@ export default function PwaRoutePersistence() {
 
     const search = typeof searchParams?.toString === 'function' ? searchParams.toString() : '';
     const currentPath = `${pathname || ''}${search ? `?${search}` : ''}`;
-    if (!isSafeInternalPath(currentPath) || currentPath === '/') {
+    if (!isPersistentRoute(currentPath) || currentPath === '/') {
       return;
     }
 
@@ -95,7 +102,7 @@ export default function PwaRoutePersistence() {
     }
 
     const lastRoute = window.localStorage.getItem(LAST_ROUTE_KEY);
-    if (!isSafeInternalPath(lastRoute)) {
+    if (!isPersistentRoute(lastRoute)) {
       return;
     }
 

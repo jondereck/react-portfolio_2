@@ -79,11 +79,11 @@ export function useGalleryAdminController() {
     folderName: '',
     breadcrumbs: [],
     mediaCount: null,
-    limit: 50,
   });
   const [importingDrive, setImportingDrive] = useState(false);
   const [importProgress, setImportProgress] = useState(null);
   const [importSummary, setImportSummary] = useState(null);
+  const driveImportAbortControllerRef = useRef(null);
 
   const selectedAlbum = useMemo(
     () => albums.find((album) => album.id === selectedAlbumId) ?? null,
@@ -545,10 +545,7 @@ export function useGalleryAdminController() {
     }
 
     setImportingDrive(true);
-    const limitValue = Math.max(1, Number(driveForm.limit) || 50);
-    const expectedTotal = typeof driveForm.mediaCount === 'number'
-      ? Math.min(Math.max(0, driveForm.mediaCount), limitValue)
-      : limitValue;
+    const expectedTotal = typeof driveForm.mediaCount === 'number' ? Math.max(0, driveForm.mediaCount) : 0;
     const importTargetName =
       driveForm.folderName?.trim() || driveForm.folderId?.trim() || 'Google Drive folder';
     setImportProgress({
@@ -562,6 +559,7 @@ export function useGalleryAdminController() {
       lastResult: null,
     });
     setImportSummary(null);
+    driveImportAbortControllerRef.current = new AbortController();
 
     let importProgressInterval = null;
 
@@ -589,9 +587,9 @@ export function useGalleryAdminController() {
       const result = await fetchJson(`/api/gallery/albums/${selectedAlbumId}/import/google-drive`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+        signal: driveImportAbortControllerRef.current.signal,
+        body: JSON.stringify({
           folderId: driveForm.folderId,
-          limit: limitValue,
         }),
       });
 
@@ -637,9 +635,14 @@ export function useGalleryAdminController() {
       await loadPhotos(selectedAlbumId, sortMode);
       await loadAlbums();
     } catch (error) {
-      toast.error(error.message);
+      if (error?.name === 'AbortError') {
+        toast.message('Google Drive import cancelled.');
+      } else {
+        toast.error(error.message);
+      }
       setImportProgress(null);
     } finally {
+      driveImportAbortControllerRef.current = null;
       if (importProgressInterval !== null) {
         window.clearInterval(importProgressInterval);
       }
@@ -648,6 +651,16 @@ export function useGalleryAdminController() {
         setImportProgress((current) => (current?.percent === 100 ? null : current));
       }, 1200);
     }
+  };
+
+  const cancelDriveImport = () => {
+    if (!importingDrive) {
+      return;
+    }
+
+    driveImportAbortControllerRef.current?.abort();
+    setImportingDrive(false);
+    setImportProgress(null);
   };
 
   const reorderChange = (nextItems) => {
@@ -858,6 +871,7 @@ export function useGalleryAdminController() {
     moveSelectedPhotos,
     setCoverPhoto,
     handleDriveImport,
+    cancelDriveImport,
     reorderChange,
     arrangeAction,
     togglePhotoSelect,

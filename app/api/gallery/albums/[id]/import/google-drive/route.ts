@@ -47,7 +47,6 @@ export async function POST(request: Request, context: RouteContext) {
     const result = await galleryService.importGoogleDriveFolder(albumId, {
       folderId: String(parsed.folderId),
       accessToken,
-      limit: Number(parsed.limit ?? 50),
     });
 
     return NextResponse.json(
