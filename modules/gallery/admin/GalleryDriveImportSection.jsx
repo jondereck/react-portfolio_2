@@ -46,6 +46,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
       folderName: '',
       breadcrumbs: [],
       mediaCount: null,
+      selectedFileIds: [],
     }));
   };
 
@@ -338,6 +339,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
                 folderName: folder.name,
                 breadcrumbs: Array.isArray(folder.breadcrumbs) ? folder.breadcrumbs : [],
                 mediaCount: typeof folder.mediaCount === 'number' ? folder.mediaCount : null,
+                selectedFileIds: Array.isArray(folder.selectedFileIds) ? folder.selectedFileIds : [],
               }));
             }}
           />
@@ -503,6 +505,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
                   folderName: folder.name,
                   breadcrumbs: Array.isArray(folder.breadcrumbs) ? folder.breadcrumbs : [],
                   mediaCount: typeof folder.mediaCount === 'number' ? folder.mediaCount : null,
+                  selectedFileIds: Array.isArray(folder.selectedFileIds) ? folder.selectedFileIds : [],
                 }));
               }}
             />

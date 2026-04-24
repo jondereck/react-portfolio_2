@@ -72,6 +72,7 @@ export const bulkPhotoBlurOverrideSchema = z.object({
 
 export const driveImportSchema = z.object({
   folderId: z.string().trim().min(1),
+  selectedFileIds: z.array(z.string().trim().min(1)).max(1000).optional().default([]),
 });
 
 export const unclothyCreateTaskSchema = z.object({

@@ -79,6 +79,7 @@ export function useGalleryAdminController() {
     folderName: '',
     breadcrumbs: [],
     mediaCount: null,
+    selectedFileIds: [],
   });
   const [importingDrive, setImportingDrive] = useState(false);
   const [importProgress, setImportProgress] = useState(null);
@@ -546,13 +547,15 @@ export function useGalleryAdminController() {
 
     setImportingDrive(true);
     const expectedTotal = typeof driveForm.mediaCount === 'number' ? Math.max(0, driveForm.mediaCount) : 0;
+    const selectedCount = Array.isArray(driveForm.selectedFileIds) ? driveForm.selectedFileIds.length : 0;
+    const resolvedExpectedTotal = selectedCount > 0 ? selectedCount : expectedTotal;
     const importTargetName =
       driveForm.folderName?.trim() || driveForm.folderId?.trim() || 'Google Drive folder';
     setImportProgress({
       percent: 3,
       currentFileName: importTargetName,
-      currentFileIndex: expectedTotal > 0 ? 1 : 0,
-      totalFiles: expectedTotal,
+      currentFileIndex: resolvedExpectedTotal > 0 ? 1 : 0,
+      totalFiles: resolvedExpectedTotal,
       uploadedCount: 0,
       skippedCount: 0,
       failedCount: 0,
@@ -569,6 +572,7 @@ export function useGalleryAdminController() {
         cache: 'no-store',
         body: JSON.stringify({
           folderId: driveForm.folderId,
+          selectedFileIds: selectedCount > 0 ? driveForm.selectedFileIds : [],
         }),
       });
 
@@ -591,7 +595,8 @@ export function useGalleryAdminController() {
         const checkedCount = Number(progressPayload.checkedCount) || 0;
         const importedCount = Number(progressPayload.importedCount) || 0;
         const duplicateCount = Number(progressPayload.duplicateCount) || 0;
-        const resolvedTotal = Number.isFinite(totalCount) && totalCount > 0 ? totalCount : Math.max(expectedTotal, checkedCount, 1);
+        const resolvedTotal =
+          Number.isFinite(totalCount) && totalCount > 0 ? totalCount : Math.max(resolvedExpectedTotal, checkedCount, 1);
         const percent = Math.min(99, Math.round((checkedCount / resolvedTotal) * 100));
 
         setImportProgress({
@@ -654,7 +659,7 @@ export function useGalleryAdminController() {
       const importedCount = Number(result.importedCount) || 0;
       const skippedCount = Number(result.skippedCount) || 0;
       const skippedItems = Array.isArray(result.skipped) ? result.skipped : [];
-      const totalItems = Math.max(importedCount + skippedCount, expectedTotal);
+      const totalItems = Math.max(importedCount + skippedCount, resolvedExpectedTotal);
 
       setImportProgress({
         percent: 100,

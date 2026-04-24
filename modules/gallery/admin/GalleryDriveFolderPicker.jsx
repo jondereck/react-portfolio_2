@@ -52,6 +52,7 @@ export default function GalleryDriveFolderPicker({
   const [folderSort, setFolderSort] = useState('recent');
   const [query, setQuery] = useState('');
   const [mobileTab, setMobileTab] = useState('folders');
+  const [selectedMediaIds, setSelectedMediaIds] = useState([]);
   const previewScrollRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
 
@@ -72,6 +73,7 @@ export default function GalleryDriveFolderPicker({
           ? payload.breadcrumbs
           : [...browseState.breadcrumbs, { id: folder.id, name: folder.name }],
         mediaCount: typeof currentFolder?.mediaCount === 'number' ? currentFolder.mediaCount : null,
+        selectedFileIds: folder.id === browseState.currentFolder?.id ? selectedMediaIds : [],
       });
       onClose();
     } catch (error) {
@@ -83,7 +85,13 @@ export default function GalleryDriveFolderPicker({
   };
 
   const loadFolders = async (parentId = null, options = {}) => {
-    const { appendFiles = false, previewPageToken = null, previewPageSize = 8, folderSortOverride = null } = options;
+    const {
+      appendFiles = false,
+      previewPageToken = null,
+      previewPageSize = 8,
+      folderSortOverride = null,
+      keepSelectedMedia = true,
+    } = options;
     const effectiveFolderSort = folderSortOverride || folderSort;
 
     setBrowseState((current) => ({
@@ -123,6 +131,12 @@ export default function GalleryDriveFolderPicker({
         nextPreviewPageToken: payload?.nextPreviewPageToken ?? null,
         error: '',
       }));
+
+      if (!appendFiles && !keepSelectedMedia) {
+        setSelectedMediaIds([]);
+      }
+
+      return payload;
     } catch (error) {
       setBrowseState((current) => ({
         ...current,
@@ -130,6 +144,7 @@ export default function GalleryDriveFolderPicker({
         previewLoadingMore: false,
         error: error instanceof Error ? error.message : 'Unable to browse Google Drive folders.',
       }));
+      return null;
     }
   };
 
@@ -140,6 +155,7 @@ export default function GalleryDriveFolderPicker({
 
     setQuery('');
     setMobileTab('folders');
+    setSelectedMediaIds([]);
     loadFolders();
   }, [open]);
 
@@ -188,6 +204,24 @@ export default function GalleryDriveFolderPicker({
   const filteredFolders = browseState.folders.filter((folder) =>
     folder.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
+
+  const selectedMediaSet = new Set(selectedMediaIds);
+
+  const handleViewAllMedia = async () => {
+    if (browseState.previewLoadingMore || browseState.loading) {
+      return;
+    }
+
+    let nextToken = browseState.nextPreviewPageToken;
+    while (nextToken) {
+      const payload = await loadFolders(currentParentId, {
+        appendFiles: true,
+        previewPageToken: nextToken,
+        previewPageSize: 24,
+      });
+      nextToken = payload?.nextPreviewPageToken ?? null;
+    }
+  };
 
   const selectedFolder = browseState.folders.find((folder) => folder.id === selectedFolderId) || browseState.currentFolder;
   const selectedFolderName = selectedFolder?.name || browseState.currentFolder?.name || 'My Drive';
@@ -271,7 +305,7 @@ export default function GalleryDriveFolderPicker({
                                 ? 'bg-slate-950 text-white'
                                 : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
                             }`}
-                            onClick={() => loadFolders(crumbParentId)}
+                            onClick={() => loadFolders(crumbParentId, { keepSelectedMedia: false })}
                           >
                             {crumb.name}
                           </button>
@@ -370,13 +404,13 @@ export default function GalleryDriveFolderPicker({
                                     : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
                                 }`}
                                 onClick={() => {
-                                  loadFolders(folder.id);
+                                  loadFolders(folder.id, { keepSelectedMedia: false });
                                   setMobileTab('preview');
                                 }}
                                 onKeyDown={(event) => {
                                   if (event.key === 'Enter' || event.key === ' ') {
                                     event.preventDefault();
-                                    loadFolders(folder.id);
+                                    loadFolders(folder.id, { keepSelectedMedia: false });
                                     setMobileTab('preview');
                                   }
                                 }}
@@ -478,13 +512,18 @@ export default function GalleryDriveFolderPicker({
                         <button
                           type="button"
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
-                          onClick={loadMorePreviews}
-                          disabled={!browseState.nextPreviewPageToken || browseState.previewLoadingMore || browseState.loading}
+                          onClick={handleViewAllMedia}
+                          disabled={browseState.previewLoadingMore || browseState.loading}
                         >
                           {browseState.previewLoadingMore ? 'Loading...' : 'View all'}
                           <ChevronRight className="h-4 w-4" />
                         </button>
                       </div>
+                      <p className="mt-2 text-xs text-slate-500">
+                        {selectedMediaIds.length > 0
+                          ? `${selectedMediaIds.length} media selected for manual import.`
+                          : 'No media manually selected — importing will include all media in this folder.'}
+                      </p>
 
                       <div
                         className="mt-4 max-h-[46vh] overflow-y-auto pr-1"
@@ -505,12 +544,33 @@ export default function GalleryDriveFolderPicker({
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                             {browseState.files.map((file) => {
                               const isVideo = file.kind === 'video';
+                              const isChecked = selectedMediaSet.has(file.id);
 
                               return (
                                 <article
                                   key={file.id}
-                                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                                  className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                                    isChecked ? 'border-blue-400 ring-2 ring-blue-200' : 'border-slate-200'
+                                  }`}
                                 >
+                                  <button
+                                    type="button"
+                                    aria-label={isChecked ? `Deselect ${file.name}` : `Select ${file.name}`}
+                                    className={`absolute right-2 top-2 z-10 inline-flex h-6 w-6 items-center justify-center rounded-full border text-white ${
+                                      isChecked
+                                        ? 'border-blue-600 bg-blue-600'
+                                        : 'border-white/70 bg-slate-900/45'
+                                    }`}
+                                    onClick={() => {
+                                      setSelectedMediaIds((current) =>
+                                        current.includes(file.id)
+                                          ? current.filter((id) => id !== file.id)
+                                          : [...current, file.id],
+                                      );
+                                    }}
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </button>
                                   <div className={`relative ${isVideo ? 'aspect-[4/3]' : 'aspect-[4/3]'} bg-slate-100`}>
                                     {isVideo ? (
                                       <video
@@ -615,7 +675,10 @@ export default function GalleryDriveFolderPicker({
                         disabled={!browseState.currentFolder}
                       >
                         <Upload className="h-4 w-4" />
-                        <span>Select this folder</span>
+                        <span>
+                          Select this folder
+                          {selectedMediaIds.length > 0 ? ` (${selectedMediaIds.length} picked)` : ''}
+                        </span>
                       </button>
                     </div>
                   </div>

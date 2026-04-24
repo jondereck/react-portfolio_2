@@ -661,6 +661,7 @@ export class GalleryService {
     args: {
       accessToken: string;
       folderId: string;
+      selectedFileIds?: string[];
       onProgress?: (event: {
         totalCount: number;
         checkedCount: number;
@@ -670,7 +671,11 @@ export class GalleryService {
       }) => void;
     },
   ) {
-    const drivePhotos = await this.driveAdapter.listFolderMedia(args);
+    const drivePhotos = await this.driveAdapter.listFolderMedia({
+      accessToken: args.accessToken,
+      folderId: args.folderId,
+      selectedFileIds: Array.isArray(args.selectedFileIds) ? args.selectedFileIds : [],
+    });
 
     const created = [];
     const skipped = [];

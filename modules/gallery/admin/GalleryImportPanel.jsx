@@ -57,7 +57,8 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
       folderId: '',
       folderName: '',
       breadcrumbs: [],
-      imageCount: null,
+      mediaCount: null,
+      selectedFileIds: [],
     }));
   };
 
@@ -354,8 +355,8 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
                         <summary className="cursor-pointer font-medium">Advanced details</summary>
                         <p className="mt-2 break-all">Folder ID: {driveForm.folderId}</p>
                         <p className="mt-1">
-                          {typeof driveForm.imageCount === 'number'
-                            ? `Estimated images: ${driveForm.imageCount}`
+                          {typeof driveForm.mediaCount === 'number'
+                            ? `Estimated images: ${driveForm.mediaCount}`
                             : 'Image count preview is unavailable before import in this version.'}
                         </p>
                       </details>
@@ -445,7 +446,8 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
             folderId: folder.id,
             folderName: folder.name,
             breadcrumbs: Array.isArray(folder.breadcrumbs) ? folder.breadcrumbs : [],
-            imageCount: typeof folder.imageCount === 'number' ? folder.imageCount : null,
+            mediaCount: typeof folder.mediaCount === 'number' ? folder.mediaCount : null,
+            selectedFileIds: Array.isArray(folder.selectedFileIds) ? folder.selectedFileIds : [],
           }));
         }}
       />
