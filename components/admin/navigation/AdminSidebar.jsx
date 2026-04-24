@@ -16,7 +16,7 @@ function isActivePath(pathname, href) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export default function AdminSidebar({ collapsed = false, onToggle, onLogout, isLoggingOut = false }) {
+export default function AdminSidebar({ collapsed = false, onToggle, onLogout, isLoggingOut = false, accountName = '' }) {
   const pathname = usePathname();
 
   return (
@@ -24,12 +24,13 @@ export default function AdminSidebar({ collapsed = false, onToggle, onLogout, is
       collapsed={collapsed}
       onToggle={onToggle}
       brandKicker="Admin Control Center"
-      brandTitle="Portfolio CMS"
+      brandTitle="JDN System"
       sections={adminNavigationSections}
       pathname={pathname}
       isActivePath={isActivePath}
       onLogout={onLogout}
       isLoggingOut={isLoggingOut}
+      accountName={accountName}
     />
   );
 }

@@ -3,6 +3,7 @@
 import { portfolioResources } from '@/modules/portfolio/admin/resources';
 import SiteContentSection from '@/modules/portfolio/admin/SiteContentSection';
 import PortfolioResourceSection from '@/modules/portfolio/admin/PortfolioResourceSection';
+import SiteConfigSection from '@/modules/system/admin/SiteConfigSection';
 
 const sectionMap = {
   homepage: 'homepage',
@@ -18,6 +19,7 @@ export default function PortfolioAdminWorkspace({ focusSection = null }) {
   return (
     <div className="space-y-6">
       {(normalized === null || normalized === 'homepage') ? <SiteContentSection /> : null}
+      {normalized === 'homepage' ? <SiteConfigSection /> : null}
       {portfolioResources
         .filter((resource) => normalized === null || normalized === resource.key)
         .map((resource) => (

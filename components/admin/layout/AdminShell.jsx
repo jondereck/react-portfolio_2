@@ -11,12 +11,21 @@ import UnclothyTaskNotifier from '@/components/admin/layout/UnclothyTaskNotifier
 const adminLastVisitedPathStorageKey = 'admin:lastVisitedPath';
 const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
 const sidebarCollapsedStorageKey = 'admin:sidebarCollapsed';
+const accountNameStorageKey = 'admin:accountDisplayName';
 
 export default function AdminShell({ children }) {
   const pathname = usePathname();
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [accountName, setAccountName] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      return window.localStorage.getItem(accountNameStorageKey) || '';
+    } catch {
+      return '';
+    }
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -33,6 +42,44 @@ export default function AdminShell({ children }) {
     window.localStorage.setItem(adminLastVisitedPathStorageKey, pathname);
     window.localStorage.setItem(authLastVisitedPathStorageKey, pathname);
   }, [pathname]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const controller = new AbortController();
+
+    const loadAccount = async () => {
+      try {
+        const response = await fetch('/api/admin/account', {
+          method: 'GET',
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error('Account request failed');
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        const account = payload?.account ?? null;
+        const resolvedName = String(account?.name || account?.email || '').trim();
+        if (!resolvedName) {
+          return;
+        }
+
+        setAccountName(resolvedName);
+        try {
+          window.localStorage.setItem(accountNameStorageKey, resolvedName);
+        } catch {
+          // ignore persistence errors
+        }
+      } catch {
+        // ignore account refresh errors and keep the last known label
+      }
+    };
+
+    void loadAccount();
+
+    return () => controller.abort();
+  }, []);
 
   const handleLogout = async () => {
     if (isLoggingOut) {
@@ -75,6 +122,7 @@ export default function AdminShell({ children }) {
             onToggle={handleToggleSidebar}
             onLogout={handleLogout}
             isLoggingOut={isLoggingOut}
+            accountName={accountName}
           />
         </div>
 
@@ -85,6 +133,7 @@ export default function AdminShell({ children }) {
               isLoggingOut={isLoggingOut}
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={handleToggleSidebar}
+              accountName={accountName}
             />
             <main className="min-w-0 flex-1 space-y-6">{children}</main>
           </div>

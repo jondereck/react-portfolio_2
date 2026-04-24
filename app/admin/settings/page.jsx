@@ -1,11 +1,5 @@
-import SiteConfigSection from '@/modules/system/admin/SiteConfigSection';
-import SettingsHashRedirect from '@/components/admin/settings/SettingsHashRedirect';
+import { redirect } from 'next/navigation';
 
 export default function AdminSettingsPage() {
-  return (
-    <div className="space-y-6">
-      <SettingsHashRedirect />
-      <SiteConfigSection />
-    </div>
-  );
+  redirect('/admin/portfolio/homepage');
 }

@@ -19,7 +19,7 @@ import {
   User,
   Users,
 } from 'lucide-react';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment } from 'react';
 
 const iconMap = {
   layoutDashboard: LayoutDashboard,
@@ -46,37 +46,10 @@ export default function CollapsibleSidebar({
   isActivePath,
   onLogout,
   isLoggingOut = false,
+  accountName = '',
 }) {
-  const [accountName, setAccountName] = useState('My Account');
-  const [accountLoading, setAccountLoading] = useState(true);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-    const controller = new AbortController();
-
-    const load = async () => {
-      setAccountLoading(true);
-      try {
-        const response = await fetch('/api/admin/account', { method: 'GET', signal: controller.signal });
-        if (!response.ok) {
-          throw new Error('Account request failed');
-        }
-
-        const payload = await response.json().catch(() => ({}));
-        const account = payload?.account ?? null;
-        const resolvedName = String(account?.name || account?.email || '').trim();
-        setAccountName(resolvedName || 'My Account');
-      } catch {
-        setAccountName('My Account');
-      } finally {
-        setAccountLoading(false);
-      }
-    };
-
-    void load();
-
-    return () => controller.abort();
-  }, []);
+  const resolvedAccountName = String(accountName || '').trim();
+  const accountInitial = resolvedAccountName.slice(0, 1).toUpperCase();
 
   return (
     <aside
@@ -173,15 +146,13 @@ export default function CollapsibleSidebar({
               aria-label="Account menu"
             >
               <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm dark:bg-slate-50 dark:text-slate-900">
-                <span className="text-sm font-semibold">{String(accountName || 'A').trim().slice(0, 1).toUpperCase()}</span>
+                {accountInitial ? <span className="text-sm font-semibold">{accountInitial}</span> : <User className="size-5" />}
                 <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
               </div>
 
               {collapsed ? null : (
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">
-                    {accountLoading ? 'Loading...' : accountName}
-                  </p>
+                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">{resolvedAccountName || 'Account'}</p>
                   <p className="truncate text-xs text-slate-500 dark:text-slate-400">Online</p>
                 </div>
               )}

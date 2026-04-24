@@ -62,12 +62,7 @@ const portfolioOverviewCards = [
 export default function PortfolioAdminPage() {
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-xl font-semibold">Portfolio Module Overview</h2>
-        <p className="mt-2 text-sm text-slate-500">
-          Portfolio administration is split into focused routes while still supporting one complete workspace.
-        </p>
-      </section>
+
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {portfolioOverviewCards.map((card) => (

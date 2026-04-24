@@ -65,12 +65,7 @@ export default async function GalleryAdminPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-xl font-semibold">Gallery Module Overview</h2>
-        <p className="mt-2 max-w-3xl text-sm text-slate-500">
-          Each card opens a dedicated route with only the relevant tools visible, with shortcuts to both the advanced workspace and the live gallery below.
-        </p>
-      </section>
+
 
       <section className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <AdminMetricCard

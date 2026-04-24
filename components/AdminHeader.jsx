@@ -8,7 +8,7 @@ export default function AdminHeader({ onLogout }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-4">
           <p className="text-sm uppercase tracking-wide text-slate-500">Admin Console</p>
-          <h1 className="text-3xl font-bold">Portfolio CMS</h1>
+          <h1 className="text-3xl font-bold">JDN System</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Manage front page content, portfolio, certificates, skills, and experience in one place.
           </p>
