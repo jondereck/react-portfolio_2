@@ -2,7 +2,23 @@
 
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { ArrowUpDown, ChevronRight, Folder, Home, Image, Loader2, Play, RefreshCw, X } from 'lucide-react';
+import {
+  ArrowUpDown,
+  Check,
+  ChevronRight,
+  Folder,
+  HelpCircle,
+  Home,
+  Image,
+  Loader2,
+  MoreVertical,
+  Play,
+  RefreshCw,
+  Search,
+  Shield,
+  Upload,
+  X,
+} from 'lucide-react';
 import { fetchJson, buttonStyles } from './galleryAdminShared';
 
 const emptyBrowseState = {
@@ -16,6 +32,16 @@ const emptyBrowseState = {
   error: '',
 };
 
+function GoogleDriveLogo() {
+  return (
+    <div className="relative h-8 w-8 shrink-0" aria-hidden="true">
+      <div className="absolute left-[9px] top-0 h-[18px] w-[10px] -rotate-[30deg] rounded-sm bg-emerald-500" />
+      <div className="absolute right-[1px] top-[12px] h-[11px] w-[18px] rounded-sm bg-amber-400" />
+      <div className="absolute bottom-[1px] left-[1px] h-[11px] w-[18px] rounded-sm bg-blue-500" />
+    </div>
+  );
+}
+
 export default function GalleryDriveFolderPicker({
   open,
   onClose,
@@ -24,6 +50,8 @@ export default function GalleryDriveFolderPicker({
 }) {
   const [browseState, setBrowseState] = useState(emptyBrowseState);
   const [folderSort, setFolderSort] = useState('recent');
+  const [query, setQuery] = useState('');
+  const [mobileTab, setMobileTab] = useState('folders');
   const previewScrollRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
 
@@ -110,6 +138,8 @@ export default function GalleryDriveFolderPicker({
       return;
     }
 
+    setQuery('');
+    setMobileTab('folders');
     loadFolders();
   }, [open]);
 
@@ -153,13 +183,14 @@ export default function GalleryDriveFolderPicker({
 
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [
-    browseState.loading,
-    browseState.nextPreviewPageToken,
-    browseState.previewLoadingMore,
-    folderSort,
-    open,
-  ]);
+  }, [browseState.loading, browseState.nextPreviewPageToken, browseState.previewLoadingMore, folderSort, open]);
+
+  const filteredFolders = browseState.folders.filter((folder) =>
+    folder.name.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
+  const selectedFolder = browseState.folders.find((folder) => folder.id === selectedFolderId) || browseState.currentFolder;
+  const selectedFolderName = selectedFolder?.name || browseState.currentFolder?.name || 'My Drive';
 
   return (
     <Transition show={open} as={Fragment}>
@@ -187,309 +218,408 @@ export default function GalleryDriveFolderPicker({
               leaveFrom="opacity-100 scale-100 translate-y-0"
               leaveTo="opacity-0 scale-95 translate-y-2"
             >
-	              <Dialog.Panel className="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-900 sm:h-auto sm:max-h-[min(44rem,calc(100dvh-3rem))] sm:max-w-4xl sm:rounded-2xl">
-	                <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-800 sm:px-5">
-	                  <div className="flex items-start justify-between gap-4">
-	                    <div className="min-w-0 space-y-1">
-	                      <div className="flex items-center justify-between gap-3">
-	                        <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Google Drive</p>
-	                        <button
-	                          type="button"
-	                          className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 px-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-	                          onClick={onClose}
-	                        >
-	                          <X className="size-4" />
-	                          <span className="ml-2 hidden sm:inline">Close</span>
-	                        </button>
-	                      </div>
-	                      <Dialog.Title className="text-lg font-semibold text-slate-950 dark:text-slate-50">
-	                        Browse folders
-	                      </Dialog.Title>
-	                      <p className="text-sm text-slate-500 dark:text-slate-400">
-	                        Navigate through Drive folders and select one import source.
-	                      </p>
-	                    </div>
-	                  </div>
+              <Dialog.Panel className="mx-auto flex h-[100dvh] w-full max-w-7xl flex-col overflow-hidden bg-white shadow-2xl sm:h-[calc(100dvh-3rem)] sm:rounded-[2rem]">
+                <header className="shrink-0 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <GoogleDriveLogo />
+                      <div className="min-w-0">
+                        <Dialog.Title className="truncate text-sm font-black text-slate-950 sm:text-base">
+                          Google Drive Import
+                        </Dialog.Title>
+                        <p className="truncate text-xs text-slate-500 sm:text-sm">Choose one source folder</p>
+                      </div>
+                    </div>
 
-	                  <div className="mt-4 flex items-center gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-	                    {browseState.breadcrumbs.map((crumb, index) => {
-	                      const isRoot = crumb.id === 'root';
-	                      const isCurrent = index === browseState.breadcrumbs.length - 1;
-	                      const crumbParentId = isRoot ? null : crumb.id;
-
-                      return (
-                        <Fragment key={`${crumb.id}-${index}`}>
-                          <button
-                            type="button"
-                            className={`inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs transition ${
-                              isCurrent
-                                ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
-                                : 'border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800'
-                            }`}
-                            onClick={() => loadFolders(crumbParentId)}
-                          >
-                            {isRoot ? <Home className="size-3.5" /> : <Folder className="size-3.5" />}
-	                            <span className="max-w-[10rem] truncate">{crumb.name}</span>
-	                          </button>
-	                          {index < browseState.breadcrumbs.length - 1 ? (
-	                            <ChevronRight className="size-4 text-slate-400" />
-	                          ) : null}
-                        </Fragment>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
-	                  <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
-	                    <div className="min-w-0">
-	                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-	                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-	                          Current location
-	                        </p>
-	                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-	                          {browseState.currentFolder?.name || 'My Drive'}
-	                        </p>
-	                      </div>
-	                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-	                        Select one folder only. Subfolders are not imported recursively in this version.
-	                      </p>
-	                    </div>
-
-	                    <div className="flex shrink-0 flex-wrap gap-2">
-	                      <button
-	                        type="button"
-	                        className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 sm:w-auto sm:px-3"
-	                        onClick={() => loadFolders(currentParentId)}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        className="hidden h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:inline-flex"
+                        onClick={() => loadFolders(currentParentId)}
                         disabled={browseState.loading}
-                        aria-label={browseState.loading ? 'Refreshing folders' : 'Refresh folders'}
-                        title={browseState.loading ? 'Refreshing folders' : 'Refresh folders'}
                       >
-                        {browseState.loading ? (
-                          <>
-                            <Loader2 className="size-4 animate-spin sm:mr-2" />
-                            <span className="hidden sm:inline">Refreshing...</span>
-                          </>
-                        ) : (
-                          <>
-                            <RefreshCw className="size-4 sm:mr-2" />
-                            <span className="hidden sm:inline">Refresh</span>
-                          </>
-                        )}
+                        {browseState.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                        {browseState.loading ? 'Refreshing...' : 'Refresh'}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Close"
+                        className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:bg-slate-50"
+                        onClick={onClose}
+                      >
+                        <X className="h-5 w-5" />
                       </button>
                     </div>
                   </div>
 
-                  {browseState.error ? (
-                    <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
-                      {browseState.error}
-                    </div>
-                  ) : null}
+                  <div className="mt-4 flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-slate-100 px-3 text-xs font-semibold text-slate-600">
+                      <Home className="h-3.5 w-3.5" />
+                      Drive
+                    </span>
+                    {browseState.breadcrumbs.map((crumb, index) => {
+                      const isCurrent = index === browseState.breadcrumbs.length - 1;
+                      const crumbParentId = crumb.id === 'root' ? null : crumb.id;
 
-                  {browseState.loading && browseState.folders.length === 0 && browseState.files.length === 0 ? (
-                    <div className="grid place-items-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-14 text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="size-4 animate-spin" />
-                        Loading folders and previews...
+                      return (
+                        <Fragment key={`${crumb.id}-${index}`}>
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
+                          <button
+                            type="button"
+                            className={`h-8 max-w-[150px] shrink-0 truncate rounded-full px-3 text-xs font-semibold transition sm:max-w-[220px] ${
+                              isCurrent
+                                ? 'bg-slate-950 text-white'
+                                : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
+                            }`}
+                            onClick={() => loadFolders(crumbParentId)}
+                          >
+                            {crumb.name}
+                          </button>
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 rounded-2xl bg-slate-100 p-1 lg:hidden">
+                    <button
+                      type="button"
+                      onClick={() => setMobileTab('folders')}
+                      className={`h-10 rounded-xl text-sm font-black transition ${
+                        mobileTab === 'folders' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'
+                      }`}
+                    >
+                      Folders
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMobileTab('preview')}
+                      className={`h-10 rounded-xl text-sm font-black transition ${
+                        mobileTab === 'preview' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'
+                      }`}
+                    >
+                      Preview
+                    </button>
+                  </div>
+                </header>
+
+                <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[390px_1fr] lg:overflow-hidden">
+                  <aside
+                    className={`${mobileTab === 'folders' ? 'block' : 'hidden'} border-b border-slate-200 bg-slate-50/60 p-4 lg:block lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-5`}
+                  >
+                    <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Folders</p>
+                          <p className="mt-1 text-sm text-slate-500">Browse and select source</p>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                          onClick={() => {
+                            const nextSort = folderSort === 'recent' ? 'name' : 'recent';
+                            setFolderSort(nextSort);
+                            loadFolders(currentParentId, { folderSortOverride: nextSort });
+                          }}
+                          disabled={browseState.loading || browseState.previewLoadingMore}
+                          title={folderSort === 'recent' ? 'Sort: recent changes' : 'Sort: name'}
+                        >
+                          <ArrowUpDown className="h-4 w-4" />
+                          {folderSort === 'recent' ? 'Recent' : 'Name'}
+                        </button>
+                      </div>
+
+                      <label className="relative mt-4 block">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                          placeholder="Search folders..."
+                          className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                        />
+                      </label>
+                    </div>
+
+                    {browseState.error ? (
+                      <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        {browseState.error}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 space-y-2 pb-4">
+                      {browseState.loading && browseState.folders.length === 0 ? (
+                        <div className="grid place-items-center rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading folders...
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {filteredFolders.length > 0
+                        ? filteredFolders.map((folder) => {
+                            const isSelected = selectedFolderId === folder.id;
+
+                            return (
+                              <div
+                                key={folder.id}
+                                role="button"
+                                tabIndex={0}
+                                className={`group flex cursor-pointer items-center gap-3 rounded-2xl border p-3 text-left transition ${
+                                  isSelected
+                                    ? 'border-blue-200 bg-blue-50 shadow-sm'
+                                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                                }`}
+                                onClick={() => {
+                                  loadFolders(folder.id);
+                                  setMobileTab('preview');
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    loadFolders(folder.id);
+                                    setMobileTab('preview');
+                                  }
+                                }}
+                              >
+                                <span
+                                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border ${
+                                    isSelected
+                                      ? 'border-blue-200 bg-white text-blue-600'
+                                      : 'border-slate-200 bg-slate-50 text-slate-500'
+                                  }`}
+                                >
+                                  <Folder className="h-5 w-5" />
+                                </span>
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <span className="truncate text-sm font-bold text-slate-950">{folder.name}</span>
+                                    {isSelected ? (
+                                      <span className="hidden rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white sm:inline">
+                                        Selected
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  <span className="mt-1 block truncate text-xs text-slate-500">
+                                    Browse subfolders or select this folder for import.
+                                  </span>
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    className={`${buttonStyles} h-8 px-3 py-1 text-xs`}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void selectFolder(folder);
+                                    }}
+                                  >
+                                    {isSelected ? 'Selected' : 'Select'}
+                                  </button>
+                                  {isSelected ? (
+                                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-white">
+                                      <Check className="h-4 w-4" />
+                                    </span>
+                                  ) : (
+                                    <ChevronRight className="h-5 w-5 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        : null}
+
+                      {!browseState.loading && filteredFolders.length === 0 ? (
+                        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
+                          <p className="font-bold text-slate-800">No folders found</p>
+                          <p className="mt-1 text-sm text-slate-500">Try another folder name.</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </aside>
+
+                  <section
+                    className={`${mobileTab === 'preview' ? 'block' : 'hidden'} bg-white p-4 pb-28 lg:block lg:min-h-0 lg:overflow-y-auto lg:p-6 lg:pb-6`}
+                  >
+                    <div className="rounded-3xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm sm:p-5">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-sm shadow-blue-600/20">
+                            <Folder className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">Current selection</p>
+                            <h2 className="mt-1 truncate text-xl font-black text-slate-950">{selectedFolderName}</h2>
+                            <p className="mt-1 text-sm leading-6 text-slate-600">
+                              Only this folder will be imported. Subfolders are ignored for now.
+                            </p>
+                          </div>
+                        </div>
+                        <span className="hidden rounded-2xl bg-white px-4 py-3 text-center text-sm font-black text-blue-700 shadow-sm sm:block">
+                          {browseState.files.length}
+                          <br />
+                          <span className="text-[10px] uppercase tracking-wider text-slate-400">Previews</span>
+                        </span>
                       </div>
                     </div>
-                  ) : (
-                    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
-	                      <section className="space-y-3">
-	                        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-	                          <div className="flex items-start justify-between gap-3">
-	                            <div className="min-w-0">
-	                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-	                                Folders
-	                              </p>
-	                              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-	                                Browse into subfolders or select the current folder for import.
-	                              </p>
-	                            </div>
-	                            <div className="flex shrink-0 items-center gap-2">
-	                              <button
-	                                type="button"
-	                                className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-	                                onClick={() => {
-	                                  const nextSort = folderSort === 'recent' ? 'name' : 'recent';
-	                                  setFolderSort(nextSort);
-	                                  loadFolders(currentParentId, { folderSortOverride: nextSort });
-	                                }}
-	                                disabled={browseState.loading || browseState.previewLoadingMore}
-	                                aria-label={
-	                                  folderSort === 'recent'
-	                                    ? 'Sorted by recent changes. Sort by name.'
-	                                    : 'Sorted by name. Sort by recent changes.'
-	                                }
-	                                title={
-	                                  folderSort === 'recent'
-	                                    ? 'Sort: recent changes'
-	                                    : 'Sort: name'
-	                                }
-	                              >
-	                                <ArrowUpDown className="size-4" />
-	                              </button>
-	                              <span className="whitespace-nowrap rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-	                                {browseState.folders.length} found
-	                              </span>
-	                            </div>
-	                          </div>
-	                        </div>
 
-	                        {browseState.folders.length === 0 ? null : (
-	                          <div className="space-y-2">
-	                            {browseState.folders.map((folder) => {
-	                              const isSelected = selectedFolderId === folder.id;
+                    <div className="mt-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Image className="h-4 w-4 text-slate-500" />
+                            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Media preview</p>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-black text-slate-600">
+                              {browseState.files.length}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Preview only. Import still uses the selected folder as one source.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
+                          onClick={loadMorePreviews}
+                          disabled={!browseState.nextPreviewPageToken || browseState.previewLoadingMore || browseState.loading}
+                        >
+                          {browseState.previewLoadingMore ? 'Loading...' : 'View all'}
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </div>
 
-	                              return (
-	                                <div
-	                                  key={folder.id}
-	                                  role="button"
-	                                  tabIndex={0}
-	                                  className={`flex cursor-pointer flex-col gap-3 rounded-xl border px-4 py-3 transition sm:flex-row sm:items-center sm:justify-between ${
-	                                    isSelected
-	                                      ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30'
-	                                      : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
-	                                  }`}
-	                                  onClick={() => loadFolders(folder.id)}
-	                                  onKeyDown={(event) => {
-	                                    if (event.key === 'Enter' || event.key === ' ') {
-	                                      event.preventDefault();
-	                                      loadFolders(folder.id);
-	                                    }
-	                                  }}
-	                                >
-	                                  <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
-	                                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-	                                      <Folder className="size-4" />
-	                                    </span>
-	                                    <span className="min-w-0">
-	                                      <span className="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
-	                                        {folder.name}
-	                                      </span>
-	                                      <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
-	                                        Browse subfolders or select this folder for import.
-	                                      </span>
-	                                    </span>
-	                                  </div>
+                      <div
+                        className="mt-4 max-h-[46vh] overflow-y-auto pr-1"
+                        ref={previewScrollRef}
+                        onScroll={(event) => {
+                          const target = event.currentTarget;
+                          const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 240;
+                          if (nearBottom) {
+                            loadMorePreviews();
+                          }
+                        }}
+                      >
+                        {browseState.files.length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-14 text-center text-sm text-slate-500">
+                            No media previews found in this location.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                            {browseState.files.map((file) => {
+                              const isVideo = file.kind === 'video';
 
-	                                  <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
-	                                    <button
-	                                      type="button"
-	                                      className={buttonStyles}
-	                                      onClick={(event) => {
-	                                        event.stopPropagation();
-	                                        void selectFolder(folder);
-	                                      }}
-	                                    >
-	                                      {isSelected ? 'Selected' : 'Select'}
-	                                    </button>
-	                                  </div>
-	                                </div>
+                              return (
+                                <article
+                                  key={file.id}
+                                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                                >
+                                  <div className={`relative ${isVideo ? 'aspect-[4/3]' : 'aspect-[4/3]'} bg-slate-100`}>
+                                    {isVideo ? (
+                                      <video
+                                        className="h-full w-full object-cover"
+                                        src={file.previewUrl}
+                                        muted
+                                        playsInline
+                                        preload="metadata"
+                                      />
+                                    ) : (
+                                      <img className="h-full w-full object-cover" src={file.previewUrl} alt={file.name} loading="lazy" />
+                                    )}
+                                    <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-800 shadow-sm backdrop-blur">
+                                      {isVideo ? <Play className="h-3.5 w-3.5" /> : <Image className="h-3.5 w-3.5" />}
+                                      {isVideo ? 'Video' : 'Image'}
+                                    </div>
+                                    {isVideo ? (
+                                      <span className="absolute inset-0 m-auto flex h-12 w-12 items-center justify-center rounded-full bg-white text-slate-950 shadow-lg ring-8 ring-white/20">
+                                        <Play className="ml-0.5 h-5 w-5" />
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex items-start gap-2 p-3">
+                                    <div className="min-w-0 flex-1">
+                                      <h4 className="truncate text-xs font-bold text-slate-950 sm:text-sm">{file.name}</h4>
+                                      <p className="mt-1 text-xs text-slate-500">{isVideo ? 'Video' : 'Image'} · {file.mimeType}</p>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      aria-label={`More options for ${file.name}`}
+                                      className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </article>
                               );
                             })}
                           </div>
                         )}
-                      </section>
 
-	                      <section className="space-y-3">
-	                        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-	                          <div className="flex items-start justify-between gap-3">
-	                            <div className="min-w-0">
-	                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
-	                                Files in this folder
-	                              </p>
-	                              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-	                                Preview only. Import still uses the selected folder as a single source.
-	                              </p>
-	                            </div>
-	                            <span className="shrink-0 whitespace-nowrap rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:border-slate-700 dark:text-slate-400">
-	                              {browseState.files.length} previews
-	                            </span>
-	                          </div>
-	                        </div>
+                        <div ref={loadMoreSentinelRef} className="h-8" />
 
-	                        <div
-	                          className="max-h-[42vh] overflow-y-auto pr-1 sm:max-h-[28rem]"
-	                          ref={previewScrollRef}
-	                          onScroll={(event) => {
-	                            const target = event.currentTarget;
-	                            const nearBottom = target.scrollHeight - target.scrollTop - target.clientHeight < 240;
-
-	                            if (nearBottom) {
-	                              loadMorePreviews();
-	                            }
-	                          }}
-	                        >
-                          {browseState.files.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-14 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
-                              No media previews found in this location.
+                        {browseState.previewLoadingMore ? (
+                          <div className="sticky bottom-0 mt-3 flex justify-center border-t border-slate-200 bg-white/95 py-3 backdrop-blur">
+                            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Loading more thumbnails...
                             </div>
-	                          ) : (
-	                            <div className="space-y-3">
-	                              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
-	                                {browseState.files.map((file) => {
-                                  const isVideo = file.kind === 'video';
-
-                                  return (
-                                    <article
-                                      key={file.id}
-                                      className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
-                                    >
-                                      <div className={`relative ${isVideo ? 'aspect-video' : 'aspect-square'} bg-slate-100 dark:bg-slate-950`}>
-                                        {isVideo ? (
-                                          <video
-                                            className="h-full w-full object-cover"
-                                            src={file.previewUrl}
-                                            muted
-                                            playsInline
-                                            preload="metadata"
-                                          />
-                                        ) : (
-                                          <img
-                                            className="h-full w-full object-cover"
-                                            src={file.previewUrl}
-                                            alt={file.name}
-                                            loading="lazy"
-                                          />
-                                        )}
-
-                                        <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-slate-950/80 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur">
-                                          {isVideo ? <Play className="size-3" /> : <Image className="size-3" />}
-                                          {isVideo ? 'Video' : 'Image'}
-                                        </div>
-                                      </div>
-
-                                      <div className="space-y-1 px-3 py-3">
-                                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100" title={file.name}>
-                                          {file.name}
-                                        </p>
-                                        <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
-                                          {file.mimeType}
-                                        </p>
-                                      </div>
-                                    </article>
-	                                  );
-	                                })}
-	                              </div>
-
-	                              <div ref={loadMoreSentinelRef} className="h-8" />
-
-	                              {browseState.previewLoadingMore ? (
-	                                <div className="sticky bottom-0 flex flex-col items-center gap-2 border-t border-slate-200 bg-white/95 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-900/95">
-	                                  <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300">
-	                                    <Loader2 className="size-3.5 animate-spin" />
-	                                    Loading more thumbnails...
-	                                  </div>
-	                                </div>
-	                              ) : null}
-	                            </div>
-	                          )}
-	                        </div>
-	                      </section>
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                  )}
+
+                    <div className="mt-5 rounded-3xl border border-blue-100 bg-blue-50 p-4 sm:p-5">
+                      <div className="flex gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm">
+                          <Shield className="h-5 w-5" />
+                        </span>
+                        <div>
+                          <h3 className="font-black text-slate-950">Safe import behavior</h3>
+                          <p className="mt-1 text-sm leading-6 text-slate-600">
+                            The final import only reads files from the selected folder. It will not recursively pull files from child folders.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
                 </div>
+
+                <footer className="shrink-0 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      className="hidden items-center gap-2 text-sm font-bold text-slate-500 transition hover:text-slate-800 sm:inline-flex"
+                    >
+                      <HelpCircle className="h-4 w-4" />
+                      Need help?
+                    </button>
+
+                    <div className="min-w-0 flex-1 sm:max-w-md">
+                      <p className="truncate text-xs font-bold uppercase tracking-[0.14em] text-slate-400">Selected folder</p>
+                      <p className="truncate text-sm font-black text-slate-950">{selectedFolderName}</p>
+                    </div>
+
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        className="hidden h-11 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:block"
+                        onClick={onClose}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 sm:px-5"
+                        onClick={() => {
+                          if (browseState.currentFolder) {
+                            void selectFolder(browseState.currentFolder);
+                          }
+                        }}
+                        disabled={!browseState.currentFolder}
+                      >
+                        <Upload className="h-4 w-4" />
+                        <span>Select this folder</span>
+                      </button>
+                    </div>
+                  </div>
+                </footer>
               </Dialog.Panel>
             </Transition.Child>
           </div>
