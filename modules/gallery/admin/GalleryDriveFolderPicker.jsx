@@ -66,6 +66,9 @@ export default function GalleryDriveFolderPicker({
       const payload = await fetchJson(`/api/admin/integrations/google-drive/folders?${params.toString()}`);
       const currentFolder = payload?.currentFolder ?? null;
 
+      const activeFolderId = browseState.breadcrumbs[browseState.breadcrumbs.length - 1]?.id;
+      const normalizedActiveFolderId = activeFolderId && activeFolderId !== 'root' ? activeFolderId : null;
+
       onSelectFolder({
         id: folder.id,
         name: folder.name,
@@ -73,7 +76,7 @@ export default function GalleryDriveFolderPicker({
           ? payload.breadcrumbs
           : [...browseState.breadcrumbs, { id: folder.id, name: folder.name }],
         mediaCount: typeof currentFolder?.mediaCount === 'number' ? currentFolder.mediaCount : null,
-        selectedFileIds: folder.id === browseState.currentFolder?.id ? selectedMediaIds : [],
+        selectedFileIds: folder.id === normalizedActiveFolderId ? selectedMediaIds : [],
       });
       onClose();
     } catch (error) {
@@ -159,7 +162,8 @@ export default function GalleryDriveFolderPicker({
     loadFolders();
   }, [open]);
 
-  const currentParentId = browseState.currentFolder?.id ?? null;
+  const activeFolderId = browseState.breadcrumbs[browseState.breadcrumbs.length - 1]?.id;
+  const currentParentId = activeFolderId && activeFolderId !== 'root' ? activeFolderId : null;
 
   const loadMorePreviews = async () => {
     if (!browseState.nextPreviewPageToken || browseState.previewLoadingMore || browseState.loading) {

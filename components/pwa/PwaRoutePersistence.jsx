@@ -40,8 +40,9 @@ const isPersistentRoute = (value) => {
     return false;
   }
 
-  return !value.startsWith('/admin') && !value.startsWith('/api') && !value.startsWith('/register');
+  return !value.startsWith('/api') && !value.startsWith('/register');
 };
+const isProtectedRoute = (value) => isSafeInternalPath(value) && value.startsWith('/admin');
 
 export default function PwaRoutePersistence() {
   const router = useRouter();
@@ -96,33 +97,51 @@ export default function PwaRoutePersistence() {
       return;
     }
 
-    const currentPath = `${window.location.pathname}${window.location.search || ''}`;
-    if (window.location.pathname !== '/') {
-      return;
-    }
+    const tryRestore = async () => {
+      const currentPath = `${window.location.pathname}${window.location.search || ''}`;
+      if (window.location.pathname !== '/') {
+        return;
+      }
 
-    const lastRoute = window.localStorage.getItem(LAST_ROUTE_KEY);
-    if (!isPersistentRoute(lastRoute)) {
-      return;
-    }
+      const lastRoute = window.localStorage.getItem(LAST_ROUTE_KEY);
+      if (!isPersistentRoute(lastRoute)) {
+        return;
+      }
 
-    if (lastRoute === '/' || lastRoute === currentPath) {
-      return;
-    }
+      if (lastRoute === '/' || lastRoute === currentPath) {
+        return;
+      }
 
-    const navType = getNavigationType();
-    if (navType !== 'navigate' && navType !== 'reload') {
-      return;
-    }
+      const navType = getNavigationType();
+      if (navType !== 'navigate' && navType !== 'reload') {
+        return;
+      }
 
-    const perf = window.performance;
-    const timeOrigin = String(perf?.timeOrigin ?? perf?.timing?.navigationStart ?? 0);
-    if (window.sessionStorage.getItem(RESTORE_GUARD_KEY) === timeOrigin) {
-      return;
-    }
+      const perf = window.performance;
+      const timeOrigin = String(perf?.timeOrigin ?? perf?.timing?.navigationStart ?? 0);
+      if (window.sessionStorage.getItem(RESTORE_GUARD_KEY) === timeOrigin) {
+        return;
+      }
 
-    window.sessionStorage.setItem(RESTORE_GUARD_KEY, timeOrigin);
-    router.replace(lastRoute);
+      if (isProtectedRoute(lastRoute)) {
+        try {
+          const response = await fetch('/api/session/status', { cache: 'no-store' });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok || !payload?.authenticated) {
+            window.localStorage.removeItem(LAST_ROUTE_KEY);
+            return;
+          }
+        } catch {
+          window.localStorage.removeItem(LAST_ROUTE_KEY);
+          return;
+        }
+      }
+
+      window.sessionStorage.setItem(RESTORE_GUARD_KEY, timeOrigin);
+      router.replace(lastRoute);
+    };
+
+    void tryRestore();
   }, [router]);
 
   return null;
