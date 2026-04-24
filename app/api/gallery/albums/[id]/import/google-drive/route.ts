@@ -48,6 +48,7 @@ export async function POST(request: Request, context: RouteContext) {
     if (!shouldStream) {
       const result = await galleryService.importGoogleDriveFolder(albumId, {
         folderId: String(parsed.folderId),
+        selectedFileIds: parsed.selectedFileIds,
         accessToken,
       });
 
@@ -74,6 +75,7 @@ export async function POST(request: Request, context: RouteContext) {
           send('start', { ok: true });
           const result = await galleryService.importGoogleDriveFolder(albumId, {
             folderId: String(parsed.folderId),
+            selectedFileIds: parsed.selectedFileIds,
             accessToken,
             onProgress: (progress) => {
               send('progress', progress);

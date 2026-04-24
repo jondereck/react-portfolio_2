@@ -48,6 +48,7 @@ type GoogleFileResponse = {
   id: string;
   name: string;
   mimeType: string;
+  trashed?: boolean;
   parents?: string[];
   modifiedTime?: string;
   imageMediaMetadata?: {
@@ -305,7 +306,53 @@ export class GoogleDriveAdapter {
     };
   }
 
-  async listFolderMedia(args: { accessToken: string; folderId: string }): Promise<ImportedDrivePhoto[]> {
+  async listFolderMedia(args: { accessToken: string; folderId: string; selectedFileIds?: string[] }): Promise<ImportedDrivePhoto[]> {
+    const selectedIds = Array.isArray(args.selectedFileIds)
+      ? Array.from(new Set(args.selectedFileIds.filter(Boolean)))
+      : [];
+
+    if (selectedIds.length > 0) {
+      const media: ImportedDrivePhoto[] = [];
+      for (const fileId of selectedIds) {
+        const params = new URLSearchParams({
+          fields: 'id,name,mimeType,trashed,imageMediaMetadata(time),createdTime',
+          supportsAllDrives: 'true',
+        });
+
+        const response = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?${params.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${args.accessToken}`,
+            },
+            cache: 'no-store',
+          },
+        );
+
+        if (!response.ok) {
+          continue;
+        }
+
+        const file = (await response.json()) as GoogleFileResponse;
+        if (!file?.id || file.trashed || typeof file.mimeType !== 'string') {
+          continue;
+        }
+        if (!ALLOWED_MEDIA_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix))) {
+          continue;
+        }
+
+        media.push({
+          sourceId: file.id,
+          imageUrl: `https://drive.google.com/thumbnail?id=${encodeURIComponent(file.id)}&sz=w2000`,
+          caption: file.name,
+          dateTaken: file.imageMediaMetadata?.time || file.createdTime,
+          mimeType: file.mimeType,
+        });
+      }
+
+      return media;
+    }
+
     const queue: string[] = [args.folderId];
     const visited = new Set<string>();
     const media: ImportedDrivePhoto[] = [];
