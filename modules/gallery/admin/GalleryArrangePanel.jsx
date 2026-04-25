@@ -357,6 +357,7 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
                       items={arrangePhotos}
                       selectedIds={selectedPhotoIds}
                       coverPhotoId={selectedAlbum.coverPhotoId}
+                      blurUnclothyGenerated={blurUnclothyGenerated}
                       onItemsChange={reorderChange}
                       onToggleSelect={togglePhotoSelect}
                       onSelectRange={(photoId, options) => selectPhotoRange(photoId, arrangePhotos.map((photo) => photo.id), options)}
@@ -388,7 +389,14 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
               )}
             </section>
 
-            <GalleryMediaViewer open={Boolean(previewPhoto)} photo={previewPhoto} onClose={() => setPreviewPhoto(null)} />
+            <GalleryMediaViewer
+              open={Boolean(previewPhoto)}
+              photo={previewPhoto}
+              onClose={() => setPreviewPhoto(null)}
+              controller={controller}
+              album={selectedAlbum}
+              blurUnclothyGenerated={blurUnclothyGenerated}
+            />
           </main>
         }
         inspector={null}
