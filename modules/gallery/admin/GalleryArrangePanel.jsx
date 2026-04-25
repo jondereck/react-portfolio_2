@@ -388,7 +388,14 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
               )}
             </section>
 
-            <GalleryMediaViewer open={Boolean(previewPhoto)} photo={previewPhoto} onClose={() => setPreviewPhoto(null)} />
+            <GalleryMediaViewer
+              open={Boolean(previewPhoto)}
+              photo={previewPhoto}
+              onClose={() => setPreviewPhoto(null)}
+              controller={controller}
+              album={selectedAlbum}
+              blurUnclothyGenerated={blurUnclothyGenerated}
+            />
           </main>
         }
         inspector={null}
