@@ -53,6 +53,7 @@ export default function GalleryDriveFolderPicker({
   const [query, setQuery] = useState('');
   const [mobileTab, setMobileTab] = useState('folders');
   const [selectedMediaIds, setSelectedMediaIds] = useState([]);
+  const [loadingAllPreviews, setLoadingAllPreviews] = useState(false);
   const previewScrollRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
 
@@ -212,18 +213,33 @@ export default function GalleryDriveFolderPicker({
   const selectedMediaSet = new Set(selectedMediaIds);
 
   const handleViewAllMedia = async () => {
-    if (browseState.previewLoadingMore || browseState.loading) {
+    if (browseState.previewLoadingMore || browseState.loading || loadingAllPreviews) {
       return;
     }
 
-    let nextToken = browseState.nextPreviewPageToken;
-    while (nextToken) {
-      const payload = await loadFolders(currentParentId, {
-        appendFiles: true,
-        previewPageToken: nextToken,
-        previewPageSize: 24,
-      });
-      nextToken = payload?.nextPreviewPageToken ?? null;
+    setLoadingAllPreviews(true);
+    try {
+      let nextToken = browseState.nextPreviewPageToken;
+      let safetyCounter = 0;
+
+      while (nextToken && safetyCounter < 200) {
+        const payload = await loadFolders(currentParentId, {
+          appendFiles: true,
+          previewPageToken: nextToken,
+          previewPageSize: 24,
+        });
+        const nextFromPayload = payload?.nextPreviewPageToken ?? null;
+
+        // Prevent edge cases where the backend returns the same cursor repeatedly.
+        if (!nextFromPayload || nextFromPayload === nextToken) {
+          break;
+        }
+
+        nextToken = nextFromPayload;
+        safetyCounter += 1;
+      }
+    } finally {
+      setLoadingAllPreviews(false);
     }
   };
 
@@ -517,9 +533,9 @@ export default function GalleryDriveFolderPicker({
                           type="button"
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
                           onClick={handleViewAllMedia}
-                          disabled={browseState.previewLoadingMore || browseState.loading}
+                          disabled={browseState.previewLoadingMore || browseState.loading || loadingAllPreviews}
                         >
-                          {browseState.previewLoadingMore ? 'Loading...' : 'View all'}
+                          {loadingAllPreviews || browseState.previewLoadingMore ? 'Loading...' : 'View all'}
                           <ChevronRight className="h-4 w-4" />
                         </button>
                       </div>
@@ -528,6 +544,9 @@ export default function GalleryDriveFolderPicker({
                           ? `${selectedMediaIds.length} media selected for manual import.`
                           : 'No media manually selected — importing will include all media in this folder.'}
                       </p>
+                      {loadingAllPreviews ? (
+                        <p className="mt-1 text-xs font-semibold text-blue-600">Loading all preview items in this folder...</p>
+                      ) : null}
 
                       <div
                         className="mt-4 max-h-[46vh] overflow-y-auto pr-1"

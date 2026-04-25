@@ -41,6 +41,15 @@ function getPhotoSearchText(photo) {
     .join(' ');
 }
 
+function normalizePhotoId(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : value;
+  }
+  return value;
+}
+
 export default function GalleryMediaPanel({ controller, embedded = false }) {
   const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v1';
   const {
@@ -339,7 +348,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
   const openTask = (task) => {
     const albumId = task?.albumId ?? null;
-    const photoId = task?.sourcePhotoId ?? null;
+    const photoId = normalizePhotoId(task?.sourcePhotoId ?? null);
 
     if (!albumId || !photoId) {
       toast.error('Task is missing an album or image reference.');
@@ -353,7 +362,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       return;
     }
 
-    const found = photos.find((photo) => photo.id === photoId) ?? null;
+    const found = photos.find((photo) => normalizePhotoId(photo.id) === photoId) ?? null;
     if (found) {
       setPreviewPhoto(found);
       setPreviewOpenGenerate(false);
@@ -371,7 +380,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     if (pendingPreviewTask.albumId !== selectedAlbumId) return;
     if (loadingPhotos) return;
 
-    const found = photos.find((photo) => photo.id === pendingPreviewTask.photoId) ?? null;
+    const found = photos.find((photo) => normalizePhotoId(photo.id) === normalizePhotoId(pendingPreviewTask.photoId)) ?? null;
     if (found) {
       setPreviewPhoto(found);
       setPreviewOpenGenerate(false);
@@ -555,7 +564,28 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                 </div>
               ) : (
                 <div>
-                  <div className="mb-4 flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:px-6">
+                  <GalleryMediaGrid
+                    photos={pagedPhotos}
+                    albumName={selectedAlbum?.name}
+                    selectedPhotoIds={selectedPhotoIds}
+                    togglePhotoSelect={togglePhotoSelect}
+                    selectPhotoRange={selectPhotoRange}
+                    onOpenPreview={handleOpenPreview}
+                    inspectorOpen={Boolean(selectedPhoto)}
+                    blurUnclothyGenerated={blurUnclothyGenerated}
+                    emptyState={
+                      photos.length === 0 ? (
+                        <GalleryEmptyState
+                          title="No media yet"
+                          description="Upload files or import Google Drive items to populate this album."
+                        />
+                      ) : (
+                        <GalleryEmptyState title="No matches" description="Try clearing search or switching filters." />
+                      )
+                    }
+                  />
+
+                  <div className="mt-4 flex flex-col gap-3 px-4 pb-2 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:px-6">
                     <div className="text-sm text-slate-600 dark:text-slate-300">
                       <span className="font-medium text-slate-900 dark:text-slate-50">Showing</span>{' '}
                       <span className="tabular-nums">
@@ -606,27 +636,6 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                       </div>
                     </div>
                   </div>
-
-                  <GalleryMediaGrid
-                    photos={pagedPhotos}
-                    albumName={selectedAlbum?.name}
-                    selectedPhotoIds={selectedPhotoIds}
-                    togglePhotoSelect={togglePhotoSelect}
-                    selectPhotoRange={selectPhotoRange}
-                    onOpenPreview={handleOpenPreview}
-                    inspectorOpen={Boolean(selectedPhoto)}
-                    blurUnclothyGenerated={blurUnclothyGenerated}
-                    emptyState={
-                      photos.length === 0 ? (
-                        <GalleryEmptyState
-                          title="No media yet"
-                          description="Upload files or import Google Drive items to populate this album."
-                        />
-                      ) : (
-                        <GalleryEmptyState title="No matches" description="Try clearing search or switching filters." />
-                      )
-                    }
-                  />
                 </div>
               )}
             </section>

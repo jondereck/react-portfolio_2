@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Sparkles, Upload } from 'lucide-react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
@@ -280,9 +280,25 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
               </p>
               <div className="mt-3 grid gap-2">
                 <form className="grid gap-2" onSubmit={handleDriveImport}>
-                  <button className={buttonStyles} disabled={importDisabled}>
-                    {importingDrive ? 'Importing…' : 'Import folder'}
+                  <button
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                    disabled={importDisabled}
+                  >
+                    {importingDrive ? (
+                      <>
+                        <Sparkles className="h-4 w-4 animate-pulse" />
+                        Importing…
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        Import folder
+                      </>
+                    )}
                   </button>
+                  <p className="text-center text-[11px] text-slate-500 dark:text-slate-400">
+                    Imports all media from the selected folder.
+                  </p>
                   {importingDrive ? (
                     <button type="button" className={ghostButtonStyles} onClick={cancelDriveImport}>
                       Cancel import
@@ -449,8 +465,21 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
             ) : null}
 
             <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleDriveImport}>
-              <button className={buttonStyles} disabled={importDisabled}>
-                {importingDrive ? 'Importing...' : 'Import Folder'}
+              <button
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+                disabled={importDisabled}
+              >
+                {importingDrive ? (
+                  <>
+                    <Sparkles className="h-4 w-4 animate-pulse" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    Import Folder
+                  </>
+                )}
               </button>
               {importingDrive ? (
                 <button type="button" className={ghostButtonStyles} onClick={cancelDriveImport}>
