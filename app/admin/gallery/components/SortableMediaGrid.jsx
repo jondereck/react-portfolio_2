@@ -20,6 +20,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Move, ScanLine } from 'lucide-react';
 import MediaPreview from './MediaPreview';
+import { shouldBlurPhoto } from '@/lib/gallery-media';
 
 const TOUCH_MULTI_SELECT_DISTANCE = 14;
 
@@ -37,6 +38,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
   suppressNextClickRef,
   onSetCover,
   onPreview,
+  blurUnclothyGenerated,
 }) {
   const {
     attributes,
@@ -223,7 +225,9 @@ const SortableMediaCard = memo(function SortableMediaCard({
               sourceType={photo.sourceType}
               sourceId={photo.sourceId}
               alt={photo.caption || `Media ${photo.id}`}
-              className="h-full w-full bg-slate-100 object-contain dark:bg-slate-800"
+              className={`h-full w-full bg-slate-100 object-contain dark:bg-slate-800 ${
+                shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated }) ? 'blur-md' : ''
+              }`}
               controls={false}
             />
           </button>
@@ -281,12 +285,13 @@ const SortableMediaCard = memo(function SortableMediaCard({
   prevProps.isDragging === nextProps.isDragging &&
   prevProps.isDropTarget === nextProps.isDropTarget &&
   prevProps.dragActive === nextProps.dragActive &&
+  prevProps.blurUnclothyGenerated === nextProps.blurUnclothyGenerated &&
   prevProps.onToggleSelect === nextProps.onToggleSelect &&
   prevProps.onSetCover === nextProps.onSetCover &&
   prevProps.onPreview === nextProps.onPreview
 ));
 
-const OverlayCard = memo(function OverlayCard({ photo, draggingCount }) {
+const OverlayCard = memo(function OverlayCard({ photo, draggingCount, blurUnclothyGenerated }) {
   if (!photo) return null;
   return (
     <article className="relative w-[220px] scale-[1.04] overflow-hidden rounded-2xl border border-slate-300/90 bg-white/96 p-2.5 shadow-[0_28px_80px_-24px_rgba(15,23,42,0.75)] backdrop-blur dark:border-slate-500 dark:bg-slate-900/95 sm:w-[250px]">
@@ -302,7 +307,9 @@ const OverlayCard = memo(function OverlayCard({ photo, draggingCount }) {
           sourceType={photo.sourceType}
           sourceId={photo.sourceId}
           alt={photo.caption || `Media ${photo.id}`}
-          className="h-full w-full bg-slate-100 object-contain dark:bg-slate-800"
+          className={`h-full w-full bg-slate-100 object-contain dark:bg-slate-800 ${
+            shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated }) ? 'blur-md' : ''
+          }`}
           controls={false}
         />
       </div>
@@ -376,6 +383,7 @@ export default function SortableMediaGrid({
   onSetCover,
   onPreview,
   onDragStateChange,
+  blurUnclothyGenerated = true,
 }) {
   const [activeId, setActiveId] = useState(null);
   const [draggedIds, setDraggedIds] = useState([]);
@@ -652,13 +660,18 @@ export default function SortableMediaGrid({
               suppressNextClickRef={suppressNextClickRef}
               onSetCover={onSetCover}
               onPreview={onPreview}
+              blurUnclothyGenerated={blurUnclothyGenerated}
             />
           ))}
         </div>
       </SortableContext>
 
       <DragOverlay dropAnimation={dropAnimation} zIndex={70}>
-        <OverlayCard photo={activePhoto} draggingCount={draggedIds.length} />
+        <OverlayCard
+          photo={activePhoto}
+          draggingCount={draggedIds.length}
+          blurUnclothyGenerated={blurUnclothyGenerated}
+        />
       </DragOverlay>
     </DndContext>
   );

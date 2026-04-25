@@ -357,6 +357,7 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
                       items={arrangePhotos}
                       selectedIds={selectedPhotoIds}
                       coverPhotoId={selectedAlbum.coverPhotoId}
+                      blurUnclothyGenerated={blurUnclothyGenerated}
                       onItemsChange={reorderChange}
                       onToggleSelect={togglePhotoSelect}
                       onSelectRange={(photoId, options) => selectPhotoRange(photoId, arrangePhotos.map((photo) => photo.id), options)}
