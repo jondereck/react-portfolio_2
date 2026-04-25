@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { fetchJson, buttonStyles } from './galleryAdminShared';
+import { FaGoogleDrive } from 'react-icons/fa';
 
 const emptyBrowseState = {
   loading: false,
@@ -277,7 +278,7 @@ export default function GalleryDriveFolderPicker({
                 <header className="shrink-0 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <GoogleDriveLogo />
+                      <FaGoogleDrive/>
                       <div className="min-w-0">
                         <Dialog.Title className="truncate text-sm font-black text-slate-950 sm:text-base">
                           Google Drive Import

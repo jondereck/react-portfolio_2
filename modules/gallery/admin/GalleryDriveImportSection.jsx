@@ -384,7 +384,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
                     {driveConnection.connected ? 'Drive is ready' : 'Connect your Google Drive'}
                   </h2>
                   <p className={`mt-1 max-w-2xl text-sm leading-6 ${driveConnection.connected ? 'text-emerald-800/80 dark:text-emerald-100/80' : 'text-amber-800/80 dark:text-amber-100/80'}`}>
-                    Connect Drive, pick a folder, and import its media directly into {selectedAlbum?.name || 'the selected album'}.
+                
                   </p>
                 </div>
               </div>
@@ -492,21 +492,6 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
               )}
             </div>
 
-            <section className="mt-4 rounded-[1.75rem] border border-blue-100 bg-blue-50 p-4 sm:p-5 dark:border-blue-900/40 dark:bg-blue-950/20">
-              <div className="flex items-start gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-slate-900">
-                  <Lock className="h-5 w-5" />
-                </span>
-                <div>
-                  <h3 className="font-black text-slate-950 dark:text-slate-50">Safe single-folder import</h3>
-                  <p className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                    {driveForm.folderId
-                      ? `Ready to import files from ${driveForm.folderName || folderPreview}. Child folders are ignored.`
-                      : 'After choosing a folder, this panel will confirm exactly what will be imported.'}
-                  </p>
-                </div>
-              </div>
-            </section>
 
             <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleDriveImport}>
               <button

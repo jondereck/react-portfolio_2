@@ -886,7 +886,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         open={importOpen}
         onClose={() => setImportOpen(false)}
         title="Import from Google Drive"
-        description={selectedAlbum ? `Import directly into ${selectedAlbum.name}.` : 'Select an album to import media.'}
+        description={selectedAlbum ? `Import directly into ${selectedAlbum.name} from one selected Drive folder.` : 'Select an album to import media.'}
       >
         <GalleryDriveImportSection controller={controller} selectedAlbum={selectedAlbum} />
       </GalleryCmsModal>

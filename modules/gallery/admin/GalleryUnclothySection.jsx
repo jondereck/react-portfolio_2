@@ -690,13 +690,7 @@ export default function GalleryUnclothySection({
         {queue.length > 0 || displayTask ? 'Add to queue' : 'Generate'}
       </button>
 
-      {queue.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <button type="button" className={ghostButtonStyles} onClick={clearQueue} disabled={disableInputs}>
-            Clear queue
-          </button>
-        </div>
-      ) : null}
+
     </div>
   );
 }
