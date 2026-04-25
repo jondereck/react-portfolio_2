@@ -275,55 +275,6 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
             )}
           </div>
 
-          {driveForm.folderId ? (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/30">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Selected folder</p>
-              <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-50">
-                {driveForm.folderName || 'Google Drive folder'}
-              </p>
-              <div className="mt-3 grid gap-2">
-                <form className="grid gap-2" onSubmit={handleDriveImport}>
-                  <label className="grid gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Media filter
-                    <select
-                      value={driveForm.mediaTypeFilter || 'all'}
-                      onChange={(event) => setDriveForm((previous) => ({ ...previous, mediaTypeFilter: event.target.value }))}
-                      className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none ring-offset-2 transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                    >
-                      <option value="all">Images + videos</option>
-                      <option value="images">Images only</option>
-                      <option value="videos">Videos only</option>
-                    </select>
-                  </label>
-                  <button
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-                    disabled={importDisabled}
-                  >
-                    {importingDrive ? (
-                      <>
-                        <Upload className="h-4 w-4 animate-pulse" />
-                        Importing…
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        Import folder
-                      </>
-                    )}
-                  </button>
-                  <p className="text-center text-[11px] text-slate-500 dark:text-slate-400">
-                    Imports {mediaFilterLabel.toLowerCase()} from the selected folder.
-                  </p>
-                  {importingDrive ? (
-                    <button type="button" className={ghostButtonStyles} onClick={cancelDriveImport}>
-                      Cancel import
-                    </button>
-                  ) : null}
-                </form>
-              </div>
-            </div>
-          ) : null}
-
           {importingDrive && importProgress ? (
             <GalleryBatchProgressCard
               progress={importProgress}
@@ -509,32 +460,6 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
             </div>
 
 
-            <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleDriveImport}>
-              <label className="md:col-span-2 grid gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                Media filter
-                <select
-                  value={driveForm.mediaTypeFilter || 'all'}
-                  onChange={(event) => setDriveForm((previous) => ({ ...previous, mediaTypeFilter: event.target.value }))}
-                  className="h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none ring-offset-2 transition focus:border-blue-400 focus:ring-2 focus:ring-blue-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                >
-                  <option value="all">Images + videos</option>
-                  <option value="images">Images only</option>
-                  <option value="videos">Videos only</option>
-                </select>
-              </label>
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-                disabled={importDisabled}
-              >
-                <Upload className="h-4 w-4" />
-                {importingDrive ? 'Importing...' : 'Import folder'}
-              </button>
-              {importingDrive ? (
-                <button type="button" className={ghostButtonStyles} onClick={cancelDriveImport}>
-                  Cancel import
-                </button>
-              ) : null}
-            </form>
 
             {importingDrive && importProgress ? (
               <GalleryBatchProgressCard
