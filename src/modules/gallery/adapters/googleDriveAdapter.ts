@@ -348,10 +348,22 @@ export class GoogleDriveAdapter {
     };
   }
 
-  async listFolderMedia(args: { accessToken: string; folderId: string; selectedFileIds?: string[] }): Promise<ImportedDrivePhoto[]> {
+  async listFolderMedia(args: {
+    accessToken: string;
+    folderId: string;
+    selectedFileIds?: string[];
+    mediaTypeFilter?: 'all' | 'images' | 'videos';
+  }): Promise<ImportedDrivePhoto[]> {
     const selectedIds = Array.isArray(args.selectedFileIds)
       ? Array.from(new Set(args.selectedFileIds.filter(Boolean)))
       : [];
+    const mediaTypeFilter = args.mediaTypeFilter || 'all';
+    const allowedMimePrefixes =
+      mediaTypeFilter === 'images'
+        ? ['image/']
+        : mediaTypeFilter === 'videos'
+          ? ['video/']
+          : ALLOWED_MEDIA_MIME_PREFIXES;
 
     if (selectedIds.length > 0) {
       const media: ImportedDrivePhoto[] = [];
@@ -379,7 +391,7 @@ export class GoogleDriveAdapter {
         if (!file?.id || file.trashed || typeof file.mimeType !== 'string') {
           continue;
         }
-        if (!ALLOWED_MEDIA_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix))) {
+        if (!allowedMimePrefixes.some((prefix) => file.mimeType.startsWith(prefix))) {
           continue;
         }
 
@@ -409,7 +421,13 @@ export class GoogleDriveAdapter {
 
       let pageToken: string | null = null;
       do {
-        const query = `'${folderId}' in parents and trashed = false and (mimeType = '${GOOGLE_FOLDER_MIME_TYPE}' or mimeType contains 'image/' or mimeType contains 'video/')`;
+        const mediaQueryPart =
+          mediaTypeFilter === 'images'
+            ? "mimeType contains 'image/'"
+            : mediaTypeFilter === 'videos'
+              ? "mimeType contains 'video/'"
+              : "(mimeType contains 'image/' or mimeType contains 'video/')";
+        const query = `'${folderId}' in parents and trashed = false and (mimeType = '${GOOGLE_FOLDER_MIME_TYPE}' or ${mediaQueryPart})`;
         const params = new URLSearchParams({
           q: query,
           pageSize: '1000',
@@ -435,7 +453,7 @@ export class GoogleDriveAdapter {
             continue;
           }
 
-          if (!ALLOWED_MEDIA_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix))) {
+          if (!allowedMimePrefixes.some((prefix) => file.mimeType.startsWith(prefix))) {
             continue;
           }
 

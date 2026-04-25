@@ -38,6 +38,8 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
   const [driveConnection, setDriveConnection] = useState(emptyDriveConnection);
   const [connectionBusy, setConnectionBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const mediaFilterLabel =
+    driveForm.mediaTypeFilter === 'images' ? 'Images only' : driveForm.mediaTypeFilter === 'videos' ? 'Videos only' : 'Images + videos';
 
   const clearDriveSelection = () => {
     setDriveForm((previous) => ({
@@ -47,6 +49,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
       breadcrumbs: [],
       mediaCount: null,
       selectedFileIds: [],
+      mediaTypeFilter: 'all',
     }));
   };
 
@@ -272,43 +275,6 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
             )}
           </div>
 
-          {driveForm.folderId ? (
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/30">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Selected folder</p>
-              <p className="mt-1 truncate text-sm font-semibold text-slate-900 dark:text-slate-50">
-                {driveForm.folderName || 'Google Drive folder'}
-              </p>
-              <div className="mt-3 grid gap-2">
-                <form className="grid gap-2" onSubmit={handleDriveImport}>
-                  <button
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-                    disabled={importDisabled}
-                  >
-                    {importingDrive ? (
-                      <>
-                        <Upload className="h-4 w-4 animate-pulse" />
-                        Importing…
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4" />
-                        Import folder
-                      </>
-                    )}
-                  </button>
-                  <p className="text-center text-[11px] text-slate-500 dark:text-slate-400">
-                    Imports all media from the selected folder.
-                  </p>
-                  {importingDrive ? (
-                    <button type="button" className={ghostButtonStyles} onClick={cancelDriveImport}>
-                      Cancel import
-                    </button>
-                  ) : null}
-                </form>
-              </div>
-            </div>
-          ) : null}
-
           {importingDrive && importProgress ? (
             <GalleryBatchProgressCard
               progress={importProgress}
@@ -356,6 +322,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
                 breadcrumbs: Array.isArray(folder.breadcrumbs) ? folder.breadcrumbs : [],
                 mediaCount: typeof folder.mediaCount === 'number' ? folder.mediaCount : null,
                 selectedFileIds: Array.isArray(folder.selectedFileIds) ? folder.selectedFileIds : [],
+                mediaTypeFilter: folder.mediaTypeFilter || previous.mediaTypeFilter || 'all',
               }));
             }}
           />
@@ -493,20 +460,6 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
             </div>
 
 
-            <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={handleDriveImport}>
-              <button
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-black text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
-                disabled={importDisabled}
-              >
-                <Upload className="h-4 w-4" />
-                {importingDrive ? 'Importing...' : 'Import folder'}
-              </button>
-              {importingDrive ? (
-                <button type="button" className={ghostButtonStyles} onClick={cancelDriveImport}>
-                  Cancel import
-                </button>
-              ) : null}
-            </form>
 
             {importingDrive && importProgress ? (
               <GalleryBatchProgressCard
@@ -556,6 +509,7 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
                   breadcrumbs: Array.isArray(folder.breadcrumbs) ? folder.breadcrumbs : [],
                   mediaCount: typeof folder.mediaCount === 'number' ? folder.mediaCount : null,
                   selectedFileIds: Array.isArray(folder.selectedFileIds) ? folder.selectedFileIds : [],
+                  mediaTypeFilter: folder.mediaTypeFilter || previous.mediaTypeFilter || 'all',
                 }));
               }}
             />
