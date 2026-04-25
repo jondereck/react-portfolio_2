@@ -80,6 +80,7 @@ export function useGalleryAdminController() {
     breadcrumbs: [],
     mediaCount: null,
     selectedFileIds: [],
+    mediaTypeFilter: 'all',
   });
   const [importingDrive, setImportingDrive] = useState(false);
   const [importProgress, setImportProgress] = useState(null);
@@ -573,6 +574,7 @@ export function useGalleryAdminController() {
         body: JSON.stringify({
           folderId: driveForm.folderId,
           selectedFileIds: selectedCount > 0 ? driveForm.selectedFileIds : [],
+          mediaTypeFilter: driveForm.mediaTypeFilter || 'all',
         }),
       });
 

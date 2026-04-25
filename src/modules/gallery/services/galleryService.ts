@@ -662,6 +662,7 @@ export class GalleryService {
       accessToken: string;
       folderId: string;
       selectedFileIds?: string[];
+      mediaTypeFilter?: 'all' | 'images' | 'videos';
       onProgress?: (event: {
         totalCount: number;
         checkedCount: number;
@@ -675,6 +676,7 @@ export class GalleryService {
       accessToken: args.accessToken,
       folderId: args.folderId,
       selectedFileIds: Array.isArray(args.selectedFileIds) ? args.selectedFileIds : [],
+      mediaTypeFilter: args.mediaTypeFilter || 'all',
     });
 
     const created = [];
