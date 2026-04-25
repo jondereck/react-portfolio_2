@@ -59,6 +59,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     uploadFiles,
     createAlbumRecord,
     loadAlbums,
+    loadPhotos,
     updatePhotoInState,
     deleteSelectedPhotos,
     moveSelectedPhotos,
@@ -346,7 +347,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       return;
     }
 
-    setPendingPreviewTask({ albumId, photoId });
+    setPendingPreviewTask({ albumId, photoId, retried: false });
 
     if (albumId !== selectedAlbumId) {
       setSelectedAlbumId(albumId);
@@ -358,6 +359,11 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       setPreviewPhoto(found);
       setPreviewOpenGenerate(false);
       setPendingPreviewTask(null);
+      return;
+    }
+
+    if (typeof loadPhotos === 'function' && selectedAlbumId) {
+      void loadPhotos(selectedAlbumId, sortMode);
       return;
     }
 
@@ -379,9 +385,15 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       return;
     }
 
+    if (!pendingPreviewTask.retried && typeof loadPhotos === 'function') {
+      setPendingPreviewTask((current) => (current ? { ...current, retried: true } : current));
+      void loadPhotos(selectedAlbumId, sortMode);
+      return;
+    }
+
     toast.error('Media not found for that task.');
     setPendingPreviewTask(null);
-  }, [loadingPhotos, pendingPreviewTask, photos, selectedAlbumId]);
+  }, [loadingPhotos, loadPhotos, pendingPreviewTask, photos, selectedAlbumId, sortMode]);
 
   return (
     <div className={embedded ? '' : 'space-y-6'}>
@@ -555,7 +567,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                 </div>
               ) : (
                 <div>
-                  <div className="mb-4 flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:px-6">
+                  <div className="mb-4 px-4 sm:px-5 lg:px-6">
                     <div className="text-sm text-slate-600 dark:text-slate-300">
                       <span className="font-medium text-slate-900 dark:text-slate-50">Showing</span>{' '}
                       <span className="tabular-nums">
@@ -564,6 +576,30 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                       <span>of</span> <span className="tabular-nums font-medium">{mediaTotal}</span>
                     </div>
 
+                  </div>
+
+                  <GalleryMediaGrid
+                    photos={pagedPhotos}
+                    albumName={selectedAlbum?.name}
+                    selectedPhotoIds={selectedPhotoIds}
+                    togglePhotoSelect={togglePhotoSelect}
+                    selectPhotoRange={selectPhotoRange}
+                    onOpenPreview={handleOpenPreview}
+                    inspectorOpen={Boolean(selectedPhoto)}
+                    blurUnclothyGenerated={blurUnclothyGenerated}
+                    emptyState={
+                      photos.length === 0 ? (
+                        <GalleryEmptyState
+                          title="No media yet"
+                          description="Upload files or import Google Drive items to populate this album."
+                        />
+                      ) : (
+                        <GalleryEmptyState title="No matches" description="Try clearing search or switching filters." />
+                      )
+                    }
+                  />
+
+                  <div className="mt-4 flex flex-col gap-3 px-4 pb-4 sm:flex-row sm:items-center sm:justify-end sm:px-5 lg:px-6">
                     <div className="flex flex-wrap items-center gap-2">
                       <label className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                         <span className="hidden sm:inline">Per page</span>
@@ -606,27 +642,6 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                       </div>
                     </div>
                   </div>
-
-                  <GalleryMediaGrid
-                    photos={pagedPhotos}
-                    albumName={selectedAlbum?.name}
-                    selectedPhotoIds={selectedPhotoIds}
-                    togglePhotoSelect={togglePhotoSelect}
-                    selectPhotoRange={selectPhotoRange}
-                    onOpenPreview={handleOpenPreview}
-                    inspectorOpen={Boolean(selectedPhoto)}
-                    blurUnclothyGenerated={blurUnclothyGenerated}
-                    emptyState={
-                      photos.length === 0 ? (
-                        <GalleryEmptyState
-                          title="No media yet"
-                          description="Upload files or import Google Drive items to populate this album."
-                        />
-                      ) : (
-                        <GalleryEmptyState title="No matches" description="Try clearing search or switching filters." />
-                      )
-                    }
-                  />
                 </div>
               )}
             </section>
