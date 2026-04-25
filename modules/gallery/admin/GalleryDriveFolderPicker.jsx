@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { fetchJson, buttonStyles } from './galleryAdminShared';
+import { FaGoogleDrive } from 'react-icons/fa';
 
 const emptyBrowseState = {
   loading: false,
@@ -53,6 +54,7 @@ export default function GalleryDriveFolderPicker({
   const [query, setQuery] = useState('');
   const [mobileTab, setMobileTab] = useState('folders');
   const [selectedMediaIds, setSelectedMediaIds] = useState([]);
+  const [loadingAllPreviews, setLoadingAllPreviews] = useState(false);
   const previewScrollRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
 
@@ -212,18 +214,34 @@ export default function GalleryDriveFolderPicker({
   const selectedMediaSet = new Set(selectedMediaIds);
 
   const handleViewAllMedia = async () => {
-    if (browseState.previewLoadingMore || browseState.loading) {
+    if (browseState.previewLoadingMore || browseState.loading || loadingAllPreviews) {
       return;
     }
 
-    let nextToken = browseState.nextPreviewPageToken;
-    while (nextToken) {
-      const payload = await loadFolders(currentParentId, {
-        appendFiles: true,
-        previewPageToken: nextToken,
-        previewPageSize: 24,
-      });
-      nextToken = payload?.nextPreviewPageToken ?? null;
+    setLoadingAllPreviews(true);
+    try {
+      const params = new URLSearchParams();
+      if (currentParentId) {
+        params.set('parentId', currentParentId);
+      }
+      params.set('includeAllPreviews', '1');
+      params.set('folderSort', folderSort);
+      const payload = await fetchJson(`/api/admin/integrations/google-drive/folders?${params.toString()}`);
+      const allFiles = Array.isArray(payload?.files) ? payload.files : [];
+
+      setBrowseState((current) => ({
+        ...current,
+        folders: Array.isArray(payload?.folders) ? payload.folders : current.folders,
+        files: allFiles,
+        breadcrumbs:
+          Array.isArray(payload?.breadcrumbs) && payload.breadcrumbs.length > 0
+            ? payload.breadcrumbs
+            : current.breadcrumbs,
+        currentFolder: payload?.currentFolder ?? current.currentFolder,
+        nextPreviewPageToken: null,
+      }));
+    } finally {
+      setLoadingAllPreviews(false);
     }
   };
 
@@ -260,7 +278,7 @@ export default function GalleryDriveFolderPicker({
                 <header className="shrink-0 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur sm:px-6 sm:py-5">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
-                      <GoogleDriveLogo />
+                      <FaGoogleDrive/>
                       <div className="min-w-0">
                         <Dialog.Title className="truncate text-sm font-black text-slate-950 sm:text-base">
                           Google Drive Import
@@ -517,9 +535,9 @@ export default function GalleryDriveFolderPicker({
                           type="button"
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
                           onClick={handleViewAllMedia}
-                          disabled={browseState.previewLoadingMore || browseState.loading}
+                          disabled={browseState.previewLoadingMore || browseState.loading || loadingAllPreviews}
                         >
-                          {browseState.previewLoadingMore ? 'Loading...' : 'View all'}
+                          {loadingAllPreviews || browseState.previewLoadingMore ? 'Loading...' : 'View all'}
                           <ChevronRight className="h-4 w-4" />
                         </button>
                       </div>
@@ -528,6 +546,9 @@ export default function GalleryDriveFolderPicker({
                           ? `${selectedMediaIds.length} media selected for manual import.`
                           : 'No media manually selected — importing will include all media in this folder.'}
                       </p>
+                      {loadingAllPreviews ? (
+                        <p className="mt-1 text-xs font-semibold text-blue-600">Loading all preview items in this folder...</p>
+                      ) : null}
 
                       <div
                         className="mt-4 max-h-[46vh] overflow-y-auto pr-1"

@@ -214,9 +214,55 @@ export class GoogleDriveAdapter {
     parentId?: string | null;
     limit?: number;
     pageToken?: string | null;
+    includeAll?: boolean;
   }): Promise<{ files: GoogleDriveMediaPreviewEntry[]; nextPageToken: string | null }> {
     const parentId = args.parentId || 'root';
     const previewLimit = Math.max(1, Math.min(24, args.limit ?? 8));
+    const mapPreviewFile = (file: GoogleFileResponse): GoogleDriveMediaPreviewEntry => ({
+      id: file.id,
+      name: file.name || 'Untitled media',
+      mimeType: file.mimeType,
+      previewUrl: `/api/admin/integrations/google-drive/files/${encodeURIComponent(file.id)}`,
+      kind: file.mimeType.startsWith('video/') ? 'video' : 'image',
+    });
+
+    if (args.includeAll) {
+      const aggregated: GoogleDriveMediaPreviewEntry[] = [];
+      let pageToken = args.pageToken ?? null;
+      let safetyCounter = 0;
+
+      do {
+        const params = new URLSearchParams({
+          q: `'${parentId}' in parents and trashed = false and (mimeType contains 'image/' or mimeType contains 'video/')`,
+          pageSize: '1000',
+          fields: 'files(id,name,mimeType),nextPageToken',
+          orderBy: 'createdTime desc',
+          supportsAllDrives: 'true',
+          includeItemsFromAllDrives: 'true',
+        });
+
+        if (pageToken) {
+          params.set('pageToken', pageToken);
+        }
+
+        const data = await this.fetchFilesList({ accessToken: args.accessToken, params });
+        const files = Array.isArray(data.files) ? data.files : [];
+        aggregated.push(
+          ...files
+            .filter((file) => file?.id && typeof file?.mimeType === 'string' && PREVIEW_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix)))
+            .map(mapPreviewFile),
+        );
+
+        pageToken = data.nextPageToken || null;
+        safetyCounter += 1;
+      } while (pageToken && safetyCounter < 100);
+
+      return {
+        files: aggregated,
+        nextPageToken: null,
+      };
+    }
+
     const params = new URLSearchParams({
       q: `'${parentId}' in parents and trashed = false and (mimeType contains 'image/' or mimeType contains 'video/')`,
       pageSize: String(previewLimit),
@@ -236,13 +282,7 @@ export class GoogleDriveAdapter {
     return {
       files: files
         .filter((file) => file?.id && typeof file?.mimeType === 'string' && PREVIEW_MIME_PREFIXES.some((prefix) => file.mimeType.startsWith(prefix)))
-        .map((file) => ({
-          id: file.id,
-          name: file.name || 'Untitled media',
-          mimeType: file.mimeType,
-          previewUrl: `/api/admin/integrations/google-drive/files/${encodeURIComponent(file.id)}`,
-          kind: file.mimeType.startsWith('video/') ? 'video' : 'image',
-        })),
+        .map(mapPreviewFile),
       nextPageToken: data.nextPageToken || null,
     };
   }
@@ -253,6 +293,7 @@ export class GoogleDriveAdapter {
     previewPageToken?: string | null;
     previewLimit?: number;
     folderSort?: 'recent' | 'name';
+    includeAllPreviews?: boolean;
   }): Promise<GoogleDriveFolderContext> {
     const breadcrumbs: Array<{ id: string; name: string }> = [{ id: 'root', name: 'My Drive' }];
     let currentFolder: GoogleDriveFolderEntry | null = null;
@@ -295,6 +336,7 @@ export class GoogleDriveAdapter {
       parentId: args.parentId,
       limit: args.previewLimit,
       pageToken: args.previewPageToken,
+      includeAll: args.includeAllPreviews,
     });
 
     return {
