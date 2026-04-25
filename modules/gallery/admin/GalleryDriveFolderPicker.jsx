@@ -219,25 +219,26 @@ export default function GalleryDriveFolderPicker({
 
     setLoadingAllPreviews(true);
     try {
-      let nextToken = browseState.nextPreviewPageToken;
-      let safetyCounter = 0;
-
-      while (nextToken && safetyCounter < 200) {
-        const payload = await loadFolders(currentParentId, {
-          appendFiles: true,
-          previewPageToken: nextToken,
-          previewPageSize: 24,
-        });
-        const nextFromPayload = payload?.nextPreviewPageToken ?? null;
-
-        // Prevent edge cases where the backend returns the same cursor repeatedly.
-        if (!nextFromPayload || nextFromPayload === nextToken) {
-          break;
-        }
-
-        nextToken = nextFromPayload;
-        safetyCounter += 1;
+      const params = new URLSearchParams();
+      if (currentParentId) {
+        params.set('parentId', currentParentId);
       }
+      params.set('includeAllPreviews', '1');
+      params.set('folderSort', folderSort);
+      const payload = await fetchJson(`/api/admin/integrations/google-drive/folders?${params.toString()}`);
+      const allFiles = Array.isArray(payload?.files) ? payload.files : [];
+
+      setBrowseState((current) => ({
+        ...current,
+        folders: Array.isArray(payload?.folders) ? payload.folders : current.folders,
+        files: allFiles,
+        breadcrumbs:
+          Array.isArray(payload?.breadcrumbs) && payload.breadcrumbs.length > 0
+            ? payload.breadcrumbs
+            : current.breadcrumbs,
+        currentFolder: payload?.currentFolder ?? current.currentFolder,
+        nextPreviewPageToken: null,
+      }));
     } finally {
       setLoadingAllPreviews(false);
     }
