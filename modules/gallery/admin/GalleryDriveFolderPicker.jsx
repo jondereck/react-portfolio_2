@@ -159,7 +159,8 @@ export default function GalleryDriveFolderPicker({
     setQuery('');
     setMobileTab('folders');
     setSelectedMediaIds([]);
-    loadFolders();
+    const initialParentId = selectedFolderId && selectedFolderId !== 'root' ? selectedFolderId : null;
+    loadFolders(initialParentId, { keepSelectedMedia: false });
   }, [open]);
 
   const activeFolderId = browseState.breadcrumbs[browseState.breadcrumbs.length - 1]?.id;
@@ -216,9 +217,22 @@ export default function GalleryDriveFolderPicker({
       return;
     }
 
+    let targetFolderId = currentParentId;
+    if (!targetFolderId && selectedFolderId && selectedFolderId !== 'root') {
+      targetFolderId = selectedFolderId;
+    }
+
     let nextToken = browseState.nextPreviewPageToken;
+    if (targetFolderId && targetFolderId !== currentParentId) {
+      const initialPayload = await loadFolders(targetFolderId, {
+        appendFiles: false,
+        previewPageSize: 24,
+      });
+      nextToken = initialPayload?.nextPreviewPageToken ?? null;
+    }
+
     while (nextToken) {
-      const payload = await loadFolders(currentParentId, {
+      const payload = await loadFolders(targetFolderId, {
         appendFiles: true,
         previewPageToken: nextToken,
         previewPageSize: 24,
@@ -680,8 +694,7 @@ export default function GalleryDriveFolderPicker({
                       >
                         <Upload className="h-4 w-4" />
                         <span>
-                          Select this media
-                          {selectedMediaIds.length > 0 ? ` (${selectedMediaIds.length})` : ''}
+                          {selectedMediaIds.length > 0 ? `Import selected media (${selectedMediaIds.length})` : 'Import folder'}
                         </span>
                       </button>
                     </div>
