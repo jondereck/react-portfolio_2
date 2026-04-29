@@ -16,7 +16,8 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 const publicDir = path.join(repoRoot, 'public');
 
-const BRAND_BG = '#020617';
+const ICON_BG = '#ffffff';
+const SOURCE_LOGO = 'pwa-logo-source.png';
 
 const resolvePublicPath = (filename) => path.join(publicDir, filename);
 
@@ -73,16 +74,28 @@ const buildSquarePng = async ({ logoBuffer, size, paddingRatio, backgroundHex })
 };
 
 async function main() {
-  const inputLogoPath = resolvePublicPath('logo512.png');
+  const sourceLogoPath = resolvePublicPath(SOURCE_LOGO);
+  let inputLogoPath = sourceLogoPath;
+
+  try {
+    await fs.access(sourceLogoPath);
+  } catch {
+    inputLogoPath = resolvePublicPath('logo512.png');
+  }
+
   const inputLogo = await fs.readFile(inputLogoPath);
 
+  if (inputLogoPath !== sourceLogoPath) {
+    await fs.writeFile(sourceLogoPath, inputLogo);
+  }
+
   const outputs = [
-    { filename: 'logo192.png', size: 192, paddingRatio: 0.2 },
-    { filename: 'logo512.png', size: 512, paddingRatio: 0.2 },
-    { filename: 'logo512-maskable.png', size: 512, paddingRatio: 0.34 },
-    { filename: 'apple-touch-icon.png', size: 180, paddingRatio: 0.2 },
-    { filename: 'favicon-32x32.png', size: 32, paddingRatio: 0.12 },
-    { filename: 'favicon-16x16.png', size: 16, paddingRatio: 0.12 },
+    { filename: 'logo192.png', size: 192, paddingRatio: 0.06 },
+    { filename: 'logo512.png', size: 512, paddingRatio: 0.06 },
+    { filename: 'logo512-maskable.png', size: 512, paddingRatio: 0.14 },
+    { filename: 'apple-touch-icon.png', size: 180, paddingRatio: 0.08 },
+    { filename: 'favicon-32x32.png', size: 32, paddingRatio: 0.04 },
+    { filename: 'favicon-16x16.png', size: 16, paddingRatio: 0.04 },
   ];
 
   await fs.mkdir(publicDir, { recursive: true });
@@ -93,7 +106,7 @@ async function main() {
       logoBuffer: inputLogo,
       size: output.size,
       paddingRatio: output.paddingRatio,
-      backgroundHex: BRAND_BG,
+      backgroundHex: ICON_BG,
     });
     generatedBuffers.set(output.filename, buffer);
     await fs.writeFile(resolvePublicPath(output.filename), buffer);
@@ -102,8 +115,8 @@ async function main() {
   const favicon48 = await buildSquarePng({
     logoBuffer: inputLogo,
     size: 48,
-    paddingRatio: 0.12,
-    backgroundHex: BRAND_BG,
+    paddingRatio: 0.04,
+    backgroundHex: ICON_BG,
   });
 
   const icoBuffer = await pngToIco([
