@@ -21,12 +21,12 @@ export const PORTFOLIO_THEMES = [
   },
 ] as const;
 
-export const PORTFOLIO_THEME_IDS = PORTFOLIO_THEMES.map((theme) => theme.value) as [
+export const PORTFOLIO_THEME_IDS = [
   'editorial-bento',
   'neo-editorial',
   'minimalist-editorial',
   'classic',
-];
+] as const;
 
 export const DEFAULT_PORTFOLIO_THEME = 'editorial-bento';
 export const DEFAULT_PORTFOLIO_THEME_RANDOM_POOL = [...PORTFOLIO_THEME_IDS];

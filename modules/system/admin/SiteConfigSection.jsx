@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
+import { Shuffle } from 'lucide-react';
 import ImageUpload from '@/components/ImageUpload';
 import AdminSectionHeader from '@/components/admin/shared/AdminSectionHeader';
 import FieldErrorText from '@/components/forms/FieldErrorText';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
 import { clearFieldErrors, getFieldError, normalizeFormError } from '@/lib/form-client';
 import { handleRequest } from '@/lib/handleRequest';
+import { PORTFOLIO_THEMES, isPortfolioThemeId, normalizePortfolioThemeRandomPool } from '@/lib/portfolioThemes';
 import { notifyRealtimeUpdate, revalidatePublicData } from '@/lib/realtime';
 import { buttonStyles, cardStyles, fetcher, inputStyles, withFieldError } from '@/modules/system/admin/settingsShared';
 
@@ -17,6 +19,7 @@ export default function SiteConfigSection() {
     logoText: '',
     logoImage: '',
     portfolioTheme: 'editorial-bento',
+    portfolioThemeRandomPool: PORTFOLIO_THEMES.map((theme) => theme.value),
   });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -32,9 +35,10 @@ export default function SiteConfigSection() {
       logoText: typeof siteConfigData?.logoText === 'string' ? siteConfigData.logoText : '',
       logoImage: typeof siteConfigData?.logoImage === 'string' ? siteConfigData.logoImage : '',
       portfolioTheme:
-        ['classic', 'editorial-bento', 'neo-editorial'].includes(siteConfigData?.portfolioTheme)
+        isPortfolioThemeId(siteConfigData?.portfolioTheme)
           ? siteConfigData.portfolioTheme
           : 'editorial-bento',
+      portfolioThemeRandomPool: normalizePortfolioThemeRandomPool(siteConfigData?.portfolioThemeRandomPool),
     });
     setFormError('');
     setFieldErrors({});
@@ -57,6 +61,12 @@ export default function SiteConfigSection() {
     setFieldErrors({});
     setSaving(true);
 
+    if (siteConfig.portfolioThemeRandomPool.length === 0) {
+      setFieldErrors({ portfolioThemeRandomPool: ['Choose at least one theme for random selection.'] });
+      setSaving(false);
+      return;
+    }
+
     try {
       const updatePromise = handleRequest(() =>
         fetch('/api/site-config', {
@@ -68,6 +78,7 @@ export default function SiteConfigSection() {
             logoText: siteConfig.logoText.trim(),
             logoImage: siteConfig.logoImage.trim(),
             portfolioTheme: siteConfig.portfolioTheme,
+            portfolioThemeRandomPool: siteConfig.portfolioThemeRandomPool,
           }),
         }),
       );
@@ -88,6 +99,34 @@ export default function SiteConfigSection() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const randomizeTheme = () => {
+    const pool = siteConfig.portfolioThemeRandomPool.filter(isPortfolioThemeId);
+    if (pool.length === 0) {
+      setFieldErrors((current) => ({
+        ...current,
+        portfolioThemeRandomPool: ['Choose at least one theme for random selection.'],
+      }));
+      return;
+    }
+
+    const nextTheme = pool[Math.floor(Math.random() * pool.length)];
+    setSiteConfig((previous) => ({ ...previous, portfolioTheme: nextTheme }));
+    setFieldErrors((current) => clearFieldErrors(clearFieldErrors(current, 'portfolioTheme'), 'portfolioThemeRandomPool'));
+  };
+
+  const toggleRandomPoolTheme = (themeValue) => {
+    setSiteConfig((previous) => {
+      const included = previous.portfolioThemeRandomPool.includes(themeValue);
+      return {
+        ...previous,
+        portfolioThemeRandomPool: included
+          ? previous.portfolioThemeRandomPool.filter((value) => value !== themeValue)
+          : [...previous.portfolioThemeRandomPool, themeValue],
+      };
+    });
+    setFieldErrors((current) => clearFieldErrors(current, 'portfolioThemeRandomPool'));
   };
 
   return (
@@ -131,61 +170,68 @@ export default function SiteConfigSection() {
           </div>
 
           <fieldset className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-            <div>
-              <legend className="text-sm font-semibold text-slate-900 dark:text-slate-100">Portfolio Theme</legend>
-              <p className="mt-1 text-sm text-slate-500">
-                Choose the UI style used by the public portfolio without changing its content or behavior.
-              </p>
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+              <div>
+                <legend className="text-sm font-semibold text-slate-900 dark:text-slate-100">Portfolio Theme</legend>
+                <p className="mt-1 text-sm text-slate-500">
+                  Choose the UI style used by the public portfolio without changing its content or behavior.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={randomizeTheme}
+                className="inline-flex h-10 w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+              >
+                <Shuffle className="h-4 w-4" />
+                Random
+              </button>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              {[
-                {
-                  value: 'editorial-bento',
-                  title: 'Editorial Bento',
-                  description: 'Light premium bento layout with bold borders, lime and blue accents.',
-                },
-                {
-                  value: 'neo-editorial',
-                  title: 'Neo Editorial',
-                  description: 'Sticky side rail, orange accent, case-study blocks, and heavy ink borders.',
-                },
-                {
-                  value: 'classic',
-                  title: 'Classic',
-                  description: 'The current dark/light portfolio interface and section styling.',
-                },
-              ].map((theme) => {
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {PORTFOLIO_THEMES.map((theme) => {
                 const selected = siteConfig.portfolioTheme === theme.value;
+                const includedInRandom = siteConfig.portfolioThemeRandomPool.includes(theme.value);
 
                 return (
-                  <label
+                  <div
                     key={theme.value}
-                    className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition ${
+                    className={`rounded-xl border p-4 transition ${
                       selected
                         ? 'border-cyan-400 bg-cyan-50 text-slate-950 dark:border-cyan-300 dark:bg-cyan-950/40 dark:text-slate-100'
                         : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900'
                     }`}
                   >
-                    <input
-                      type="radio"
-                      name="portfolioTheme"
-                      value={theme.value}
-                      checked={selected}
-                      onChange={(event) => {
-                        setSiteConfig((previous) => ({ ...previous, portfolioTheme: event.target.value }));
-                        setFieldErrors((current) => clearFieldErrors(current, 'portfolioTheme'));
-                      }}
-                      className="mt-1"
-                    />
-                    <span>
-                      <span className="block text-sm font-semibold">{theme.title}</span>
-                      <span className="mt-1 block text-sm text-slate-500">{theme.description}</span>
-                    </span>
-                  </label>
+                    <label className="flex cursor-pointer gap-3">
+                      <input
+                        type="radio"
+                        name="portfolioTheme"
+                        value={theme.value}
+                        checked={selected}
+                        onChange={(event) => {
+                          setSiteConfig((previous) => ({ ...previous, portfolioTheme: event.target.value }));
+                          setFieldErrors((current) => clearFieldErrors(current, 'portfolioTheme'));
+                        }}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold">{theme.title}</span>
+                        <span className="mt-1 block text-sm text-slate-500">{theme.description}</span>
+                      </span>
+                    </label>
+                    <label className="mt-4 flex cursor-pointer items-center gap-2 border-t border-slate-200 pt-3 text-xs font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                      <input
+                        type="checkbox"
+                        checked={includedInRandom}
+                        onChange={() => toggleRandomPoolTheme(theme.value)}
+                        className="h-4 w-4 rounded border-slate-300 text-cyan-600"
+                      />
+                      Include in random
+                    </label>
+                  </div>
                 );
               })}
             </div>
             <FieldErrorText error={getFieldError(fieldErrors, 'portfolioTheme')} />
+            <FieldErrorText error={getFieldError(fieldErrors, 'portfolioThemeRandomPool')} />
           </fieldset>
 
           <button type="submit" disabled={saving || loading} className={buttonStyles}>

@@ -12,8 +12,10 @@ import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import Projects from './components/Projects';
 import SocialLinks from './components/SocialLinks';
 import EditorialBentoPortfolio from './components/editorial/EditorialBentoPortfolio';
+import MinimalistEditorialPortfolio from './components/editorial/MinimalistEditorialPortfolio';
 import NeoEditorialPortfolio from './components/editorial/NeoEditorialPortfolio';
 import GlobalLoader from '@/components/GlobalLoader';
+import { isPortfolioThemeId } from '@/lib/portfolioThemes';
 import { REALTIME_EVENT, REALTIME_SIGNAL_KEY, revalidatePublicData } from '@/lib/realtime';
 import { useLoadingStore } from '@/store/loading';
 
@@ -81,6 +83,7 @@ function App({ profileSlug = null }) {
               highlights: normalizeHighlights(siteContentData.about.highlights),
             }
           : null,
+      contact: siteContentData?.contact && typeof siteContentData.contact === 'object' ? siteContentData.contact : null,
     }),
     [siteContentData],
   );
@@ -92,7 +95,7 @@ function App({ profileSlug = null }) {
 
   const loading = siteContentLoading || siteConfigLoading;
   const loadError = siteContentError || siteConfigError;
-  const portfolioTheme = ['classic', 'editorial-bento', 'neo-editorial'].includes(siteConfig?.portfolioTheme)
+  const portfolioTheme = isPortfolioThemeId(siteConfig?.portfolioTheme)
     ? siteConfig.portfolioTheme
     : 'editorial-bento';
 
@@ -215,6 +218,20 @@ function App({ profileSlug = null }) {
           siteConfig={siteConfig}
           darkMode={darkMode}
           onToggleDark={toggleDark}
+        />
+        <PwaInstallPrompt />
+      </div>
+    );
+  }
+
+  if (portfolioTheme === 'minimalist-editorial') {
+    return (
+      <div>
+        {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
+        <MinimalistEditorialPortfolio
+          profileSlug={profileSlug}
+          siteContent={siteContent}
+          siteConfig={siteConfig}
         />
         <PwaInstallPrompt />
       </div>
