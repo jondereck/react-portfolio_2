@@ -1,32 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-const HideOnScroll = ({ children, className = '' }) => {
-  const [isScrolling, setIsScrolling] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
+const HideOnScroll = ({ children, className = '', showDelay = 5000 }) => {
+  const [isHidden, setIsHidden] = useState(false);
+  const showTimerRef = useRef(null);
 
   useEffect(() => {
     const handleScroll = () => {
-      const scrollTop = window.scrollY || document.documentElement.scrollTop;
-      setIsScrolling(scrollTop > 0);
+      setIsHidden(true);
+      window.clearTimeout(showTimerRef.current);
+      showTimerRef.current = window.setTimeout(() => {
+        setIsHidden(false);
+      }, showDelay);
     };
 
-    const handleResize = () => {
-      setIsMobile(window.innerWidth <= 768);
-    };
-
-    handleResize();
-    handleScroll();
     window.addEventListener("scroll", handleScroll);
-    window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener('resize', handleResize);
+      window.clearTimeout(showTimerRef.current);
     };
-  }, []);
+  }, [showDelay]);
 
   return (
-    <div className={`${className} transition-opacity duration-500 ${isScrolling && isMobile ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
+    <div className={`${className} transition-opacity duration-500 ${isHidden ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
       {children}
     </div>
   );
