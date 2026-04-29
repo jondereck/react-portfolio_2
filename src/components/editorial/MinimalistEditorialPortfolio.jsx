@@ -140,8 +140,12 @@ const normalizeLinks = (config) => {
 
 function Logo({ config }) {
   const adminClickStateRef = useRef({ count: 0, timerId: null });
-  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : 'N System';
+  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : '';
   const logoImage = getSafeUrl(config?.logoImage);
+
+  if (!logoText && !logoImage) {
+    return null;
+  }
 
   const clearAdminClicks = useCallback(() => {
     if (adminClickStateRef.current.timerId) {
@@ -282,9 +286,11 @@ function Hero({ hero, projects, experience }) {
               ) : null}
             </div>
           ) : null}
-          <h1 className="max-w-[640px] text-8xl font-light leading-[0.78] text-neutral-900 sm:text-[9rem] lg:text-[12rem]">
-            {hero?.title || 'Portfolio'}
-          </h1>
+          {hero?.title ? (
+            <h1 className="max-w-[640px] text-8xl font-light leading-[0.78] text-neutral-900 sm:text-[9rem] lg:text-[12rem]">
+              {hero.title}
+            </h1>
+          ) : null}
           {hero?.description ? <p className="mt-3 max-w-md text-sm font-medium text-neutral-700 sm:text-base">{hero.description}</p> : null}
           <div className="mt-24 hidden items-center gap-2 text-xs text-neutral-500 md:flex">
             Scroll down <Icon name="arrowDown" className="h-3.5 w-3.5" />
@@ -728,12 +734,15 @@ function Contact({ contact }) {
 }
 
 function Footer({ config }) {
-  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : 'Jon D. Nifas';
+  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : '';
   return (
     <footer className="border-t border-neutral-200 bg-[#f7f7f5] px-6 py-8 lg:px-10">
       <div className="mx-auto flex max-w-[1280px] flex-col justify-between gap-4 text-sm text-neutral-500 sm:flex-row sm:items-center">
         <Logo config={config} />
-        <p>(c) {new Date().getFullYear()} {logoText}. All rights reserved.</p>
+        <p>
+          (c) {new Date().getFullYear()}
+          {logoText ? ` ${logoText}.` : ''} All rights reserved.
+        </p>
       </div>
     </footer>
   );

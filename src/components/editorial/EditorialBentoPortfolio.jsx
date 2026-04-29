@@ -222,8 +222,13 @@ function MediaAvatar({ src, alt, className = 'h-12 w-12 rounded-2xl' }) {
 
 function Logo({ config }) {
   const adminClickStateRef = useRef({ count: 0, timerId: null });
-  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : 'N System';
+  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : '';
   const logoImage = isSafeHttpUrl(config?.logoImage) ? config.logoImage : '';
+
+  if (!logoText && !logoImage) {
+    return null;
+  }
+
   const initial = logoText.trim()[0]?.toUpperCase() || 'N';
 
   const clearAdminClicks = useCallback(() => {
@@ -432,32 +437,55 @@ function Hero({ hero, about, profileSlug }) {
   const portraitHighlight = normalizedHighlights[0]?.value?.split(/[.,\n]/)[0]?.slice(0, 12) || '';
   const portraitLabel = normalizedHighlights[0]?.label || '';
   const sideCards = aboutHighlights.slice(0, 2);
+  const eyebrow = typeof hero?.eyebrow === 'string' ? hero.eyebrow.trim() : '';
+  const title = typeof hero?.title === 'string' ? hero.title.trim() : '';
+  const primaryCtaLabel = typeof hero?.primaryCtaLabel === 'string' ? hero.primaryCtaLabel.trim() : '';
+  const primaryCtaHref = typeof hero?.primaryCtaHref === 'string' ? hero.primaryCtaHref.trim() : '';
+  const secondaryCtaLabel = typeof hero?.secondaryCtaLabel === 'string' ? hero.secondaryCtaLabel.trim() : '';
+  const secondaryCtaHref = typeof hero?.secondaryCtaHref === 'string' ? hero.secondaryCtaHref.trim() : '';
 
   return (
     <section id="home" name="home" className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-16">
       <div className="grid content-between rounded-[2.5rem] border-[3px] border-slate-950 bg-white p-6 shadow-[12px_12px_0_#0f172a] sm:p-8 lg:min-h-[620px] lg:p-10">
         <div>
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border-2 border-slate-950 bg-lime-300 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-950">
-            <Icon name="spark" className="h-4 w-4" /> {hero?.eyebrow || 'Portfolio'}
-          </div>
-          <h1 className="max-w-4xl text-5xl font-black leading-[0.92] tracking-tight text-slate-950 sm:text-7xl lg:text-8xl">
-            {hero?.title || 'Portfolio'}
-          </h1>
+          {eyebrow ? (
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border-2 border-slate-950 bg-lime-300 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-950">
+              <Icon name="spark" className="h-4 w-4" /> {eyebrow}
+            </div>
+          ) : null}
+          {title ? (
+            <h1 className="max-w-4xl text-5xl font-black leading-[0.92] tracking-tight text-slate-950 sm:text-7xl lg:text-8xl">
+              {title}
+            </h1>
+          ) : null}
           {hero?.description ? <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700">{hero.description}</p> : null}
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <CtaLink
-              href={hero?.primaryCtaHref || '#portfolio'}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-700 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-700/20 transition hover:-translate-y-0.5"
-            >
-              {hero?.primaryCtaLabel || 'View Projects'} <Icon name="arrow" className="h-4 w-4" />
-            </CtaLink>
-            <CtaLink
-              href={hero?.secondaryCtaHref || '#contact'}
-              className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-slate-950 bg-white px-6 py-4 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-lime-300"
-            >
-              {hero?.secondaryCtaLabel || 'Work With Me'} <Icon name="arrowUp" className="h-4 w-4" />
-            </CtaLink>
-          </div>
+          {primaryCtaLabel && primaryCtaHref ? (
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <CtaLink
+                href={primaryCtaHref}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-700 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-700/20 transition hover:-translate-y-0.5"
+              >
+                {primaryCtaLabel} <Icon name="arrow" className="h-4 w-4" />
+              </CtaLink>
+              {secondaryCtaLabel && secondaryCtaHref ? (
+                <CtaLink
+                  href={secondaryCtaHref}
+                  className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-slate-950 bg-white px-6 py-4 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-lime-300"
+                >
+                  {secondaryCtaLabel} <Icon name="arrowUp" className="h-4 w-4" />
+                </CtaLink>
+              ) : null}
+            </div>
+          ) : secondaryCtaLabel && secondaryCtaHref ? (
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <CtaLink
+                href={secondaryCtaHref}
+                className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-slate-950 bg-white px-6 py-4 text-sm font-black text-slate-950 transition hover:-translate-y-0.5 hover:bg-lime-300"
+              >
+                {secondaryCtaLabel} <Icon name="arrowUp" className="h-4 w-4" />
+              </CtaLink>
+            </div>
+          ) : null}
         </div>
 
         {normalizedHighlights.length > 0 ? <div className="mt-10 grid gap-3 sm:grid-cols-3">
@@ -1002,7 +1030,7 @@ function Contact({ contact }) {
 
 function Footer({ config, contact }) {
   const links = useMemo(() => normalizeLinks(config), [config]);
-  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : 'Jon D. Nifas';
+  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : '';
   const socialLinks = Array.isArray(contact?.socialLinks) ? contact.socialLinks.filter((link) => link?.label && isSafeHttpUrl(link.url)) : [];
 
   return (
@@ -1032,7 +1060,10 @@ function Footer({ config, contact }) {
           </div>
         </div> : null}
       </div>
-      <div className="border-t border-slate-950/10 py-5 text-center text-xs font-bold text-slate-500">© {new Date().getFullYear()} {logoText}. All rights reserved.</div>
+      <div className="border-t border-slate-950/10 py-5 text-center text-xs font-bold text-slate-500">
+        © {new Date().getFullYear()}
+        {logoText ? ` ${logoText}.` : ''} All rights reserved.
+      </div>
     </footer>
   );
 }

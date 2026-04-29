@@ -157,8 +157,13 @@ function Icon({ name, className = 'h-5 w-5' }) {
 
 function Logo({ config }) {
   const adminClickStateRef = useRef({ count: 0, timerId: null });
-  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : 'N System';
+  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : '';
   const logoImage = getSafeImage(config?.logoImage);
+
+  if (!logoText && !logoImage) {
+    return null;
+  }
+
   const initial = logoText.trim()[0]?.toUpperCase() || 'N';
 
   const clearAdminClicks = useCallback(() => {
@@ -432,26 +437,46 @@ function HeroSection({ hero, about, profileSlug }) {
     ...aboutHighlights.map((item) => ({ value: item.value, label: item.label })),
   ].filter((metric) => metric?.value && metric?.label).slice(0, 3);
   const hasVisual = Boolean(getSafeImage(hero?.image) || projects.length || experienceItems.length || aboutHighlights.length);
+  const eyebrow = typeof hero?.eyebrow === 'string' ? hero.eyebrow.trim() : '';
+  const title = typeof hero?.title === 'string' ? hero.title.trim() : '';
+  const primaryCtaLabel = typeof hero?.primaryCtaLabel === 'string' ? hero.primaryCtaLabel.trim() : '';
+  const primaryCtaHref = typeof hero?.primaryCtaHref === 'string' ? hero.primaryCtaHref.trim() : '';
+  const secondaryCtaLabel = typeof hero?.secondaryCtaLabel === 'string' ? hero.secondaryCtaLabel.trim() : '';
+  const secondaryCtaHref = typeof hero?.secondaryCtaHref === 'string' ? hero.secondaryCtaHref.trim() : '';
 
   return (
     <section id="home" className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="grid min-h-[620px] content-between rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-7 shadow-[8px_8px_0_#101010]">
         <div>
-          <div className="inline-flex rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-4 py-3 text-xs font-black uppercase">
-            {hero?.eyebrow || 'Portfolio'}
-          </div>
-          <h1 className="mt-6 max-w-[10ch] text-5xl font-black leading-[0.92] text-[#101010] md:text-7xl xl:text-[6.6rem]">
-            {hero?.title || 'Portfolio'}
-          </h1>
+          {eyebrow ? (
+            <div className="inline-flex rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-4 py-3 text-xs font-black uppercase">
+              {eyebrow}
+            </div>
+          ) : null}
+          {title ? (
+            <h1 className="mt-6 max-w-[10ch] text-5xl font-black leading-[0.92] text-[#101010] md:text-7xl xl:text-[6.6rem]">
+              {title}
+            </h1>
+          ) : null}
           {hero?.description ? <p className="mt-6 max-w-2xl text-base leading-8 text-[#5f5f5f] md:text-lg">{hero.description}</p> : null}
-          <div className="mt-7 flex flex-wrap gap-3">
-            <CtaLink href={hero?.primaryCtaHref || '#portfolio'} className="inline-flex items-center gap-2 rounded-full border-2 border-[#101010] bg-[#101010] px-5 py-4 text-sm font-black text-white shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5">
-              {hero?.primaryCtaLabel || 'View work'} <Icon name="arrow" className="h-4 w-4" />
-            </CtaLink>
-            <CtaLink href={hero?.secondaryCtaHref || '#contact'} className="inline-flex items-center gap-2 rounded-full border-2 border-[#101010] bg-[#fffdf8] px-5 py-4 text-sm font-black text-[#101010] shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5">
-              {hero?.secondaryCtaLabel || 'Contact me'} <Icon name="arrowUp" className="h-4 w-4" />
-            </CtaLink>
-          </div>
+          {primaryCtaLabel && primaryCtaHref ? (
+            <div className="mt-7 flex flex-wrap gap-3">
+              <CtaLink href={primaryCtaHref} className="inline-flex items-center gap-2 rounded-full border-2 border-[#101010] bg-[#101010] px-5 py-4 text-sm font-black text-white shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5">
+                {primaryCtaLabel} <Icon name="arrow" className="h-4 w-4" />
+              </CtaLink>
+              {secondaryCtaLabel && secondaryCtaHref ? (
+                <CtaLink href={secondaryCtaHref} className="inline-flex items-center gap-2 rounded-full border-2 border-[#101010] bg-[#fffdf8] px-5 py-4 text-sm font-black text-[#101010] shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5">
+                  {secondaryCtaLabel} <Icon name="arrowUp" className="h-4 w-4" />
+                </CtaLink>
+              ) : null}
+            </div>
+          ) : secondaryCtaLabel && secondaryCtaHref ? (
+            <div className="mt-7 flex flex-wrap gap-3">
+              <CtaLink href={secondaryCtaHref} className="inline-flex items-center gap-2 rounded-full border-2 border-[#101010] bg-[#fffdf8] px-5 py-4 text-sm font-black text-[#101010] shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5">
+                {secondaryCtaLabel} <Icon name="arrowUp" className="h-4 w-4" />
+              </CtaLink>
+            </div>
+          ) : null}
         </div>
         {metrics.length > 0 ? (
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
@@ -934,11 +959,14 @@ function ContactSection({ contact }) {
 }
 
 function Footer({ config }) {
-  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : 'Jon D. Nifas';
+  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : '';
   return (
     <footer className="py-7 text-sm font-bold text-[#5f5f5f]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-[#101010]/10 pt-6">
-        <div>(c) {new Date().getFullYear()} {logoText}. All rights reserved.</div>
+        <div>
+          (c) {new Date().getFullYear()}
+          {logoText ? ` ${logoText}.` : ''} All rights reserved.
+        </div>
       </div>
     </footer>
   );
