@@ -68,6 +68,7 @@ async function main() {
       logoImage: defaultSiteConfig.logoImage,
       navigation: defaultSiteConfig.navigation,
       portfolioTheme: defaultSiteConfig.portfolioTheme,
+      portfolioThemeRandomPool: defaultSiteConfig.portfolioThemeRandomPool,
     },
   });
   await prisma.adminSettings.create({ data: defaultAdminSettings });

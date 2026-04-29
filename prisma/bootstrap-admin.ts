@@ -100,6 +100,7 @@ async function main() {
       logoImage: defaultSiteConfig.logoImage,
       navigation: defaultSiteConfig.navigation,
       portfolioTheme: defaultSiteConfig.portfolioTheme,
+      portfolioThemeRandomPool: defaultSiteConfig.portfolioThemeRandomPool,
     },
   });
 

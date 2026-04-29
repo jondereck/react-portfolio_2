@@ -32,7 +32,7 @@ export default function SiteConfigSection() {
       logoText: typeof siteConfigData?.logoText === 'string' ? siteConfigData.logoText : '',
       logoImage: typeof siteConfigData?.logoImage === 'string' ? siteConfigData.logoImage : '',
       portfolioTheme:
-        siteConfigData?.portfolioTheme === 'classic' || siteConfigData?.portfolioTheme === 'editorial-bento'
+        ['classic', 'editorial-bento', 'neo-editorial'].includes(siteConfigData?.portfolioTheme)
           ? siteConfigData.portfolioTheme
           : 'editorial-bento',
     });
@@ -137,12 +137,17 @@ export default function SiteConfigSection() {
                 Choose the UI style used by the public portfolio without changing its content or behavior.
               </p>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-3">
               {[
                 {
                   value: 'editorial-bento',
                   title: 'Editorial Bento',
                   description: 'Light premium bento layout with bold borders, lime and blue accents.',
+                },
+                {
+                  value: 'neo-editorial',
+                  title: 'Neo Editorial',
+                  description: 'Sticky side rail, orange accent, case-study blocks, and heavy ink borders.',
                 },
                 {
                   value: 'classic',

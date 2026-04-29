@@ -12,6 +12,7 @@ import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import Projects from './components/Projects';
 import SocialLinks from './components/SocialLinks';
 import EditorialBentoPortfolio from './components/editorial/EditorialBentoPortfolio';
+import NeoEditorialPortfolio from './components/editorial/NeoEditorialPortfolio';
 import GlobalLoader from '@/components/GlobalLoader';
 import { REALTIME_EVENT, REALTIME_SIGNAL_KEY, revalidatePublicData } from '@/lib/realtime';
 import { useLoadingStore } from '@/store/loading';
@@ -91,7 +92,9 @@ function App({ profileSlug = null }) {
 
   const loading = siteContentLoading || siteConfigLoading;
   const loadError = siteContentError || siteConfigError;
-  const portfolioTheme = siteConfig?.portfolioTheme === 'classic' ? 'classic' : 'editorial-bento';
+  const portfolioTheme = ['classic', 'editorial-bento', 'neo-editorial'].includes(siteConfig?.portfolioTheme)
+    ? siteConfig.portfolioTheme
+    : 'editorial-bento';
 
   useEffect(() => {
     if (!loading) {
@@ -195,6 +198,22 @@ function App({ profileSlug = null }) {
           profileSlug={profileSlug}
           siteContent={siteContent}
           siteConfig={siteConfig}
+          onToggleDark={toggleDark}
+        />
+        <PwaInstallPrompt />
+      </div>
+    );
+  }
+
+  if (portfolioTheme === 'neo-editorial') {
+    return (
+      <div>
+        {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
+        <NeoEditorialPortfolio
+          profileSlug={profileSlug}
+          siteContent={siteContent}
+          siteConfig={siteConfig}
+          darkMode={darkMode}
           onToggleDark={toggleDark}
         />
         <PwaInstallPrompt />

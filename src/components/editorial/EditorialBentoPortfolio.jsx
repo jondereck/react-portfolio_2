@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
@@ -12,6 +12,7 @@ import { isSafeHttpUrl } from '@/lib/url-safety';
 import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl } from '@/lib/certificates';
 
 const cx = (...classes) => classes.filter(Boolean).join(' ');
+const BENTO_ADMIN_CLICK_WINDOW_MS = 550;
 
 const fetcher = (url) =>
   fetch(url, { cache: 'no-store' }).then((response) => {
@@ -220,12 +221,46 @@ function MediaAvatar({ src, alt, className = 'h-12 w-12 rounded-2xl' }) {
 }
 
 function Logo({ config }) {
+  const adminClickStateRef = useRef({ count: 0, timerId: null });
   const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : 'N System';
   const logoImage = isSafeHttpUrl(config?.logoImage) ? config.logoImage : '';
   const initial = logoText.trim()[0]?.toUpperCase() || 'N';
 
+  const clearAdminClicks = useCallback(() => {
+    if (adminClickStateRef.current.timerId) {
+      window.clearTimeout(adminClickStateRef.current.timerId);
+      adminClickStateRef.current.timerId = null;
+    }
+    adminClickStateRef.current.count = 0;
+  }, []);
+
+  const handleLogoClick = (event) => {
+    if ('button' in event && event.button !== 0) {
+      return;
+    }
+
+    const nextCount = adminClickStateRef.current.count + 1;
+    if (adminClickStateRef.current.timerId) {
+      window.clearTimeout(adminClickStateRef.current.timerId);
+    }
+
+    if (nextCount >= 3) {
+      event.preventDefault();
+      clearAdminClicks();
+      window.location.assign('/admin/login');
+      return;
+    }
+
+    adminClickStateRef.current.count = nextCount;
+    adminClickStateRef.current.timerId = window.setTimeout(() => {
+      clearAdminClicks();
+    }, BENTO_ADMIN_CLICK_WINDOW_MS);
+  };
+
+  useEffect(() => () => clearAdminClicks(), [clearAdminClicks]);
+
   return (
-    <a href="#home" className="flex items-center gap-3">
+    <a href="#home" onClick={handleLogoClick} className="flex items-center gap-3">
       {logoImage ? (
         <img src={logoImage} alt={logoText} className="h-12 w-12 rounded-[1.1rem] object-contain shadow-lg" />
       ) : (

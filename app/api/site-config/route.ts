@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { canMutateContent } from '@/lib/auth/roles';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { defaultSiteConfig } from '@/lib/siteContentDefaults';
+import { normalizePortfolioThemeRandomPool } from '@/lib/portfolioThemes';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { siteConfigSchema } from '@/lib/validators';
 import { logAdminAuditEvent } from '@/lib/server/admin-settings';
@@ -15,6 +16,7 @@ type ConfigPayload = {
   logoImage?: unknown;
   navigation?: unknown;
   portfolioTheme?: unknown;
+  portfolioThemeRandomPool?: unknown;
 };
 
 const extractConfigPayload = (input: unknown): ConfigPayload | null => {
@@ -22,14 +24,28 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
     return null;
   }
 
-  const body = input as { data?: unknown; logoText?: unknown; logoImage?: unknown; navigation?: unknown; portfolioTheme?: unknown };
+  const body = input as {
+    data?: unknown;
+    logoText?: unknown;
+    logoImage?: unknown;
+    navigation?: unknown;
+    portfolioTheme?: unknown;
+    portfolioThemeRandomPool?: unknown;
+  };
   if (body.data && typeof body.data === 'object') {
-    const nested = body.data as { logoText?: unknown; logoImage?: unknown; navigation?: unknown; portfolioTheme?: unknown };
+    const nested = body.data as {
+      logoText?: unknown;
+      logoImage?: unknown;
+      navigation?: unknown;
+      portfolioTheme?: unknown;
+      portfolioThemeRandomPool?: unknown;
+    };
     return {
       logoText: nested.logoText,
       logoImage: nested.logoImage,
       navigation: nested.navigation,
       portfolioTheme: nested.portfolioTheme,
+      portfolioThemeRandomPool: nested.portfolioThemeRandomPool,
     };
   }
 
@@ -38,11 +54,18 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
     logoImage: body.logoImage,
     navigation: body.navigation,
     portfolioTheme: body.portfolioTheme,
+    portfolioThemeRandomPool: body.portfolioThemeRandomPool,
   };
 };
 
 const normalizeSiteConfig = (
-  config: { logoText: string | null; logoImage: string | null; navigation: unknown; portfolioTheme?: string | null } | null,
+  config: {
+    logoText: string | null;
+    logoImage: string | null;
+    navigation: unknown;
+    portfolioTheme?: string | null;
+    portfolioThemeRandomPool?: unknown;
+  } | null,
 ) => {
   const parsed = siteConfigSchema.partial().safeParse({
     logoText: typeof config?.logoText === 'string' ? config.logoText : defaultSiteConfig.logoText,
@@ -50,6 +73,7 @@ const normalizeSiteConfig = (
     navigation: config?.navigation ?? defaultSiteConfig.navigation,
     portfolioTheme:
       typeof config?.portfolioTheme === 'string' ? config.portfolioTheme : defaultSiteConfig.portfolioTheme,
+    portfolioThemeRandomPool: normalizePortfolioThemeRandomPool(config?.portfolioThemeRandomPool),
   });
 
   if (!parsed.success) {
@@ -61,6 +85,7 @@ const normalizeSiteConfig = (
     logoImage: parsed.data.logoImage ?? defaultSiteConfig.logoImage,
     navigation: parsed.data.navigation ?? defaultSiteConfig.navigation,
     portfolioTheme: parsed.data.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
+    portfolioThemeRandomPool: parsed.data.portfolioThemeRandomPool ?? defaultSiteConfig.portfolioThemeRandomPool,
   };
 };
 
@@ -107,13 +132,20 @@ export async function PUT(request: Request) {
       logoImage: typeof payload.logoImage === 'string' ? payload.logoImage.trim() : payload.logoImage,
       navigation: payload.navigation,
       portfolioTheme: payload.portfolioTheme,
+      portfolioThemeRandomPool: payload.portfolioThemeRandomPool,
     });
 
     if (!parsed.success) {
       return createZodFormErrorResponse(parsed.error, { errorCode: 'INVALID_SITE_CONFIG_PAYLOAD' });
     }
 
-    if (!parsed.data.logoText && !parsed.data.logoImage && !parsed.data.navigation && !parsed.data.portfolioTheme) {
+    if (
+      !parsed.data.logoText &&
+      !parsed.data.logoImage &&
+      !parsed.data.navigation &&
+      !parsed.data.portfolioTheme &&
+      !parsed.data.portfolioThemeRandomPool
+    ) {
       return createFormErrorResponse(
         {
           error: 'Provide at least one site configuration field.',
@@ -132,6 +164,10 @@ export async function PUT(request: Request) {
         logoImage: parsed.data.logoImage ?? normalizedCurrent.logoImage ?? null,
         navigation: parsed.data.navigation ?? normalizedCurrent.navigation ?? defaultSiteConfig.navigation,
         portfolioTheme: parsed.data.portfolioTheme ?? normalizedCurrent.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
+        portfolioThemeRandomPool:
+          parsed.data.portfolioThemeRandomPool ??
+          normalizedCurrent.portfolioThemeRandomPool ??
+          defaultSiteConfig.portfolioThemeRandomPool,
       },
       create: {
         profileId: profile.id,
@@ -139,6 +175,10 @@ export async function PUT(request: Request) {
         logoImage: parsed.data.logoImage ?? normalizedCurrent.logoImage ?? null,
         navigation: parsed.data.navigation ?? normalizedCurrent.navigation ?? defaultSiteConfig.navigation,
         portfolioTheme: parsed.data.portfolioTheme ?? normalizedCurrent.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
+        portfolioThemeRandomPool:
+          parsed.data.portfolioThemeRandomPool ??
+          normalizedCurrent.portfolioThemeRandomPool ??
+          defaultSiteConfig.portfolioThemeRandomPool,
       },
     });
 
@@ -151,6 +191,7 @@ export async function PUT(request: Request) {
           parsed.data.navigation ? 'navigation' : null,
           parsed.data.logoText !== undefined || parsed.data.logoImage !== undefined ? 'branding' : null,
           parsed.data.portfolioTheme !== undefined ? 'portfolio_theme' : null,
+          parsed.data.portfolioThemeRandomPool !== undefined ? 'portfolio_theme_random_pool' : null,
         ].filter(Boolean),
       },
     });

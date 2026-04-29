@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PORTFOLIO_THEME_IDS } from './portfolioThemes';
 import { isAnchorOrSafeHttpUrl, isSafeHttpUrl } from '@/lib/url-safety';
 
 const textField = (min: number, max: number) => z.string().trim().min(min).max(max);
@@ -113,7 +114,8 @@ export const aboutSchema = z.object({
 export const siteConfigSchema = z.object({
   logoText: optionalTextField(1, 80),
   logoImage: optionalUrlField(500),
-  portfolioTheme: z.enum(['editorial-bento', 'classic']).optional().default('editorial-bento'),
+  portfolioTheme: z.enum(PORTFOLIO_THEME_IDS).optional().default('editorial-bento'),
+  portfolioThemeRandomPool: z.array(z.enum(PORTFOLIO_THEME_IDS)).min(1).optional(),
   navigation: z
     .object({
       links: z

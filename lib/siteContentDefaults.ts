@@ -1,3 +1,5 @@
+import { DEFAULT_PORTFOLIO_THEME, DEFAULT_PORTFOLIO_THEME_RANDOM_POOL } from './portfolioThemes';
+
 export const defaultHero = {
   eyebrow: 'Full-Stack Engineering',
   title: 'Full-Stack Engineer building scalable, high-performance web apps',
@@ -74,5 +76,6 @@ export const defaultSiteConfig = {
   logoText: 'Jon',
   logoImage: '',
   navigation: defaultNavigation,
-  portfolioTheme: 'editorial-bento',
+  portfolioTheme: DEFAULT_PORTFOLIO_THEME,
+  portfolioThemeRandomPool: DEFAULT_PORTFOLIO_THEME_RANDOM_POOL,
 };
