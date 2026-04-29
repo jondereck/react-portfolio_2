@@ -247,52 +247,60 @@ function SectionLabel({ children }) {
 
 function Hero({ hero, projects, experience }) {
   const years = (() => {
+    if (experience.length === 0) return '';
     const first = experience
       .map((item) => (item?.startDate ? new Date(item.startDate).getTime() : Number.NaN))
       .filter((value) => Number.isFinite(value))
       .sort((left, right) => left - right)[0];
-    if (!Number.isFinite(first)) return '+3';
+    if (!Number.isFinite(first)) return '';
     return `+${Math.max(1, Math.floor((Date.now() - first) / (365.25 * 24 * 60 * 60 * 1000)))}`;
   })();
+  const hasProjectMetric = projects.length > 0;
+  const sideLabel = hero?.eyebrow || '';
+  const recentProject = projects[0];
 
   return (
     <section id="home" className="relative min-h-[760px] overflow-hidden bg-[#f7f7f5] px-6 pb-10 pt-12 lg:px-10 lg:pt-16">
       <div className="absolute left-8 top-28 hidden h-[560px] w-px bg-neutral-200 lg:block" />
-      <div className="absolute left-4 top-40 hidden -rotate-90 text-xs font-light text-neutral-300 lg:block">Full-stack developer</div>
+      {sideLabel ? <div className="absolute left-4 top-40 hidden -rotate-90 text-xs font-light text-neutral-300 lg:block">{sideLabel}</div> : null}
       <div className="absolute bottom-16 left-6 hidden -rotate-90 text-xs font-light text-neutral-300 lg:block">{new Date().getFullYear()}</div>
       <div className="relative z-10 mx-auto grid max-w-[1280px] gap-10 lg:grid-cols-[0.94fr_1.06fr] lg:gap-2">
         <div className="pt-8 lg:pt-16">
-          <div className="mb-10 flex gap-12 pl-0 lg:pl-16">
-            <div>
-              <p className="text-3xl font-light text-neutral-900 sm:text-4xl">+{Math.max(projects.length, 10)}</p>
-              <p className="mt-1 text-xs text-neutral-500">Systems built</p>
+          {hasProjectMetric || years ? (
+            <div className="mb-10 flex gap-12 pl-0 lg:pl-16">
+              {hasProjectMetric ? (
+                <div>
+                  <p className="text-3xl font-light text-neutral-900 sm:text-4xl">+{projects.length}</p>
+                  <p className="mt-1 text-xs text-neutral-500">Projects</p>
+                </div>
+              ) : null}
+              {years ? (
+                <div>
+                  <p className="text-3xl font-light text-neutral-900 sm:text-4xl">{years}</p>
+                  <p className="mt-1 text-xs text-neutral-500">Years experience</p>
+                </div>
+              ) : null}
             </div>
-            <div>
-              <p className="text-3xl font-light text-neutral-900 sm:text-4xl">{years}</p>
-              <p className="mt-1 text-xs text-neutral-500">Years experience</p>
-            </div>
-          </div>
+          ) : null}
           <h1 className="max-w-[640px] text-8xl font-light leading-[0.78] text-neutral-900 sm:text-[9rem] lg:text-[12rem]">
-            Hello
+            {hero?.title || 'Portfolio'}
           </h1>
-          <p className="mt-3 max-w-md text-sm font-medium text-neutral-700 sm:text-base">
-            {hero?.description || "I am Jon, a full-stack developer building practical systems for public service workflows."}
-          </p>
+          {hero?.description ? <p className="mt-3 max-w-md text-sm font-medium text-neutral-700 sm:text-base">{hero.description}</p> : null}
           <div className="mt-24 hidden items-center gap-2 text-xs text-neutral-500 md:flex">
             Scroll down <Icon name="arrowDown" className="h-3.5 w-3.5" />
           </div>
         </div>
         <div className="relative min-h-[500px] lg:min-h-[680px]">
-          <div className="absolute right-0 top-14 hidden max-w-[170px] items-center gap-3 text-xs text-neutral-500 lg:flex">
+          {recentProject ? <div className="absolute right-0 top-14 hidden max-w-[170px] items-center gap-3 text-xs text-neutral-500 lg:flex">
             <a href="#portfolio" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#e8dfd3] text-neutral-900 transition hover:scale-105">
               <Icon name="arrowUp" />
             </a>
             <span>
               Recent work
               <br />
-              {projects[0]?.title || 'Portfolio System'}
+              {recentProject.title}
             </span>
-          </div>
+          </div> : null}
           <Portrait />
         </div>
       </div>
@@ -301,33 +309,50 @@ function Hero({ hero, projects, experience }) {
 }
 
 function About({ about }) {
+  const highlights = Array.isArray(about?.highlights) ? about.highlights : [];
+  const primaryHighlight = highlights[0];
+  const quoteHighlight = highlights[1];
+  const focusHighlights = highlights.slice(2);
+  const hasAbout = Boolean(about?.title || about?.body || highlights.length);
+
+  if (!hasAbout) {
+    return null;
+  }
+
   return (
     <section id="about-me" className="bg-[#f7f7f5] px-6 py-20 lg:px-10">
       <div className="mx-auto grid max-w-[1280px] gap-10 lg:grid-cols-[0.9fr_0.62fr_1fr] lg:gap-9">
         <div className="flex min-h-[460px] flex-col justify-between">
           <div>
             <h2 className="text-5xl font-light text-neutral-950 sm:text-6xl">{about?.title || 'About Me'}</h2>
-            <p className="mt-6 max-w-[390px] text-sm leading-7 text-neutral-500">
-              {about?.body || 'I specialize in turning complex office processes into clean digital systems with usability, automation, and maintainable engineering.'}
-            </p>
+            {about?.body ? <p className="mt-6 max-w-[390px] text-sm leading-7 text-neutral-500">{about.body}</p> : null}
           </div>
           <a href="#contact" className="inline-flex w-fit items-center gap-2 border-b border-neutral-950 pb-1 text-sm font-medium text-neutral-950">
             More about me <Icon name="arrowUp" className="h-3.5 w-3.5" />
           </a>
         </div>
-        <div className="rounded-3xl border border-neutral-200 bg-white p-7 shadow-[0_18px_55px_rgba(0,0,0,.05)]">
+        {primaryHighlight ? <div className="rounded-3xl border border-neutral-200 bg-white p-7 shadow-[0_18px_55px_rgba(0,0,0,.05)]">
           <div className="grid h-12 w-12 place-items-center rounded-full bg-[#ebe3d8] text-neutral-950">
             <Icon name="sparkle" />
           </div>
-          <p className="mt-8 text-6xl font-light text-neutral-950">{about?.highlights?.[0]?.label || '120%'}</p>
+          <p className="mt-8 text-6xl font-light text-neutral-950">{primaryHighlight.label}</p>
           <p className="mt-5 max-w-[230px] text-sm leading-7 text-neutral-500">
-            {about?.highlights?.[0]?.value || 'Estimated improvement in workflow clarity after replacing manual tracking with a proper system.'}
+            {primaryHighlight.value}
           </p>
-          <div className="my-8 h-px bg-neutral-200" />
-          <p className="text-sm leading-7 text-neutral-500">
-            Focus areas<br />Web Systems<br />Workflow Automation<br />Dashboard Design<br />Data Accuracy
-          </p>
-        </div>
+          {focusHighlights.length > 0 ? (
+            <>
+              <div className="my-8 h-px bg-neutral-200" />
+              <div className="grid gap-3 text-sm leading-7 text-neutral-500">
+                {focusHighlights.map((item) => (
+                  <div key={item.label}>
+                    <span className="font-medium text-neutral-700">{item.label}</span>
+                    <p>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div> : null}
         <div className="grid gap-5">
           <div className="relative min-h-[245px] overflow-hidden rounded-3xl bg-neutral-200">
             <div className="absolute inset-0 bg-gradient-to-b from-neutral-100 to-neutral-300" />
@@ -335,13 +360,13 @@ function About({ about }) {
             <div className="absolute left-1/2 top-10 h-24 w-24 -translate-x-1/2 rounded-full bg-neutral-300" />
             <div className="absolute left-1/2 top-5 h-14 w-28 -translate-x-1/2 rounded-t-full bg-neutral-700" />
           </div>
-          <div className="rounded-3xl bg-[#efe7dc] p-8">
+          {quoteHighlight ? <div className="rounded-3xl bg-[#efe7dc] p-8">
             <p className="text-3xl leading-none text-neutral-950">"</p>
             <p className="mt-3 max-w-xs text-xl font-light leading-8 text-neutral-950">
-              {about?.highlights?.[1]?.value || 'Good systems are not just what they look like. They are how the work flows.'}
+              {quoteHighlight.value}
             </p>
-            <p className="mt-8 font-serif text-3xl italic text-neutral-700">J. Nifas</p>
-          </div>
+            <p className="mt-8 font-serif text-3xl italic text-neutral-700">{quoteHighlight.label}</p>
+          </div> : null}
         </div>
       </div>
     </section>
@@ -386,11 +411,11 @@ function ProjectImage({ index }) {
 }
 
 function Work({ projects, loading, error }) {
-  const displayProjects = projects.length > 0 ? projects.slice(0, 3) : [
-    { title: 'HRIS Dashboard', description: 'A data-rich dashboard designed for cleaner HR operations and faster decisions.', badge: 'Web System' },
-    { title: 'iTrackDocs', description: 'A document workflow tracker for routing, monitoring, and office accountability.', badge: 'Tracking App' },
-    { title: 'Private Gallery', description: 'A secure visual platform for private albums, uploads, and controlled access.', badge: 'Gallery Platform' },
-  ];
+  const displayProjects = projects.slice(0, 3);
+
+  if (!loading && !error && displayProjects.length === 0) {
+    return null;
+  }
 
   return (
     <section id="portfolio" className="bg-white px-6 py-20 lg:px-10">
@@ -405,17 +430,18 @@ function Work({ projects, loading, error }) {
         {error ? <p className="mb-4 text-sm text-rose-600">{error.message}</p> : null}
         <div className="grid gap-6 md:grid-cols-3">
           {displayProjects.map((project, index) => {
-            const summary = project.description ?? project.summary ?? normalizeDescriptions(project.descriptions)[0] ?? 'A practical system built for cleaner workflows and faster decisions.';
+            const summary = project.description ?? project.summary ?? normalizeDescriptions(project.descriptions)[0] ?? '';
             const link = getSafeUrl(project.demoUrl) || getSafeUrl(project.repoUrl);
+            const badge = project.badge || normalizeTech(project.tech ?? project.techStack)[0] || '';
             return (
               <article key={project.id ?? project.slug ?? project.title} className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_45px_rgba(0,0,0,.05)]">
                 <ProjectImage index={index} />
                 <div className="p-5">
                   <p className="text-xs text-neutral-400">{String(index + 1).padStart(2, '0')}</p>
                   <h3 className="mt-2 text-xl font-medium text-neutral-950">{project.title}</h3>
-                  <p className="mt-2 min-h-[54px] text-sm leading-6 text-neutral-500">{summary}</p>
+                  {summary ? <p className="mt-2 min-h-[54px] text-sm leading-6 text-neutral-500">{summary}</p> : null}
                   <div className="mt-5 flex items-center justify-between">
-                    <span className="text-xs text-neutral-400">{project.badge || normalizeTech(project.tech ?? project.techStack)[0] || 'Web System'}</span>
+                    {badge ? <span className="text-xs text-neutral-400">{badge}</span> : <span />}
                     <a href={link || '#contact'} target={link ? '_blank' : undefined} rel={link ? 'noreferrer' : undefined} className="grid h-9 w-9 place-items-center rounded-full bg-[#ede5da] text-neutral-950">
                       <Icon name="arrowUp" className="h-3.5 w-3.5" />
                     </a>
@@ -442,24 +468,18 @@ function Work({ projects, loading, error }) {
 }
 
 function Skills({ skills, loading, error }) {
-  const displaySkills = skills.length > 0 ? skills : [
-    { name: 'React', level: 86 },
-    { name: 'Next.js', level: 78 },
-    { name: 'TypeScript', level: 80 },
-    { name: 'Tailwind CSS', level: 90 },
-    { name: 'Prisma', level: 98 },
-    { name: 'Node.js', level: 85 },
-  ];
+  const displaySkills = skills;
+
+  if (!loading && !error && displaySkills.length === 0) {
+    return null;
+  }
 
   return (
     <section id="skills" className="bg-[#f7f7f5] px-6 py-20 lg:px-10">
       <div className="mx-auto grid max-w-[1280px] gap-10 lg:grid-cols-[0.75fr_1.25fr]">
         <div>
           <SectionLabel>Skills</SectionLabel>
-          <h2 className="mt-4 max-w-md text-6xl font-light leading-[0.95] text-neutral-950">Tools I use to build practical systems.</h2>
-          <p className="mt-6 max-w-sm text-sm leading-7 text-neutral-500">
-            A minimal skills board that keeps the same quiet editorial feel while still showing technical range.
-          </p>
+          <h2 className="mt-4 max-w-md text-6xl font-light leading-[0.95] text-neutral-950">Skills.</h2>
           {loading ? <p className="mt-4 text-sm text-neutral-500">Loading skills...</p> : null}
           {error ? <p className="mt-4 text-sm text-rose-600">{error.message}</p> : null}
         </div>
@@ -485,24 +505,11 @@ function Skills({ skills, loading, error }) {
 }
 
 function Experience({ items, loading, error }) {
-  const displayItems = items.length > 0 ? items : [
-    {
-      id: 'fallback-1',
-      title: 'Full-Stack Engineer',
-      company: 'Local Government Unit - Lingayen',
-      startDate: '2023-01-01',
-      description: 'Developed and maintain web systems for employee records, approvals, analytics, and HR data insights.',
-      isCurrent: true,
-    },
-    {
-      id: 'fallback-2',
-      title: 'Front-End Developer',
-      company: 'Freelance / Project Based',
-      startDate: '2021-01-01',
-      endDate: '2023-01-01',
-      description: 'Built responsive project-based web applications with clean user interfaces and reliable front-end delivery.',
-    },
-  ];
+  const displayItems = items;
+
+  if (!loading && !error && displayItems.length === 0) {
+    return null;
+  }
 
   return (
     <section id="experience" className="bg-white px-6 py-20 lg:px-10">
@@ -510,11 +517,8 @@ function Experience({ items, loading, error }) {
         <div className="mb-10 grid gap-8 lg:grid-cols-[0.8fr_1.2fr]">
           <div>
             <SectionLabel>Experience</SectionLabel>
-            <h2 className="mt-4 max-w-md text-6xl font-light leading-[0.95] text-neutral-950">Work history, quietly presented.</h2>
+            <h2 className="mt-4 max-w-md text-6xl font-light leading-[0.95] text-neutral-950">Experience.</h2>
           </div>
-          <p className="max-w-2xl self-end text-sm leading-7 text-neutral-500">
-            The experience section uses large spacing and thin dividers instead of heavy boxes, matching the minimalist reference style.
-          </p>
         </div>
         {loading ? <p className="mb-4 text-sm text-neutral-500">Loading experience...</p> : null}
         {error ? <p className="mb-4 text-sm text-rose-600">{error.message}</p> : null}
@@ -540,13 +544,13 @@ function Experience({ items, loading, error }) {
 function Certificates({ items, error }) {
   const [activeCategory, setActiveCategory] = useState('All');
   const sorted = useMemo(() => [...items].sort(compareCertificatesByIssuedAtDesc), [items]);
-  const displayItems = sorted.length > 0 ? sorted : [
-    { title: 'Introduction to Cybersecurity', issuer: 'Cisco Networking Academy', category: 'Cybersecurity' },
-    { title: 'Networking Basics', issuer: 'Cisco', category: 'Networking' },
-    { title: 'Data Privacy - Good Governance', issuer: 'DICT', category: 'Data' },
-  ];
+  const displayItems = sorted;
   const categories = ['All', ...Array.from(new Set(displayItems.map((item) => item.category).filter(Boolean)))];
   const filtered = activeCategory === 'All' ? displayItems : displayItems.filter((item) => item.category === activeCategory);
+
+  if (!error && displayItems.length === 0) {
+    return null;
+  }
 
   return (
     <section id="certificates" className="bg-[#f7f7f5] px-6 py-20 lg:px-10">
@@ -554,7 +558,7 @@ function Certificates({ items, error }) {
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
           <div>
             <SectionLabel>Certificates</SectionLabel>
-            <h2 className="mt-4 max-w-lg text-6xl font-light leading-[0.95] text-neutral-950">Verified learning, simplified.</h2>
+            <h2 className="mt-4 max-w-lg text-6xl font-light leading-[0.95] text-neutral-950">Certificates.</h2>
           </div>
           <div className="flex flex-wrap gap-2">
             {categories.map((filter) => (
@@ -729,7 +733,7 @@ function Footer({ config }) {
     <footer className="border-t border-neutral-200 bg-[#f7f7f5] px-6 py-8 lg:px-10">
       <div className="mx-auto flex max-w-[1280px] flex-col justify-between gap-4 text-sm text-neutral-500 sm:flex-row sm:items-center">
         <Logo config={config} />
-        <p>(c) {new Date().getFullYear()} {logoText}. Minimalist portfolio theme.</p>
+        <p>(c) {new Date().getFullYear()} {logoText}. All rights reserved.</p>
       </div>
     </footer>
   );

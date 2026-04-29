@@ -272,7 +272,6 @@ function Logo({ config }) {
       )}
       <div>
         <p className="text-base font-black tracking-tight text-slate-950">{logoText}</p>
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Build Innovation</p>
       </div>
     </a>
   );
@@ -355,7 +354,7 @@ function SectionHeading({ eyebrow, title, desc, dark = false }) {
   );
 }
 
-function PortraitCard({ highlightValue = '10+', image = '', title = 'Profile image' }) {
+function PortraitCard({ highlightValue = '', highlightLabel = '', image = '', title = 'Profile image' }) {
   const heroImage = getSafeImage(image);
 
   return (
@@ -364,11 +363,10 @@ function PortraitCard({ highlightValue = '10+', image = '', title = 'Profile ima
       <div className="relative overflow-hidden rounded-[2rem] border-[3px] border-slate-950 bg-slate-950 shadow-2xl shadow-slate-950/20">
         <div className="absolute left-0 top-0 h-full w-full bg-[radial-gradient(circle_at_50%_0%,rgba(132,204,22,.35),transparent_28%),radial-gradient(circle_at_0%_70%,rgba(37,99,235,.45),transparent_28%)]" />
         <div className="relative mx-auto grid min-h-[500px] max-w-[380px] place-items-end px-8 pt-10">
-          <div className="absolute right-5 top-5 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-black text-white backdrop-blur">Available for work</div>
-          <div className="absolute bottom-8 left-5 z-10 rounded-2xl bg-lime-300 p-4 text-slate-950 shadow-xl">
+          {highlightValue ? <div className="absolute bottom-8 left-5 z-10 rounded-2xl bg-lime-300 p-4 text-slate-950 shadow-xl">
             <p className="text-2xl font-black">{highlightValue}</p>
-            <p className="text-xs font-black uppercase tracking-wider">systems built</p>
-          </div>
+            {highlightLabel ? <p className="text-xs font-black uppercase tracking-wider">{highlightLabel}</p> : null}
+          </div> : null}
           {heroImage ? (
             <div className="relative h-[430px] w-[280px] overflow-hidden rounded-t-[9rem] border-[10px] border-slate-100 bg-slate-100 shadow-2xl">
               <img src={heroImage} alt={title} className="h-full w-full object-cover" />
@@ -414,40 +412,44 @@ function Hero({ hero, about, profileSlug }) {
   const mainStack = getMostUsedTech(projects);
   const aboutHighlights = Array.isArray(about?.highlights) ? about.highlights.slice(0, 3) : [];
   const normalizedHighlights = [
-    {
+    projectCount > 0 ? {
       label: 'Systems built',
-      value: projectCount > 0 ? `${projectCount}+` : aboutHighlights[0]?.value || '10+',
-    },
-    {
+      value: `${projectCount}+`,
+    } : null,
+    experienceYears ? {
       label: 'Experience',
-      value: experienceYears || aboutHighlights[1]?.value || '3+ yrs',
-    },
-    {
+      value: experienceYears,
+    } : null,
+    mainStack ? {
       label: 'Main stack',
-      value: mainStack || aboutHighlights[2]?.value || 'Next.js',
-    },
-  ];
-  const portraitHighlight = normalizedHighlights[0]?.value?.split(/[.,\n]/)[0]?.slice(0, 12) || '10+';
+      value: mainStack,
+    } : null,
+    ...aboutHighlights.map((item) => ({
+      label: item.label,
+      value: item.value,
+    })),
+  ].filter((item) => item?.label && item?.value).slice(0, 3);
+  const portraitHighlight = normalizedHighlights[0]?.value?.split(/[.,\n]/)[0]?.slice(0, 12) || '';
+  const portraitLabel = normalizedHighlights[0]?.label || '';
+  const sideCards = aboutHighlights.slice(0, 2);
 
   return (
     <section id="home" name="home" className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-16">
       <div className="grid content-between rounded-[2.5rem] border-[3px] border-slate-950 bg-white p-6 shadow-[12px_12px_0_#0f172a] sm:p-8 lg:min-h-[620px] lg:p-10">
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border-2 border-slate-950 bg-lime-300 px-4 py-2 text-xs font-black uppercase tracking-[0.25em] text-slate-950">
-            <Icon name="spark" className="h-4 w-4" /> {hero?.eyebrow || 'Full-stack developer'}
+            <Icon name="spark" className="h-4 w-4" /> {hero?.eyebrow || 'Portfolio'}
           </div>
           <h1 className="max-w-4xl text-5xl font-black leading-[0.92] tracking-tight text-slate-950 sm:text-7xl lg:text-8xl">
-            {hero?.title || 'I build systems that make offices move faster.'}
+            {hero?.title || 'Portfolio'}
           </h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700">
-            {hero?.description || 'Practical web-based systems for HR, document tracking, reporting, automation, data accuracy, and public service workflows.'}
-          </p>
+          {hero?.description ? <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700">{hero.description}</p> : null}
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <CtaLink
               href={hero?.primaryCtaHref || '#portfolio'}
               className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-700 px-6 py-4 text-sm font-black text-white shadow-lg shadow-blue-700/20 transition hover:-translate-y-0.5"
             >
-              {hero?.primaryCtaLabel || 'See Case Studies'} <Icon name="arrow" className="h-4 w-4" />
+              {hero?.primaryCtaLabel || 'View Projects'} <Icon name="arrow" className="h-4 w-4" />
             </CtaLink>
             <CtaLink
               href={hero?.secondaryCtaHref || '#contact'}
@@ -458,50 +460,50 @@ function Hero({ hero, about, profileSlug }) {
           </div>
         </div>
 
-        <div className="mt-10 grid gap-3 sm:grid-cols-3">
+        {normalizedHighlights.length > 0 ? <div className="mt-10 grid gap-3 sm:grid-cols-3">
           {normalizedHighlights.map((item) => (
             <div key={`${item.label}-${item.value}`} className="rounded-3xl border-2 border-slate-950 bg-[#F5F1E8] p-4">
               <p className="line-clamp-2 text-3xl font-black tracking-tight text-slate-950">{item.value}</p>
               <p className="mt-1 text-xs font-black uppercase tracking-wider text-slate-500">{item.label}</p>
             </div>
           ))}
-        </div>
+        </div> : null}
       </div>
 
       <div className="grid gap-5">
-        <PortraitCard highlightValue={portraitHighlight} image={hero?.image} title={hero?.title || 'Profile image'} />
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div className="rounded-[2rem] border-[3px] border-slate-950 bg-slate-950 p-6 text-white shadow-[8px_8px_0_#2563eb]">
-            <Icon name="shield" className="h-8 w-8 text-lime-300" />
-            <p className="mt-4 text-2xl font-black">Clean operations, not just clean code.</p>
+        <PortraitCard highlightValue={portraitHighlight} highlightLabel={portraitLabel} image={hero?.image} title={hero?.title || 'Profile image'} />
+        {sideCards.length > 0 ? (
+          <div className="grid gap-5 sm:grid-cols-2">
+            {sideCards.map((card, index) => (
+              <div key={`${card.label}-${index}`} className={cx('rounded-[2rem] border-[3px] border-slate-950 p-6 shadow-[8px_8px_0_#0f172a]', index % 2 === 0 ? 'bg-slate-950 text-white shadow-blue-700' : 'bg-lime-300 text-slate-950')}>
+                <Icon name={index % 2 === 0 ? 'shield' : 'database'} className={cx('h-8 w-8', index % 2 === 0 ? 'text-lime-300' : '')} />
+                <p className="mt-4 text-sm font-black uppercase tracking-wider opacity-70">{card.label}</p>
+                <p className="mt-3 line-clamp-4 text-2xl font-black">{card.value}</p>
+              </div>
+            ))}
           </div>
-          <div className="rounded-[2rem] border-[3px] border-slate-950 bg-lime-300 p-6 text-slate-950 shadow-[8px_8px_0_#0f172a]">
-            <Icon name="database" className="h-8 w-8" />
-            <p className="mt-4 text-2xl font-black">Data-first workflows for better decisions.</p>
-          </div>
-        </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
 function About({ about }) {
-  const cards = Array.isArray(about?.highlights) && about.highlights.length > 0
-    ? about.highlights.slice(0, 3)
-    : [
-        { label: 'Government workflow builder', value: 'I focus on practical systems for real office operations: records, HR data, attendance, routing, and reports.' },
-        { label: 'Automation mindset', value: 'I reduce repetitive manual work using custom web apps, dashboards, Excel workflows, and cleaner data pipelines.' },
-        { label: 'User-first delivery', value: 'I design tools that non-technical staff can actually use every day without making the process harder.' },
-      ];
+  const cards = Array.isArray(about?.highlights) ? about.highlights.slice(0, 3) : [];
+  const hasAbout = Boolean(about?.title || about?.body || cards.length);
+
+  if (!hasAbout) {
+    return null;
+  }
 
   return (
     <section id="about" name="about" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <SectionHeading
         eyebrow="About"
-        title={about?.title || 'Not just a portfolio - a record of systems that solve office bottlenecks.'}
-        desc={about?.body || 'Based in the Philippines, I build full-stack systems focused on automation, data accuracy, accountability, and better public service delivery.'}
+        title={about?.title || 'About'}
+        desc={about?.body}
       />
-      <div className="grid gap-5 md:grid-cols-3">
+      {cards.length > 0 ? <div className="grid gap-5 md:grid-cols-3">
         {cards.map((card, index) => (
           <article key={`${card.label}-${index}`} className="rounded-[2rem] border-[3px] border-slate-950 bg-white p-6 shadow-[8px_8px_0_#0f172a] transition hover:-translate-y-1">
             <p className="text-sm font-black text-blue-700">{String(index + 1).padStart(2, '0')}</p>
@@ -509,7 +511,7 @@ function About({ about }) {
             <p className="mt-4 text-sm leading-7 text-slate-600">{card.value}</p>
           </article>
         ))}
-      </div>
+      </div> : null}
     </section>
   );
 }
@@ -600,13 +602,16 @@ function Work({ profileSlug }) {
     setPage(1);
   }, [projects.length]);
 
+  if (!isLoading && !error && projects.length === 0) {
+    return null;
+  }
+
   return (
     <section id="portfolio" name="portfolio" className="bg-slate-950 py-16 text-white">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading dark eyebrow="Selected Work" title="Case studies, not just cards." desc="A project section designed to feel more premium and product-focused, with each system presented as an operational solution." />
+        <SectionHeading dark eyebrow="Selected Work" title="Selected projects." />
         {error ? <p className="mb-4 rounded-2xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error.message}</p> : null}
         {isLoading ? <p className="mb-4 text-sm text-slate-300">Loading projects...</p> : null}
-        {!isLoading && !error && projects.length === 0 ? <p className="mb-4 text-sm text-slate-300">No projects yet.</p> : null}
         <div className="grid gap-6">
           {paginatedProjects.map((project, index) => {
             const globalIndex = (page - 1) * itemsPerPage + index;
@@ -679,12 +684,18 @@ function SkillsExperience({ profileSlug }) {
   const experienceItems = Array.isArray(experienceData) ? experienceData : [];
   const loading = skillsLoading || experienceLoading;
   const error = skillsError || experienceError;
+  const hasSkills = skills.length > 0;
+  const hasExperience = experienceItems.length > 0;
+
+  if (!loading && !error && !hasSkills && !hasExperience) {
+    return null;
+  }
 
   return (
     <section id="experience" name="experience" className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
       <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <div id="skills" name="skills">
-          <SectionHeading eyebrow="Skills" title="A stack for shipping practical systems." desc="Frontend, backend, data handling, dashboards, automation, documentation, and support - built around real users and office workflows." />
+        {hasSkills || loading || skillsError ? <div id="skills" name="skills">
+          <SectionHeading eyebrow="Skills" title="Skills." />
           {loading ? <p className="mb-4 text-sm text-slate-500">Loading experience data...</p> : null}
           {error ? <p className="mb-4 text-sm text-rose-600">{error.message}</p> : null}
           <div className="grid gap-3 sm:grid-cols-2">
@@ -702,11 +713,10 @@ function SkillsExperience({ profileSlug }) {
                 </div>
               </div>
             ))}
-            {skills.length === 0 && !loading ? <p className="text-sm text-slate-500">No skills published yet.</p> : null}
           </div>
-        </div>
+        </div> : null}
 
-        <div className="rounded-[2.3rem] border-[3px] border-slate-950 bg-white p-6 shadow-[10px_10px_0_#0f172a] lg:p-8">
+        {hasExperience || loading || experienceError ? <div className="rounded-[2.3rem] border-[3px] border-slate-950 bg-white p-6 shadow-[10px_10px_0_#0f172a] lg:p-8">
           <p className="text-xs font-black uppercase tracking-[0.3em] text-blue-700">Experience</p>
           <div className="mt-8 space-y-6">
             {experienceItems.map((item, index) => (
@@ -728,9 +738,8 @@ function SkillsExperience({ profileSlug }) {
                 <p className="mt-4 text-sm leading-7 text-slate-600">{item.description}</p>
               </article>
             ))}
-            {experienceItems.length === 0 && !loading ? <p className="text-sm text-slate-500">No experience entries yet.</p> : null}
           </div>
-        </div>
+        </div> : null}
       </div>
     </section>
   );
@@ -752,10 +761,14 @@ function Certificates({ profileSlug }) {
     setPage(1);
   }, [activeCategory, items.length]);
 
+  if (!error && items.length === 0) {
+    return null;
+  }
+
   return (
     <section id="certificates" name="certificates" className="bg-[#E8F7FF] py-16">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeading eyebrow="Certificates" title="Learning proof with a cleaner gallery." desc="A certificate section that feels curated instead of repetitive, with filter chips and compact proof cards." />
+        <SectionHeading eyebrow="Certificates" title="Certificates." />
         {error ? <p className="mb-4 text-sm text-rose-600">{error.message}</p> : null}
         <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
           {categories.map((category) => (
@@ -827,7 +840,7 @@ function Certificates({ profileSlug }) {
 const initialForm = { name: '', email: '', message: '' };
 const sanitizeInput = (value) => value.replace(/[<>]/g, '').replace(/\s+/g, ' ').trimStart();
 
-function Contact() {
+function Contact({ contact }) {
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState(initialForm);
   const [formError, setFormError] = useState('');
@@ -835,6 +848,17 @@ function Contact() {
   const [loading, setLoading] = useState(false);
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
+  const contactItems = [
+    contact?.email ? ['mail', contact.email, `mailto:${contact.email}`] : null,
+    contact?.location ? ['map', contact.location, ''] : null,
+    contact?.calendarLink && isSafeHttpUrl(contact.calendarLink) ? ['check', 'Book a call', contact.calendarLink] : null,
+    ...(Array.isArray(contact?.socialLinks)
+      ? contact.socialLinks
+          .filter((link) => link?.label && isSafeHttpUrl(link.url))
+          .slice(0, 3)
+          .map((link) => ['check', link.label, link.url])
+      : []),
+  ].filter(Boolean);
 
   const validateForm = ({ name, email, message }) => {
     const nextErrors = { ...initialForm };
@@ -917,22 +941,29 @@ function Contact() {
       <div className="grid overflow-hidden rounded-[2.5rem] border-[3px] border-slate-950 bg-slate-950 shadow-[12px_12px_0_#2563eb] lg:grid-cols-[0.9fr_1.1fr]">
         <div className="p-6 text-white sm:p-8 lg:p-10">
           <p className="text-xs font-black uppercase tracking-[0.3em] text-lime-300">Contact</p>
-          <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Let's build something useful.</h2>
-          <p className="mt-5 max-w-xl text-base leading-8 text-slate-300">Have a system idea, internal workflow problem, or portfolio collaboration? Send a message and let's talk about the practical next step.</p>
-          <div className="mt-8 grid gap-3">
-            {[
-              ['mail', 'jonderecknifas@gmail.com'],
-              ['map', 'Philippines'],
-              ['check', 'Open for opportunities'],
-            ].map(([icon, text]) => (
-              <div key={text} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+          <h2 className="mt-3 text-4xl font-black tracking-tight sm:text-5xl">Contact.</h2>
+          <p className="mt-5 max-w-xl text-base leading-8 text-slate-300">Send a message about a project, workflow, or collaboration.</p>
+          {contactItems.length > 0 ? <div className="mt-8 grid gap-3">
+            {contactItems.map(([icon, text, href]) => {
+              const content = (
+                <>
                 <div className="grid h-10 w-10 place-items-center rounded-xl bg-lime-300 text-slate-950">
                   <Icon name={icon} />
                 </div>
                 <p className="font-black text-white">{text}</p>
-              </div>
-            ))}
-          </div>
+                </>
+              );
+              return href ? (
+                <a key={text} href={href} target={isSafeHttpUrl(href) ? '_blank' : undefined} rel={isSafeHttpUrl(href) ? 'noreferrer' : undefined} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                  {content}
+                </a>
+              ) : (
+                <div key={text} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                  {content}
+                </div>
+              );
+            })}
+          </div> : null}
         </div>
         {isSubmitted ? (
           <div className="grid place-items-center border-t-[3px] border-slate-950 bg-lime-300 p-6 text-center sm:p-8 lg:border-l-[3px] lg:border-t-0 lg:p-10">
@@ -969,15 +1000,18 @@ function Contact() {
   );
 }
 
-function Footer({ config }) {
+function Footer({ config, contact }) {
   const links = useMemo(() => normalizeLinks(config), [config]);
+  const logoText = typeof config?.logoText === 'string' && config.logoText.trim() ? config.logoText.trim() : 'Jon D. Nifas';
+  const socialLinks = Array.isArray(contact?.socialLinks) ? contact.socialLinks.filter((link) => link?.label && isSafeHttpUrl(link.url)) : [];
 
   return (
     <footer className="border-t-[3px] border-slate-950 bg-white">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.2fr_0.8fr_0.8fr_1fr] lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.2fr_0.8fr_0.8fr] lg:px-8">
         <div>
           <Logo config={config} />
-          <p className="mt-4 max-w-sm text-sm leading-7 text-slate-600">Building practical systems that automate workflows and improve public service delivery.</p>
+          {contact?.email ? <a href={`mailto:${contact.email}`} className="mt-4 block max-w-sm text-sm font-bold leading-7 text-slate-600 hover:text-blue-700">{contact.email}</a> : null}
+          {contact?.location ? <p className="mt-2 max-w-sm text-sm leading-7 text-slate-600">{contact.location}</p> : null}
         </div>
         <div>
           <p className="font-black text-slate-950">Navigate</p>
@@ -989,21 +1023,16 @@ function Footer({ config }) {
             ))}
           </div>
         </div>
-        <div>
-          <p className="font-black text-slate-950">Services</p>
+        {socialLinks.length > 0 ? <div>
+          <p className="font-black text-slate-950">Links</p>
           <div className="mt-3 grid gap-2 text-sm font-bold text-slate-600">
-            <span>Web Development</span>
-            <span>System Automation</span>
-            <span>Dashboard & Analytics</span>
-            <span>ICT Support</span>
+            {socialLinks.map((link) => (
+              <a key={`${link.label}-${link.url}`} href={link.url} target="_blank" rel="noreferrer" className="hover:text-blue-700">{link.label}</a>
+            ))}
           </div>
-        </div>
-        <div>
-          <p className="font-black text-slate-950">Status</p>
-          <p className="mt-3 rounded-full bg-lime-300 px-4 py-2 text-sm font-black text-slate-950">Open for Opportunities</p>
-        </div>
+        </div> : null}
       </div>
-      <div className="border-t border-slate-950/10 py-5 text-center text-xs font-bold text-slate-500">© 2026 Jon D. Nifas. All rights reserved.</div>
+      <div className="border-t border-slate-950/10 py-5 text-center text-xs font-bold text-slate-500">© {new Date().getFullYear()} {logoText}. All rights reserved.</div>
     </footer>
   );
 }
@@ -1019,9 +1048,9 @@ export default function EditorialBentoPortfolio({ profileSlug = null, siteConten
         <Work profileSlug={profileSlug} />
         <SkillsExperience profileSlug={profileSlug} />
         <Certificates profileSlug={profileSlug} />
-        <Contact />
+        <Contact contact={siteContent?.contact} />
       </main>
-      <Footer config={siteConfig} />
+      <Footer config={siteConfig} contact={siteContent?.contact} />
     </div>
   );
 }

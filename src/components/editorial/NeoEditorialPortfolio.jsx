@@ -205,7 +205,6 @@ function Logo({ config }) {
       )}
       <span>
         <strong className="block text-base leading-none text-[#101010]">{logoText}</strong>
-        <span className="mt-1 block text-[0.68rem] font-black uppercase text-[#5f5f5f]">Neo Editorial</span>
       </span>
     </a>
   );
@@ -262,25 +261,49 @@ function NavLinks({ links, onNavigate, compact = false }) {
   );
 }
 
-function Sidebar({ config, links, darkMode, onToggleDark }) {
+function Sidebar({ config, links, darkMode, onToggleDark, siteContent }) {
+  const contact = siteContent?.contact && typeof siteContent.contact === 'object' ? siteContent.contact : null;
+  const highlight = Array.isArray(siteContent?.about?.highlights) ? siteContent.about.highlights[0] : null;
+  const sidebarItems = [
+    contact?.email ? { label: 'Email', value: contact.email, href: `mailto:${contact.email}` } : null,
+    contact?.location ? { label: 'Location', value: contact.location } : null,
+    contact?.calendarLink && isSafeHttpUrl(contact.calendarLink) ? { label: 'Calendar', value: 'Book a call', href: contact.calendarLink } : null,
+  ].filter(Boolean);
+
   return (
     <aside className="sticky top-0 hidden h-screen flex-col justify-between gap-5 border-r-[3px] border-[#101010] bg-[#fffdf8]/85 p-7 backdrop-blur-xl xl:flex">
       <div>
         <Logo config={config} />
-        <div className="mt-5 rounded-[26px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
-          <span className="inline-flex rounded-full border-2 border-[#101010] bg-[#ff6a2a] px-4 py-2 text-xs font-black text-white">Open for opportunities</span>
-          <p className="mt-4 text-sm leading-8 text-[#5f5f5f]">
-            Sticky rail, editorial blocks, case-study sections, and a bolder portfolio identity powered by your existing content.
-          </p>
-        </div>
+        {highlight || sidebarItems.length > 0 ? (
+          <div className="mt-5 rounded-[26px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
+            {highlight ? (
+              <>
+                <span className="inline-flex rounded-full border-2 border-[#101010] bg-[#ff6a2a] px-4 py-2 text-xs font-black text-white">{highlight.label}</span>
+                <p className="mt-4 text-sm leading-8 text-[#5f5f5f]">{highlight.value}</p>
+              </>
+            ) : null}
+            {sidebarItems.length > 0 ? (
+              <div className={cx('grid gap-2 text-sm font-black text-[#101010]', highlight ? 'mt-4 border-t-2 border-[#101010]/10 pt-4' : '')}>
+                {sidebarItems.map((item) =>
+                  item.href ? (
+                    <a key={item.label} href={item.href} target={isSafeHttpUrl(item.href) ? '_blank' : undefined} rel={isSafeHttpUrl(item.href) ? 'noreferrer' : undefined} className="break-words hover:text-[#ff6a2a]">
+                      {item.value}
+                    </a>
+                  ) : (
+                    <span key={item.label}>{item.value}</span>
+                  ),
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div className="mt-5">
           <NavLinks links={links} />
         </div>
       </div>
 
       <div className="rounded-[26px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
-        <h3 className="text-base font-black text-[#101010]">Theme direction</h3>
-        <p className="mt-2 text-sm leading-7 text-[#5f5f5f]">Neo-editorial / product case-study layout with a sticky rail.</p>
+        <h3 className="text-base font-black text-[#101010]">Display</h3>
         <ThemeButtons darkMode={darkMode} onToggleDark={onToggleDark} />
       </div>
     </aside>
@@ -337,24 +360,34 @@ function SectionTitle({ eyebrow, title, desc, dark = false }) {
   );
 }
 
-function DeviceMock({ heroImage = '' }) {
+function DeviceMock({ heroImage = '', projects = [], skills = [], experience = [], aboutHighlights = [] }) {
   const image = getSafeImage(heroImage);
+  const visualCards = [
+    ...projects.slice(0, 3).map((project) => ({
+      label: project.badge || normalizeTech(project.tech ?? project.techStack)[0] || 'Project',
+      value: project.title,
+    })),
+    ...skills.slice(0, 3).map((skill) => ({
+      label: 'Skill',
+      value: skill.name,
+    })),
+    ...experience.slice(0, 3).map((item) => ({
+      label: item.company || 'Experience',
+      value: item.title,
+    })),
+    ...aboutHighlights.slice(0, 3).map((item) => ({
+      label: item.label,
+      value: item.value,
+    })),
+  ].filter((item) => item.label && item.value).slice(0, 6);
+
+  if (!image && visualCards.length === 0) {
+    return null;
+  }
 
   return (
     <div className="relative min-h-[420px] overflow-hidden rounded-[26px] border-[3px] border-[#101010] bg-[linear-gradient(135deg,#f8d5c5,#f6ecd7_45%,#fff_100%)] p-5">
       <div className="absolute inset-0 bg-[linear-gradient(rgba(16,16,16,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(16,16,16,.08)_1px,transparent_1px)] bg-[size:24px_24px] opacity-45" />
-      <div className="absolute right-4 top-4 z-10 rounded-[20px] border-2 border-[#101010] bg-white/85 p-4 shadow-[8px_8px_0_#101010] backdrop-blur">
-        <strong className="block text-lg">LGU-ready</strong>
-        <span className="text-sm text-[#5f5f5f]">Practical systems</span>
-      </div>
-      <div className="absolute bottom-5 left-4 z-10 rounded-[20px] border-2 border-[#101010] bg-white/85 p-4 shadow-[8px_8px_0_#101010] backdrop-blur">
-        <strong className="block text-lg">Operations</strong>
-        <span className="text-sm text-[#5f5f5f]">Automation first</span>
-      </div>
-      <div className="absolute bottom-8 right-8 z-10 rounded-[20px] border-2 border-[#101010] bg-white/85 p-4 shadow-[8px_8px_0_#101010] backdrop-blur">
-        <strong className="block text-lg">UX + Dev</strong>
-        <span className="text-sm text-[#5f5f5f]">One workflow</span>
-      </div>
       <div className="absolute left-1/2 top-[54%] w-[min(94%,420px)] -translate-x-1/2 -translate-y-1/2 -rotate-[7deg] overflow-hidden rounded-[30px] border-[3px] border-[#101010] bg-[#fffdf8] shadow-[12px_12px_0_rgba(16,16,16,.18)]">
         <div className="flex h-11 items-center gap-2 border-b-[3px] border-[#101010] bg-[#e8dfd2] px-4">
           <span className="h-3 w-3 rounded-full bg-[#ff6a2a]" />
@@ -365,32 +398,16 @@ function DeviceMock({ heroImage = '' }) {
           <div className="relative h-[315px]">
             <img src={image} alt="Portfolio hero visual" className="h-full w-full object-cover" />
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#101010]/75 to-transparent p-5 pt-20">
-              <p className="text-2xl font-black text-white">Portfolio system preview</p>
+              {visualCards[0]?.value ? <p className="line-clamp-2 text-2xl font-black text-white">{visualCards[0].value}</p> : null}
             </div>
           </div>
         ) : (
           <div className="grid gap-3 p-4">
-            <div className="grid gap-3 sm:grid-cols-[1.1fr_0.9fr]">
-              <div className="rounded-[18px] border-2 border-[#101010] bg-white p-4">
-                <strong>Operations Dashboard</strong>
-                <span className="mt-4 block h-2 rounded-full bg-[#e8dfd2]" />
-                <span className="mt-2 block h-2 w-2/3 rounded-full bg-[#e8dfd2]" />
-              </div>
-              <div className="rounded-[18px] border-2 border-[#101010] bg-[linear-gradient(180deg,#fff,#fff7ef)] p-4">
-                <strong>Analytics</strong>
-                <div className="mt-3 flex h-16 items-end gap-2">
-                  {[38, 66, 80, 55, 92].map((height) => (
-                    <span key={height} className="flex-1 rounded-t-lg bg-[#101010]" style={{ height: `${height}%` }} />
-                  ))}
-                </div>
-              </div>
-            </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {['Employees', 'Documents', 'Approvals', 'Reports'].map((label) => (
-                <div key={label} className="rounded-[18px] border-2 border-[#101010] bg-white p-4">
-                  <strong>{label}</strong>
-                  <span className="mt-4 block h-2 rounded-full bg-[#e8dfd2]" />
-                  <span className="mt-2 block h-2 w-2/3 rounded-full bg-[#e8dfd2]" />
+              {visualCards.map((card, index) => (
+                <div key={`${card.label}-${card.value}-${index}`} className="rounded-[18px] border-2 border-[#101010] bg-white p-4">
+                  <span className="text-xs font-black uppercase text-[#ff6a2a]">{card.label}</span>
+                  <strong className="mt-2 line-clamp-2 block">{card.value}</strong>
                 </div>
               ))}
             </div>
@@ -407,67 +424,63 @@ function HeroSection({ hero, about, profileSlug }) {
   const projects = Array.isArray(projectsData) ? projectsData : Array.isArray(projectsData?.projects) ? projectsData.projects : [];
   const experienceItems = Array.isArray(experienceData) ? experienceData : [];
   const aboutHighlights = Array.isArray(about?.highlights) ? about.highlights.slice(0, 3) : [];
+  const mainStack = getMostUsedTech(projects);
   const metrics = [
-    { value: projects.length > 0 ? `${projects.length}+` : aboutHighlights[0]?.label || '10+', label: 'systems built' },
-    { value: formatExperienceYears(experienceItems) || '3+', label: 'years experience' },
-    { value: getMostUsedTech(projects) || '100%', label: getMostUsedTech(projects) ? 'main stack' : 'responsive layout' },
-  ];
+    projects.length > 0 ? { value: `${projects.length}+`, label: 'projects' } : null,
+    formatExperienceYears(experienceItems) ? { value: formatExperienceYears(experienceItems), label: 'years experience' } : null,
+    mainStack ? { value: mainStack, label: 'main stack' } : null,
+    ...aboutHighlights.map((item) => ({ value: item.value, label: item.label })),
+  ].filter((metric) => metric?.value && metric?.label).slice(0, 3);
+  const hasVisual = Boolean(getSafeImage(hero?.image) || projects.length || experienceItems.length || aboutHighlights.length);
 
   return (
     <section id="home" className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
       <div className="grid min-h-[620px] content-between rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-7 shadow-[8px_8px_0_#101010]">
         <div>
           <div className="inline-flex rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-4 py-3 text-xs font-black uppercase">
-            {hero?.eyebrow || 'Neo editorial portfolio'}
+            {hero?.eyebrow || 'Portfolio'}
           </div>
           <h1 className="mt-6 max-w-[10ch] text-5xl font-black leading-[0.92] text-[#101010] md:text-7xl xl:text-[6.6rem]">
-            {hero?.title || 'I build systems that make office work easier.'}
+            {hero?.title || 'Portfolio'}
           </h1>
-          <p className="mt-6 max-w-2xl text-base leading-8 text-[#5f5f5f] md:text-lg">
-            {hero?.description || 'Practical web-based systems for HR, document tracking, reporting, automation, data accuracy, and public service workflows.'}
-          </p>
+          {hero?.description ? <p className="mt-6 max-w-2xl text-base leading-8 text-[#5f5f5f] md:text-lg">{hero.description}</p> : null}
           <div className="mt-7 flex flex-wrap gap-3">
             <CtaLink href={hero?.primaryCtaHref || '#portfolio'} className="inline-flex items-center gap-2 rounded-full border-2 border-[#101010] bg-[#101010] px-5 py-4 text-sm font-black text-white shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5">
-              {hero?.primaryCtaLabel || 'View case studies'} <Icon name="arrow" className="h-4 w-4" />
+              {hero?.primaryCtaLabel || 'View work'} <Icon name="arrow" className="h-4 w-4" />
             </CtaLink>
             <CtaLink href={hero?.secondaryCtaHref || '#contact'} className="inline-flex items-center gap-2 rounded-full border-2 border-[#101010] bg-[#fffdf8] px-5 py-4 text-sm font-black text-[#101010] shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5">
-              {hero?.secondaryCtaLabel || 'Use this design'} <Icon name="arrowUp" className="h-4 w-4" />
+              {hero?.secondaryCtaLabel || 'Contact me'} <Icon name="arrowUp" className="h-4 w-4" />
             </CtaLink>
           </div>
         </div>
-        <div className="mt-8 grid gap-3 sm:grid-cols-3">
-          {metrics.map((metric) => (
-            <div key={`${metric.value}-${metric.label}`} className="rounded-[22px] border-2 border-[#101010] bg-[#e8dfd2] p-4">
-              <strong className="block break-words text-2xl leading-none">{metric.value}</strong>
-              <span className="mt-2 block text-sm font-bold text-[#5f5f5f]">{metric.label}</span>
-            </div>
-          ))}
-        </div>
+        {metrics.length > 0 ? (
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            {metrics.map((metric) => (
+              <div key={`${metric.value}-${metric.label}`} className="rounded-[22px] border-2 border-[#101010] bg-[#e8dfd2] p-4">
+                <strong className="line-clamp-2 break-words text-2xl leading-none">{metric.value}</strong>
+                <span className="mt-2 block text-sm font-bold text-[#5f5f5f]">{metric.label}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <span className="rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-4 py-2 text-xs font-black">Portfolio Preview</span>
-          <span className="rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-4 py-2 text-xs font-black">Responsive</span>
+      {hasVisual ? (
+        <div className="grid rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
+          <DeviceMock heroImage={hero?.image} projects={projects} experience={experienceItems} aboutHighlights={aboutHighlights} />
         </div>
-        <DeviceMock heroImage={hero?.image} />
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <span className="rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-4 py-2 text-center text-xs font-black">Creative UI</span>
-          <span className="rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-4 py-2 text-center text-xs font-black">Clean Code</span>
-        </div>
-      </div>
+      ) : null}
     </section>
   );
 }
 
 function AboutSection({ about }) {
-  const cards = Array.isArray(about?.highlights) && about.highlights.length > 0
-    ? about.highlights.slice(0, 3)
-    : [
-        { label: 'Different structure', value: 'Desktop uses a sticky side rail, while mobile becomes a compact topbar with a proper menu.' },
-        { label: 'Case-study feeling', value: 'Projects are displayed as longer story blocks instead of repeated small cards, which feels more professional.' },
-        { label: 'Stronger personality', value: 'Typography, shadows, borders, and asymmetry make the design more memorable and less generic.' },
-      ];
+  const cards = Array.isArray(about?.highlights) ? about.highlights.slice(0, 3) : [];
+  const hasAbout = Boolean(about?.title || about?.body || cards.length);
+
+  if (!hasAbout) {
+    return null;
+  }
 
   return (
     <section id="about" className="mt-7">
@@ -476,21 +489,23 @@ function AboutSection({ about }) {
           <SectionTitle
             dark
             eyebrow="About"
-            title={about?.title || 'A sharper personal brand presentation.'}
-            desc={about?.body || 'This layout makes your portfolio feel more intentional and premium while keeping your content dynamic.'}
+            title={about?.title || 'About'}
+            desc={about?.body}
           />
         </div>
-        <div className="grid gap-4">
-          {cards.map((card, index) => (
-            <article key={`${card.label}-${index}`} className="grid grid-cols-[auto_1fr] gap-4 rounded-[24px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
-              <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[#ff6a2a] font-black text-white shadow-[4px_4px_0_#101010]">{String(index + 1).padStart(2, '0')}</div>
-              <div>
-                <h3 className="text-xl font-black">{card.label}</h3>
-                <p className="mt-2 text-sm leading-7 text-[#5f5f5f]">{card.value}</p>
-              </div>
-            </article>
-          ))}
-        </div>
+        {cards.length > 0 ? (
+          <div className="grid gap-4">
+            {cards.map((card, index) => (
+              <article key={`${card.label}-${index}`} className="grid grid-cols-[auto_1fr] gap-4 rounded-[24px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
+                <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[#ff6a2a] font-black text-white shadow-[4px_4px_0_#101010]">{String(index + 1).padStart(2, '0')}</div>
+                <div>
+                  <h3 className="text-xl font-black">{card.label}</h3>
+                  <p className="mt-2 text-sm leading-7 text-[#5f5f5f]">{card.value}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -562,13 +577,16 @@ function WorkSection({ profileSlug }) {
     setPage(1);
   }, [projects.length]);
 
+  if (!isLoading && !error && projects.length === 0) {
+    return null;
+  }
+
   return (
     <section id="portfolio" className="mt-7">
       <div className="mb-5 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
         <SectionTitle
           eyebrow="Selected Work"
-          title="Projects shown like product solutions."
-          desc="Each project is treated like a real system with its own summary, stack, and value proposition."
+          title="Selected projects."
         />
         <a href="#contact" className="w-fit rounded-full border-2 border-[#101010] bg-[#fffdf8] px-5 py-4 text-sm font-black shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5">
           Start a project
@@ -576,7 +594,6 @@ function WorkSection({ profileSlug }) {
       </div>
       {error ? <p className="mb-4 rounded-2xl border-2 border-rose-700 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700">{error.message}</p> : null}
       {isLoading ? <p className="mb-4 text-sm font-bold text-[#5f5f5f]">Loading projects...</p> : null}
-      {!isLoading && !error && projects.length === 0 ? <p className="mb-4 text-sm font-bold text-[#5f5f5f]">No projects yet.</p> : null}
       <div className="grid gap-6">
         {pageItems.map((project, index) => {
           const globalIndex = (page - 1) * itemsPerPage + index;
@@ -638,12 +655,19 @@ function SkillsExperienceSection({ profileSlug }) {
   const experienceItems = Array.isArray(experienceData) ? experienceData : [];
   const loading = skillsLoading || experienceLoading;
   const error = skillsError || experienceError;
+  const hasSkills = skills.length > 0;
+  const hasExperience = experienceItems.length > 0;
+
+  if (!loading && !error && !hasSkills && !hasExperience) {
+    return null;
+  }
 
   return (
     <section id="experience" className="mt-7">
       <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        {hasSkills || loading || skillsError ? (
         <div id="skills" className="rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-7 shadow-[8px_8px_0_#101010]">
-          <SectionTitle eyebrow="Skills" title="Balanced stack for shipping useful systems." desc="Frontend, backend, database work, reporting, dashboards, and deployment." />
+          <SectionTitle eyebrow="Skills" title="Skills." />
           {loading ? <p className="mt-4 text-sm font-bold text-[#5f5f5f]">Loading experience data...</p> : null}
           {error ? <p className="mt-4 text-sm font-bold text-rose-700">{error.message}</p> : null}
           <div className="mt-6 grid gap-4">
@@ -658,12 +682,13 @@ function SkillsExperienceSection({ profileSlug }) {
                 </div>
               </div>
             ))}
-            {skills.length === 0 && !loading ? <p className="text-sm font-bold text-[#5f5f5f]">No skills published yet.</p> : null}
           </div>
         </div>
+        ) : null}
 
+        {hasExperience || loading || experienceError ? (
         <div className="rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-7 shadow-[8px_8px_0_#101010]">
-          <SectionTitle eyebrow="Experience" title="Professional timeline." desc="A cleaner way to show your experience without making the section boring." />
+          <SectionTitle eyebrow="Experience" title="Experience." />
           <div className="relative mt-6 grid gap-5 before:absolute before:bottom-0 before:left-3 before:top-0 before:w-[3px] before:bg-[#101010]">
             {experienceItems.map((item, index) => (
               <article key={item.id} className="relative pl-10">
@@ -682,9 +707,9 @@ function SkillsExperienceSection({ profileSlug }) {
                 </div>
               </article>
             ))}
-            {experienceItems.length === 0 && !loading ? <p className="pl-10 text-sm font-bold text-[#5f5f5f]">No experience entries yet.</p> : null}
           </div>
         </div>
+        ) : null}
       </div>
     </section>
   );
@@ -706,11 +731,15 @@ function CertificatesSection({ profileSlug }) {
     setPage(1);
   }, [activeCategory, items.length]);
 
+  if (!error && items.length === 0) {
+    return null;
+  }
+
   return (
     <section id="certificates" className="mt-7">
       <div className="rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-7 shadow-[8px_8px_0_#101010]">
         <div className="mb-6 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-          <SectionTitle eyebrow="Certificates" title="Compact proof gallery." desc="A certificate section that feels lighter and more organized." />
+          <SectionTitle eyebrow="Certificates" title="Certificates." />
           <div className="flex flex-wrap gap-2">
             {categories.map((category) => (
               <button key={category} type="button" onClick={() => setActiveCategory(category)} className={cx('rounded-full border-2 border-[#101010] px-4 py-2 text-xs font-black', activeCategory === category ? 'bg-[#101010] text-white' : 'bg-[#fffdf8] text-[#101010]')}>
@@ -769,7 +798,7 @@ function CertificatesSection({ profileSlug }) {
 const initialForm = { name: '', email: '', message: '' };
 const sanitizeInput = (value) => value.replace(/[<>]/g, '').replace(/\s+/g, ' ').trimStart();
 
-function ContactSection() {
+function ContactSection({ contact }) {
   const [formData, setFormData] = useState(initialForm);
   const [errors, setErrors] = useState(initialForm);
   const [formError, setFormError] = useState('');
@@ -777,6 +806,11 @@ function ContactSection() {
   const [loading, setLoading] = useState(false);
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
+  const contactItems = [
+    contact?.email ? ['mail', contact.email, `mailto:${contact.email}`] : null,
+    contact?.location ? ['file', contact.location, ''] : null,
+    contact?.calendarLink && isSafeHttpUrl(contact.calendarLink) ? ['check', 'Book a call', contact.calendarLink] : null,
+  ].filter(Boolean);
 
   const validateForm = ({ name, email, message }) => {
     const nextErrors = { ...initialForm };
@@ -845,12 +879,20 @@ function ContactSection() {
     <section id="contact" className="mt-7">
       <div className="grid gap-6 lg:grid-cols-[0.88fr_1.12fr]">
         <div className="rounded-[28px] border-[3px] border-[#101010] bg-[linear-gradient(135deg,#ff6a2a,#ff905d)] p-7 text-white shadow-[8px_8px_0_#101010]">
-          <SectionTitle dark eyebrow="Contact" title="Let's build something useful." desc="Have a system idea, internal workflow problem, or portfolio collaboration? Send a message and let's talk about the practical next step." />
-          <div className="mt-6 grid gap-3">
-            {['jonderecknifas@gmail.com', 'Philippines', 'Open for opportunities'].map((item) => (
-              <div key={item} className="rounded-[18px] border-2 border-white/45 bg-white/15 px-4 py-4 font-black">{item}</div>
-            ))}
-          </div>
+          <SectionTitle dark eyebrow="Contact" title="Contact." desc="Send a message about a project, workflow, or collaboration." />
+          {contactItems.length > 0 ? (
+            <div className="mt-6 grid gap-3">
+              {contactItems.map(([, text, href]) =>
+                href ? (
+                  <a key={text} href={href} target={isSafeHttpUrl(href) ? '_blank' : undefined} rel={isSafeHttpUrl(href) ? 'noreferrer' : undefined} className="rounded-[18px] border-2 border-white/45 bg-white/15 px-4 py-4 font-black">
+                    {text}
+                  </a>
+                ) : (
+                  <div key={text} className="rounded-[18px] border-2 border-white/45 bg-white/15 px-4 py-4 font-black">{text}</div>
+                ),
+              )}
+            </div>
+          ) : null}
         </div>
         <div className="rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-7 shadow-[8px_8px_0_#101010]">
           {isSubmitted ? (
@@ -896,8 +938,7 @@ function Footer({ config }) {
   return (
     <footer className="py-7 text-sm font-bold text-[#5f5f5f]">
       <div className="flex flex-wrap items-center justify-between gap-3 border-t-2 border-[#101010]/10 pt-6">
-        <div>(c) 2026 {logoText}. Neo editorial portfolio.</div>
-        <div>Sticky rail / Editorial layout / Responsive design</div>
+        <div>(c) {new Date().getFullYear()} {logoText}. All rights reserved.</div>
       </div>
     </footer>
   );
@@ -910,14 +951,14 @@ export default function NeoEditorialPortfolio({ profileSlug = null, siteContent,
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(255,106,42,.10),transparent_22%),radial-gradient(circle_at_bottom_left,rgba(255,209,102,.16),transparent_24%),#f3efe7] font-sans text-[#101010] selection:bg-[#ff6a2a] selection:text-white">
       <MobileTopbar config={siteConfig} links={links} darkMode={darkMode} onToggleDark={onToggleDark} />
       <div className="grid min-h-screen xl:grid-cols-[300px_minmax(0,1fr)]">
-        <Sidebar config={siteConfig} links={links} darkMode={darkMode} onToggleDark={onToggleDark} />
+        <Sidebar config={siteConfig} links={links} darkMode={darkMode} onToggleDark={onToggleDark} siteContent={siteContent} />
         <main className="mx-auto w-[min(1380px,calc(100%-20px))] py-5 md:w-[min(1380px,calc(100%-32px))] md:py-7">
           <HeroSection hero={siteContent?.hero} about={siteContent?.about} profileSlug={profileSlug} />
           <AboutSection about={siteContent?.about} />
           <WorkSection profileSlug={profileSlug} />
           <SkillsExperienceSection profileSlug={profileSlug} />
           <CertificatesSection profileSlug={profileSlug} />
-          <ContactSection />
+          <ContactSection contact={siteContent?.contact} />
           <Footer config={siteConfig} />
         </main>
       </div>
