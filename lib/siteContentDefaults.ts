@@ -74,4 +74,5 @@ export const defaultSiteConfig = {
   logoText: 'Jon',
   logoImage: '',
   navigation: defaultNavigation,
+  portfolioTheme: 'editorial-bento',
 };

@@ -24,6 +24,7 @@ export async function ensureSiteConfigForProfile(profileId: number) {
       logoText: defaultSiteConfig.logoText,
       logoImage: defaultSiteConfig.logoImage,
       navigation: defaultSiteConfig.navigation,
+      portfolioTheme: defaultSiteConfig.portfolioTheme,
     },
   });
 }

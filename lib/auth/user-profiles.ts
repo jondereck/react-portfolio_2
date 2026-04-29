@@ -38,6 +38,7 @@ export async function ensureSiteDataForProfile(db: DbClient, profileId: number) 
       logoText: defaultSiteConfig.logoText,
       logoImage: defaultSiteConfig.logoImage,
       navigation: defaultSiteConfig.navigation,
+      portfolioTheme: defaultSiteConfig.portfolioTheme,
     },
   });
 }

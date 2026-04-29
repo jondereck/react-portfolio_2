@@ -99,6 +99,7 @@ async function main() {
       logoText: defaultSiteConfig.logoText,
       logoImage: defaultSiteConfig.logoImage,
       navigation: defaultSiteConfig.navigation,
+      portfolioTheme: defaultSiteConfig.portfolioTheme,
     },
   });
 

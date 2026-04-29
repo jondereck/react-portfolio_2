@@ -110,14 +110,15 @@ model SiteContent {
 }
 
 model SiteConfig {
-  id         Int      @id @default(autoincrement())
-  profileId  Int      @unique
-  logoText   String?
-  logoImage  String?
-  navigation Json?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  profile    Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  id             Int      @id @default(autoincrement())
+  profileId      Int      @unique
+  logoText       String?
+  logoImage      String?
+  navigation     Json?
+  portfolioTheme String   @default("editorial-bento")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  profile        Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
 }
 
 model AdminSettings {

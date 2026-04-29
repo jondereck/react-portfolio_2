@@ -14,6 +14,7 @@ type ConfigPayload = {
   logoText?: unknown;
   logoImage?: unknown;
   navigation?: unknown;
+  portfolioTheme?: unknown;
 };
 
 const extractConfigPayload = (input: unknown): ConfigPayload | null => {
@@ -21,13 +22,14 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
     return null;
   }
 
-  const body = input as { data?: unknown; logoText?: unknown; logoImage?: unknown; navigation?: unknown };
+  const body = input as { data?: unknown; logoText?: unknown; logoImage?: unknown; navigation?: unknown; portfolioTheme?: unknown };
   if (body.data && typeof body.data === 'object') {
-    const nested = body.data as { logoText?: unknown; logoImage?: unknown; navigation?: unknown };
+    const nested = body.data as { logoText?: unknown; logoImage?: unknown; navigation?: unknown; portfolioTheme?: unknown };
     return {
       logoText: nested.logoText,
       logoImage: nested.logoImage,
       navigation: nested.navigation,
+      portfolioTheme: nested.portfolioTheme,
     };
   }
 
@@ -35,14 +37,19 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
     logoText: body.logoText,
     logoImage: body.logoImage,
     navigation: body.navigation,
+    portfolioTheme: body.portfolioTheme,
   };
 };
 
-const normalizeSiteConfig = (config: { logoText: string | null; logoImage: string | null; navigation: unknown } | null) => {
+const normalizeSiteConfig = (
+  config: { logoText: string | null; logoImage: string | null; navigation: unknown; portfolioTheme?: string | null } | null,
+) => {
   const parsed = siteConfigSchema.partial().safeParse({
     logoText: typeof config?.logoText === 'string' ? config.logoText : defaultSiteConfig.logoText,
     logoImage: typeof config?.logoImage === 'string' ? config.logoImage : defaultSiteConfig.logoImage,
     navigation: config?.navigation ?? defaultSiteConfig.navigation,
+    portfolioTheme:
+      typeof config?.portfolioTheme === 'string' ? config.portfolioTheme : defaultSiteConfig.portfolioTheme,
   });
 
   if (!parsed.success) {
@@ -53,6 +60,7 @@ const normalizeSiteConfig = (config: { logoText: string | null; logoImage: strin
     logoText: parsed.data.logoText ?? defaultSiteConfig.logoText,
     logoImage: parsed.data.logoImage ?? defaultSiteConfig.logoImage,
     navigation: parsed.data.navigation ?? defaultSiteConfig.navigation,
+    portfolioTheme: parsed.data.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
   };
 };
 
@@ -98,13 +106,14 @@ export async function PUT(request: Request) {
       logoText: typeof payload.logoText === 'string' ? payload.logoText.trim() : payload.logoText,
       logoImage: typeof payload.logoImage === 'string' ? payload.logoImage.trim() : payload.logoImage,
       navigation: payload.navigation,
+      portfolioTheme: payload.portfolioTheme,
     });
 
     if (!parsed.success) {
       return createZodFormErrorResponse(parsed.error, { errorCode: 'INVALID_SITE_CONFIG_PAYLOAD' });
     }
 
-    if (!parsed.data.logoText && !parsed.data.logoImage && !parsed.data.navigation) {
+    if (!parsed.data.logoText && !parsed.data.logoImage && !parsed.data.navigation && !parsed.data.portfolioTheme) {
       return createFormErrorResponse(
         {
           error: 'Provide at least one site configuration field.',
@@ -122,12 +131,14 @@ export async function PUT(request: Request) {
         logoText: parsed.data.logoText ?? normalizedCurrent.logoText ?? null,
         logoImage: parsed.data.logoImage ?? normalizedCurrent.logoImage ?? null,
         navigation: parsed.data.navigation ?? normalizedCurrent.navigation ?? defaultSiteConfig.navigation,
+        portfolioTheme: parsed.data.portfolioTheme ?? normalizedCurrent.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
       },
       create: {
         profileId: profile.id,
         logoText: parsed.data.logoText ?? normalizedCurrent.logoText ?? defaultSiteConfig.logoText,
         logoImage: parsed.data.logoImage ?? normalizedCurrent.logoImage ?? null,
         navigation: parsed.data.navigation ?? normalizedCurrent.navigation ?? defaultSiteConfig.navigation,
+        portfolioTheme: parsed.data.portfolioTheme ?? normalizedCurrent.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
       },
     });
 
@@ -139,6 +150,7 @@ export async function PUT(request: Request) {
         scope: [
           parsed.data.navigation ? 'navigation' : null,
           parsed.data.logoText !== undefined || parsed.data.logoImage !== undefined ? 'branding' : null,
+          parsed.data.portfolioTheme !== undefined ? 'portfolio_theme' : null,
         ].filter(Boolean),
       },
     });

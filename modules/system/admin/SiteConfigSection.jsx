@@ -16,6 +16,7 @@ export default function SiteConfigSection() {
   const [siteConfig, setSiteConfig] = useState({
     logoText: '',
     logoImage: '',
+    portfolioTheme: 'editorial-bento',
   });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -30,6 +31,10 @@ export default function SiteConfigSection() {
     setSiteConfig({
       logoText: typeof siteConfigData?.logoText === 'string' ? siteConfigData.logoText : '',
       logoImage: typeof siteConfigData?.logoImage === 'string' ? siteConfigData.logoImage : '',
+      portfolioTheme:
+        siteConfigData?.portfolioTheme === 'classic' || siteConfigData?.portfolioTheme === 'editorial-bento'
+          ? siteConfigData.portfolioTheme
+          : 'editorial-bento',
     });
     setFormError('');
     setFieldErrors({});
@@ -62,6 +67,7 @@ export default function SiteConfigSection() {
           body: JSON.stringify({
             logoText: siteConfig.logoText.trim(),
             logoImage: siteConfig.logoImage.trim(),
+            portfolioTheme: siteConfig.portfolioTheme,
           }),
         }),
       );
@@ -88,7 +94,7 @@ export default function SiteConfigSection() {
     <section className={cardStyles}>
       <AdminSectionHeader
         title="General Site Settings"
-        description="Manage logo and global identity settings used across the public site."
+        description="Manage logo, global identity, and the public portfolio theme."
       />
       <div className="p-6">
         <form onSubmit={submit} className="space-y-4">
@@ -123,6 +129,59 @@ export default function SiteConfigSection() {
               <FieldErrorText error={getFieldError(fieldErrors, 'logoImage')} />
             </div>
           </div>
+
+          <fieldset className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+            <div>
+              <legend className="text-sm font-semibold text-slate-900 dark:text-slate-100">Portfolio Theme</legend>
+              <p className="mt-1 text-sm text-slate-500">
+                Choose the UI style used by the public portfolio without changing its content or behavior.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {[
+                {
+                  value: 'editorial-bento',
+                  title: 'Editorial Bento',
+                  description: 'Light premium bento layout with bold borders, lime and blue accents.',
+                },
+                {
+                  value: 'classic',
+                  title: 'Classic',
+                  description: 'The current dark/light portfolio interface and section styling.',
+                },
+              ].map((theme) => {
+                const selected = siteConfig.portfolioTheme === theme.value;
+
+                return (
+                  <label
+                    key={theme.value}
+                    className={`flex cursor-pointer gap-3 rounded-xl border p-4 transition ${
+                      selected
+                        ? 'border-cyan-400 bg-cyan-50 text-slate-950 dark:border-cyan-300 dark:bg-cyan-950/40 dark:text-slate-100'
+                        : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="portfolioTheme"
+                      value={theme.value}
+                      checked={selected}
+                      onChange={(event) => {
+                        setSiteConfig((previous) => ({ ...previous, portfolioTheme: event.target.value }));
+                        setFieldErrors((current) => clearFieldErrors(current, 'portfolioTheme'));
+                      }}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block text-sm font-semibold">{theme.title}</span>
+                      <span className="mt-1 block text-sm text-slate-500">{theme.description}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <FieldErrorText error={getFieldError(fieldErrors, 'portfolioTheme')} />
+          </fieldset>
 
           <button type="submit" disabled={saving || loading} className={buttonStyles}>
             {saving ? 'Saving...' : 'Update Site Config'}

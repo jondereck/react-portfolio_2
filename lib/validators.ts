@@ -113,6 +113,7 @@ export const aboutSchema = z.object({
 export const siteConfigSchema = z.object({
   logoText: optionalTextField(1, 80),
   logoImage: optionalUrlField(500),
+  portfolioTheme: z.enum(['editorial-bento', 'classic']).optional().default('editorial-bento'),
   navigation: z
     .object({
       links: z
