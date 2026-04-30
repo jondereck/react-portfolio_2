@@ -2,22 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import About from './components/About';
-import Certificates from './components/Certificates';
-import Contact from './components/Contact';
-import Experience from './components/Experience';
-import Hero from './components/Hero';
-import NavBar from './components/NavBar';
 import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
-import Projects from './components/Projects';
-import SocialLinks from './components/SocialLinks';
 import EditorialBentoPortfolio from './components/editorial/EditorialBentoPortfolio';
 import MinimalistEditorialPortfolio from './components/editorial/MinimalistEditorialPortfolio';
 import NeoEditorialPortfolio from './components/editorial/NeoEditorialPortfolio';
-import GlobalLoader from '@/components/GlobalLoader';
 import { isPortfolioThemeId } from '@/lib/portfolioThemes';
 import { REALTIME_EVENT, REALTIME_SIGNAL_KEY, revalidatePublicData } from '@/lib/realtime';
-import { useLoadingStore } from '@/store/loading';
 
 const sanitizeText = (value) => (typeof value === 'string' ? value : '');
 
@@ -56,11 +46,69 @@ const withProfile = (path, profileSlug) => {
   return `${path}${joiner}profile=${encodeURIComponent(profileSlug)}`;
 };
 
+function PortfolioNotFound() {
+  return (
+    <main className="grid min-h-screen place-items-center bg-[#f7f7f5] px-6 text-neutral-950">
+      <section className="w-full max-w-xl border-y border-neutral-300 py-12 text-center">
+        <p className="text-xs font-medium uppercase tracking-[0.35em] text-neutral-500">404</p>
+        <h1 className="mt-5 text-5xl font-light tracking-tight text-neutral-950 sm:text-6xl">Page unavailable.</h1>
+        <p className="mx-auto mt-5 max-w-md text-sm leading-7 text-neutral-500">
+          The portfolio content could not be loaded. The page may be unavailable or temporarily out of sync.
+        </p>
+        <a
+          href="/"
+          className="mt-8 inline-flex items-center justify-center border-b border-neutral-950 pb-1 text-sm font-medium text-neutral-950"
+        >
+          Back to home
+        </a>
+      </section>
+    </main>
+  );
+}
+
+const normalizeRotationMinutes = (value) => {
+  const minutes = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
+  return Math.max(0, Math.min(Math.floor(minutes), 60 * 24 * 30));
+};
+
+const resolveRandomTheme = ({ pool, rotationMinutes, profileSlug }) => {
+  const candidates = Array.isArray(pool) ? pool.filter((value) => isPortfolioThemeId(value) && value !== 'classic') : [];
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const key = `portfolio_theme_rotation:${profileSlug || 'primary'}`;
+  const now = Date.now();
+  const rotationMs = rotationMinutes > 0 ? rotationMinutes * 60 * 1000 : 0;
+
+  try {
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const storedTheme = typeof parsed?.theme === 'string' ? parsed.theme : '';
+      const storedAt = typeof parsed?.chosenAt === 'number' ? parsed.chosenAt : 0;
+      if (rotationMs > 0 && storedTheme && candidates.includes(storedTheme) && storedAt > 0 && now - storedAt < rotationMs) {
+        return storedTheme;
+      }
+    }
+  } catch {
+    // Ignore storage JSON errors and re-pick.
+  }
+
+  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ theme: chosen, chosenAt: now }));
+  } catch {
+    // Ignore storage failures.
+  }
+  return chosen;
+};
+
 function App({ profileSlug = null }) {
   const [darkMode, setDarkMode] = useState(false);
   const [showThemeFade, setShowThemeFade] = useState(false);
-  const startGlobalLoading = useLoadingStore((state) => state.startLoading);
-  const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
+  const [resolvedTheme, setResolvedTheme] = useState(null);
   const {
     data: siteContentData,
     error: siteContentError,
@@ -95,20 +143,14 @@ function App({ profileSlug = null }) {
 
   const loading = siteContentLoading || siteConfigLoading;
   const loadError = siteContentError || siteConfigError;
-  const portfolioTheme = isPortfolioThemeId(siteConfig?.portfolioTheme)
-    ? siteConfig.portfolioTheme
-    : 'editorial-bento';
-
-  useEffect(() => {
-    if (!loading) {
-      return undefined;
-    }
-
-    startGlobalLoading('Composing the portfolio experience');
-    return () => {
-      stopGlobalLoading();
-    };
-  }, [loading, startGlobalLoading, stopGlobalLoading]);
+  const portfolioTheme = siteConfig?.portfolioTheme;
+  const isRandomMode = portfolioTheme === 'random';
+  const randomPoolHasCandidates = isRandomMode
+    ? Array.isArray(siteConfig?.portfolioThemeRandomPool) &&
+      siteConfig.portfolioThemeRandomPool.some((value) => isPortfolioThemeId(value) && value !== 'classic')
+    : true;
+  const hasValidTheme =
+    (isRandomMode || (isPortfolioThemeId(portfolioTheme) && portfolioTheme !== 'classic')) && randomPoolHasCandidates;
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -185,15 +227,44 @@ function App({ profileSlug = null }) {
     };
   }, [darkMode]);
 
+  useEffect(() => {
+    if (loading) {
+      setResolvedTheme(null);
+      return;
+    }
+
+    if (loadError || !siteConfig) {
+      setResolvedTheme(null);
+      return;
+    }
+
+    if (isRandomMode) {
+      const rotationMinutes = normalizeRotationMinutes(siteConfig?.portfolioThemeRotationMinutes);
+      const picked = resolveRandomTheme({
+        pool: siteConfig?.portfolioThemeRandomPool,
+        rotationMinutes,
+        profileSlug,
+      });
+      setResolvedTheme(picked);
+      return;
+    }
+
+    setResolvedTheme(portfolioTheme);
+  }, [isRandomMode, loadError, loading, portfolioTheme, profileSlug, siteConfig]);
+
   if (loading) {
-    return <GlobalLoader forceVisible message="Loading portfolio" hint="Fetching homepage data." />;
+    return null;
   }
 
-  if (loadError) {
-    return <div className="p-6 text-sm text-red-600 dark:text-red-400">{loadError instanceof Error ? loadError.message : 'Unable to load homepage content.'}</div>;
+  if (loadError || !siteContentData || !siteConfig || !hasValidTheme) {
+    return <PortfolioNotFound />;
   }
 
-  if (portfolioTheme === 'editorial-bento') {
+  if (!resolvedTheme) {
+    return <PortfolioNotFound />;
+  }
+
+  if (resolvedTheme === 'editorial-bento') {
     return (
       <div>
         {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
@@ -208,7 +279,7 @@ function App({ profileSlug = null }) {
     );
   }
 
-  if (portfolioTheme === 'neo-editorial') {
+  if (resolvedTheme === 'neo-editorial') {
     return (
       <div>
         {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
@@ -224,7 +295,7 @@ function App({ profileSlug = null }) {
     );
   }
 
-  if (portfolioTheme === 'minimalist-editorial') {
+  if (resolvedTheme === 'minimalist-editorial') {
     return (
       <div>
         {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
@@ -238,22 +309,7 @@ function App({ profileSlug = null }) {
     );
   }
 
-  return (
-    <div>
-      {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
-      <NavBar darkMode={darkMode} onToggleDark={toggleDark} config={siteConfig} />
-      <main className="bg-slate-50 text-black transition duration-500 dark:bg-slate-950 dark:text-white">
-        <Hero hero={siteContent?.hero} />
-        <About about={siteContent?.about} />
-        <Projects profileSlug={profileSlug} />
-        <Experience profileSlug={profileSlug} />
-        <Certificates profileSlug={profileSlug} />
-        <Contact />
-      </main>
-      <SocialLinks />
-      <PwaInstallPrompt />
-    </div>
-  );
+  return <PortfolioNotFound />;
 }
 
 export default App;

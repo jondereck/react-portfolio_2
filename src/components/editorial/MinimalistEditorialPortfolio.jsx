@@ -5,7 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
-import { compareCertificatesByIssuedAtDesc } from '@/lib/certificates';
+import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl } from '@/lib/certificates';
 import { normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
 import { isSafeHttpUrl } from '@/lib/url-safety';
@@ -47,6 +47,7 @@ const formatDate = (value) => {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short' });
 };
 const getSafeUrl = (value) => (isSafeHttpUrl(value) ? value : '');
+const getSafeImage = (value) => (isSafeHttpUrl(value) ? value : '');
 
 function Icon({ name, className = 'h-4 w-4' }) {
   const common = {
@@ -175,7 +176,7 @@ function Logo({ config }) {
   return (
     <a href="#home" onClick={handleLogoClick} className="group inline-flex items-center gap-2">
       {logoImage ? (
-        <img src={logoImage} alt={logoText} className="h-8 w-8 rounded-full object-contain grayscale" />
+        <img src={logoImage} alt={logoText} className="h-8 w-8 rounded-full object-contain" />
       ) : (
         <div className="relative h-7 w-7">
           <span className="absolute left-0 top-1 h-5 w-2 rotate-[-24deg] rounded-full bg-neutral-950" />
@@ -227,20 +228,21 @@ function Header({ config, links }) {
   );
 }
 
-function Portrait() {
+function Portrait({ image, title }) {
+  const heroImage = getSafeImage(image);
+
   return (
-    <div className="pointer-events-none absolute bottom-0 right-[-4%] hidden h-[78%] w-[58%] lg:block">
-      <div className="absolute bottom-0 right-[12%] h-[76%] w-[62%] rounded-t-[42%] bg-gradient-to-b from-neutral-300 via-neutral-200 to-neutral-100" />
-      <div className="absolute bottom-[49%] right-[28%] h-[22%] w-[20%] rounded-[50%] bg-gradient-to-b from-neutral-200 to-neutral-300 shadow-[inset_0_14px_24px_rgba(0,0,0,.08)]" />
-      <div className="absolute bottom-[67%] right-[25.5%] h-[12%] w-[25%] rounded-t-[70%] bg-neutral-700 blur-[.2px]" />
-      <div className="absolute bottom-[60%] right-[29.5%] h-[4px] w-[7%] rounded-full bg-neutral-900" />
-      <div className="absolute bottom-[60%] right-[39%] h-[4px] w-[7%] rounded-full bg-neutral-900" />
-      <div className="absolute bottom-[55%] right-[33.8%] h-[2px] w-[8%] rounded-full bg-neutral-700" />
-      <div className="absolute bottom-[36%] right-[26%] h-[24%] w-[25%] rounded-t-[38%] bg-gradient-to-b from-neutral-100 to-neutral-300" />
-      <div className="absolute bottom-[27%] right-[24%] h-[20%] w-[30%] rounded-t-[48%] bg-gradient-to-b from-neutral-200 to-neutral-400 opacity-80" />
-      <div className="absolute bottom-0 right-[10%] h-[32%] w-[65%] rounded-t-[46%] bg-gradient-to-b from-neutral-200 via-neutral-300 to-neutral-400" />
-      <div className="absolute bottom-[50%] right-[28.6%] h-[22%] w-[21.5%] rounded-full border-[3px] border-neutral-700 opacity-70" />
-      <div className="absolute bottom-[61%] right-[37%] h-[2px] w-[10%] bg-neutral-700 opacity-70" />
+    <div className="relative mx-auto h-[340px] w-full max-w-[430px] overflow-hidden rounded-t-[12rem] rounded-b-[2rem] bg-neutral-200 sm:h-[390px] lg:mt-4 lg:h-[500px]">
+      {heroImage ? (
+        <img src={heroImage} alt={title || 'Profile portrait'} className="h-full w-full object-cover object-center" />
+      ) : (
+        <>
+          <div className="absolute inset-0 bg-gradient-to-b from-neutral-100 to-neutral-300" />
+          <div className="absolute bottom-0 left-1/2 h-[72%] w-[48%] -translate-x-1/2 rounded-t-[5rem] bg-neutral-100" />
+          <div className="absolute left-1/2 top-[14%] h-[22%] w-[24%] -translate-x-1/2 rounded-full bg-neutral-300" />
+          <div className="absolute left-1/2 top-[9%] h-[12%] w-[32%] -translate-x-1/2 rounded-t-full bg-neutral-700" />
+        </>
+      )}
     </div>
   );
 }
@@ -264,14 +266,14 @@ function Hero({ hero, projects, experience }) {
   const recentProject = projects[0];
 
   return (
-    <section id="home" className="relative min-h-[760px] overflow-hidden bg-[#f7f7f5] px-6 pb-10 pt-12 lg:px-10 lg:pt-16">
-      <div className="absolute left-8 top-28 hidden h-[560px] w-px bg-neutral-200 lg:block" />
-      {sideLabel ? <div className="absolute left-4 top-40 hidden -rotate-90 text-xs font-light text-neutral-300 lg:block">{sideLabel}</div> : null}
-      <div className="absolute bottom-16 left-6 hidden -rotate-90 text-xs font-light text-neutral-300 lg:block">{new Date().getFullYear()}</div>
-      <div className="relative z-10 mx-auto grid max-w-[1280px] gap-10 lg:grid-cols-[0.94fr_1.06fr] lg:gap-2">
-        <div className="pt-8 lg:pt-16">
+    <section id="home" className="relative min-h-[calc(100svh-73px)] overflow-hidden bg-[#f7f7f5] px-6 py-8 lg:px-10 lg:py-10">
+      <div className="absolute left-8 top-24 hidden h-[430px] w-px bg-neutral-200 lg:block" />
+      {sideLabel ? <div className="absolute left-4 top-36 hidden -rotate-90 text-xs font-light text-neutral-300 lg:block">{sideLabel}</div> : null}
+      <div className="absolute bottom-10 left-6 hidden -rotate-90 text-xs font-light text-neutral-300 lg:block">{new Date().getFullYear()}</div>
+      <div className="relative z-10 mx-auto grid max-w-[1280px] items-center gap-8 lg:grid-cols-[0.96fr_1.04fr] lg:gap-6">
+        <div className="lg:pl-14">
           {hasProjectMetric || years ? (
-            <div className="mb-10 flex gap-12 pl-0 lg:pl-16">
+            <div className="mb-7 flex gap-10">
               {hasProjectMetric ? (
                 <div>
                   <p className="text-3xl font-light text-neutral-900 sm:text-4xl">+{projects.length}</p>
@@ -287,17 +289,14 @@ function Hero({ hero, projects, experience }) {
             </div>
           ) : null}
           {hero?.title ? (
-            <h1 className="max-w-[640px] text-8xl font-light leading-[0.78] text-neutral-900 sm:text-[9rem] lg:text-[12rem]">
+            <h1 className="max-w-[720px] text-5xl font-light leading-[0.92] text-neutral-900 sm:text-6xl lg:text-7xl xl:text-8xl">
               {hero.title}
             </h1>
           ) : null}
-          {hero?.description ? <p className="mt-3 max-w-md text-sm font-medium text-neutral-700 sm:text-base">{hero.description}</p> : null}
-          <div className="mt-24 hidden items-center gap-2 text-xs text-neutral-500 md:flex">
-            Scroll down <Icon name="arrowDown" className="h-3.5 w-3.5" />
-          </div>
+          {hero?.description ? <p className="mt-5 max-w-xl text-sm leading-7 text-neutral-600 sm:text-base">{hero.description}</p> : null}
         </div>
-        <div className="relative min-h-[500px] lg:min-h-[680px]">
-          {recentProject ? <div className="absolute right-0 top-14 hidden max-w-[170px] items-center gap-3 text-xs text-neutral-500 lg:flex">
+        <div className="relative">
+          {recentProject ? <div className="absolute right-0 top-0 z-10 hidden max-w-[170px] items-center gap-3 text-xs text-neutral-500 lg:flex">
             <a href="#portfolio" className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-[#e8dfd3] text-neutral-900 transition hover:scale-105">
               <Icon name="arrowUp" />
             </a>
@@ -307,7 +306,7 @@ function Hero({ hero, projects, experience }) {
               {recentProject.title}
             </span>
           </div> : null}
-          <Portrait />
+          <Portrait image={hero?.image} title={hero?.title} />
         </div>
       </div>
     </section>
@@ -316,9 +315,6 @@ function Hero({ hero, projects, experience }) {
 
 function About({ about }) {
   const highlights = Array.isArray(about?.highlights) ? about.highlights : [];
-  const primaryHighlight = highlights[0];
-  const quoteHighlight = highlights[1];
-  const focusHighlights = highlights.slice(2);
   const hasAbout = Boolean(about?.title || about?.body || highlights.length);
 
   if (!hasAbout) {
@@ -327,62 +323,40 @@ function About({ about }) {
 
   return (
     <section id="about-me" className="bg-[#f7f7f5] px-6 py-20 lg:px-10">
-      <div className="mx-auto grid max-w-[1280px] gap-10 lg:grid-cols-[0.9fr_0.62fr_1fr] lg:gap-9">
-        <div className="flex min-h-[460px] flex-col justify-between">
-          <div>
-            <h2 className="text-5xl font-light text-neutral-950 sm:text-6xl">{about?.title || 'About Me'}</h2>
-            {about?.body ? <p className="mt-6 max-w-[390px] text-sm leading-7 text-neutral-500">{about.body}</p> : null}
-          </div>
+      <div className="mx-auto max-w-[1280px]">
+        <div className="grid gap-8 lg:grid-cols-[0.82fr_1.18fr] lg:items-end">
+          <h2 className="text-5xl font-light text-neutral-950 sm:text-6xl">{about?.title || 'About Me'}</h2>
+          {about?.body ? <p className="max-w-2xl text-sm leading-7 text-neutral-500">{about.body}</p> : null}
+        </div>
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {highlights.map((item) => (
+            <article key={item.label} className="rounded-3xl border border-neutral-200 bg-white p-7 shadow-[0_18px_55px_rgba(0,0,0,.05)]">
+              <div className="grid h-11 w-11 place-items-center rounded-full bg-[#ebe3d8] text-neutral-950">
+                <Icon name="sparkle" />
+              </div>
+              <h3 className="mt-6 text-3xl font-light text-neutral-950">{item.label}</h3>
+              <p className="mt-4 whitespace-pre-line text-sm leading-7 text-neutral-500">{item.value}</p>
+            </article>
+          ))}
+        </div>
+        <div className="mt-10">
           <a href="#contact" className="inline-flex w-fit items-center gap-2 border-b border-neutral-950 pb-1 text-sm font-medium text-neutral-950">
             More about me <Icon name="arrowUp" className="h-3.5 w-3.5" />
           </a>
-        </div>
-        {primaryHighlight ? <div className="rounded-3xl border border-neutral-200 bg-white p-7 shadow-[0_18px_55px_rgba(0,0,0,.05)]">
-          <div className="grid h-12 w-12 place-items-center rounded-full bg-[#ebe3d8] text-neutral-950">
-            <Icon name="sparkle" />
-          </div>
-          <p className="mt-8 text-6xl font-light text-neutral-950">{primaryHighlight.label}</p>
-          <p className="mt-5 max-w-[230px] text-sm leading-7 text-neutral-500">
-            {primaryHighlight.value}
-          </p>
-          {focusHighlights.length > 0 ? (
-            <>
-              <div className="my-8 h-px bg-neutral-200" />
-              <div className="grid gap-3 text-sm leading-7 text-neutral-500">
-                {focusHighlights.map((item) => (
-                  <div key={item.label}>
-                    <span className="font-medium text-neutral-700">{item.label}</span>
-                    <p>{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : null}
-        </div> : null}
-        <div className="grid gap-5">
-          <div className="relative min-h-[245px] overflow-hidden rounded-3xl bg-neutral-200">
-            <div className="absolute inset-0 bg-gradient-to-b from-neutral-100 to-neutral-300" />
-            <div className="absolute bottom-0 left-1/2 h-52 w-40 -translate-x-1/2 rounded-t-[5rem] bg-neutral-100" />
-            <div className="absolute left-1/2 top-10 h-24 w-24 -translate-x-1/2 rounded-full bg-neutral-300" />
-            <div className="absolute left-1/2 top-5 h-14 w-28 -translate-x-1/2 rounded-t-full bg-neutral-700" />
-          </div>
-          {quoteHighlight ? <div className="rounded-3xl bg-[#efe7dc] p-8">
-            <p className="text-3xl leading-none text-neutral-950">"</p>
-            <p className="mt-3 max-w-xs text-xl font-light leading-8 text-neutral-950">
-              {quoteHighlight.value}
-            </p>
-            <p className="mt-8 font-serif text-3xl italic text-neutral-700">{quoteHighlight.label}</p>
-          </div> : null}
         </div>
       </div>
     </section>
   );
 }
 
-function ProjectImage({ index }) {
+function ProjectImage({ image, title }) {
+  const projectImage = getSafeImage(image);
+
   return (
-    <div className="relative h-52 overflow-hidden rounded-t-3xl bg-neutral-200 grayscale">
-      {index % 3 === 0 ? (
+    <div className="relative h-52 overflow-hidden rounded-t-3xl bg-neutral-200">
+      {projectImage ? (
+        <img src={projectImage} alt={`${title} project preview`} className="h-full w-full object-cover object-center" />
+      ) : (
         <div className="absolute inset-5 rounded-2xl bg-white p-4 shadow-xl">
           <div className="h-3 w-24 rounded-full bg-neutral-300" />
           <div className="mt-5 grid grid-cols-3 gap-3">
@@ -394,30 +368,13 @@ function ProjectImage({ index }) {
             ))}
           </div>
         </div>
-      ) : null}
-      {index % 3 === 1 ? (
-        <div className="absolute left-1/2 top-5 h-72 w-36 -translate-x-1/2 rotate-[-12deg] rounded-[2rem] border-[10px] border-neutral-800 bg-white p-3 shadow-2xl">
-          <div className="mx-auto h-3 w-12 rounded-full bg-neutral-800" />
-          <div className="mt-6 h-5 rounded-full bg-neutral-300" />
-          <div className="mt-4 h-24 rounded-2xl bg-neutral-100" />
-          <div className="mt-4 h-4 rounded-full bg-neutral-300" />
-        </div>
-      ) : null}
-      {index % 3 === 2 ? (
-        <div className="absolute bottom-6 left-8 right-8 h-36 rounded-2xl border-[10px] border-neutral-800 bg-white p-4 shadow-2xl">
-          <div className="h-4 w-32 rounded-full bg-neutral-300" />
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="h-16 rounded-xl bg-neutral-100" />
-            <div className="h-16 rounded-xl bg-neutral-200" />
-          </div>
-        </div>
-      ) : null}
+      )}
     </div>
   );
 }
 
 function Work({ projects, loading, error }) {
-  const displayProjects = projects.slice(0, 3);
+  const displayProjects = projects;
 
   if (!loading && !error && displayProjects.length === 0) {
     return null;
@@ -441,7 +398,7 @@ function Work({ projects, loading, error }) {
             const badge = project.badge || normalizeTech(project.tech ?? project.techStack)[0] || '';
             return (
               <article key={project.id ?? project.slug ?? project.title} className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_45px_rgba(0,0,0,.05)]">
-                <ProjectImage index={index} />
+                <ProjectImage image={project.image} title={project.title} />
                 <div className="p-5">
                   <p className="text-xs text-neutral-400">{String(index + 1).padStart(2, '0')}</p>
                   <h3 className="mt-2 text-xl font-medium text-neutral-950">{project.title}</h3>
@@ -549,10 +506,18 @@ function Experience({ items, loading, error }) {
 
 function Certificates({ items, error }) {
   const [activeCategory, setActiveCategory] = useState('All');
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 6;
   const sorted = useMemo(() => [...items].sort(compareCertificatesByIssuedAtDesc), [items]);
   const displayItems = sorted;
   const categories = ['All', ...Array.from(new Set(displayItems.map((item) => item.category).filter(Boolean)))];
   const filtered = activeCategory === 'All' ? displayItems : displayItems.filter((item) => item.category === activeCategory);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / itemsPerPage));
+  const pageItems = filtered.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeCategory, items.length]);
 
   if (!error && displayItems.length === 0) {
     return null;
@@ -576,15 +541,23 @@ function Certificates({ items, error }) {
         </div>
         {error ? <p className="mb-4 text-sm text-rose-600">{error.message}</p> : null}
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((cert, index) => {
+          {pageItems.map((cert, index) => {
             const verifyLink = getSafeUrl(cert.link);
+            const certificateImage = getSafeImage(cert.image);
+            const isPdf = isPdfAssetUrl(cert.image);
             return (
               <article key={cert.id ?? `${cert.title}-${index}`} className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_45px_rgba(0,0,0,.05)]">
-                <div className="grid h-44 place-items-center bg-[#fbfaf7] p-5 grayscale">
-                  <div className="grid h-28 w-full max-w-xs place-items-center rounded-2xl border border-neutral-200 bg-white text-center">
-                    <Icon name="certificate" className="h-8 w-8 text-neutral-500" />
-                    <p className="mt-2 text-xs font-medium uppercase text-neutral-400">Verified Certificate</p>
-                  </div>
+                <div className="grid h-44 place-items-center bg-[#fbfaf7]">
+                  {certificateImage && !isPdf ? (
+                    <img src={certificateImage} alt={`${cert.title} certificate`} className="h-full w-full object-cover object-center" />
+                  ) : (
+                    <div className="m-5 grid h-28 w-full max-w-xs place-items-center rounded-2xl border border-neutral-200 bg-white text-center">
+                      <Icon name="certificate" className="h-8 w-8 text-neutral-500" />
+                      <p className="mt-2 text-xs font-medium uppercase text-neutral-400">
+                        {isPdf ? 'PDF Certificate' : 'Verified Certificate'}
+                      </p>
+                    </div>
+                  )}
                 </div>
                 <div className="p-5">
                   <p className="text-xs text-neutral-400">{cert.category}</p>
@@ -600,6 +573,19 @@ function Certificates({ items, error }) {
             );
           })}
         </div>
+        {totalPages > 1 ? (
+          <div className="mt-8 flex items-center justify-center gap-3">
+            <button type="button" onClick={() => setPage((value) => Math.max(value - 1, 1))} disabled={page === 1} className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-medium text-neutral-600 disabled:cursor-not-allowed disabled:opacity-40">
+              Previous
+            </button>
+            <span className="rounded-full bg-neutral-950 px-4 py-2 text-xs font-medium text-white">
+              {page} / {totalPages}
+            </span>
+            <button type="button" onClick={() => setPage((value) => Math.min(value + 1, totalPages))} disabled={page === totalPages} className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-medium text-neutral-600 disabled:cursor-not-allowed disabled:opacity-40">
+              Next
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );

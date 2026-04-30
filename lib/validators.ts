@@ -114,7 +114,8 @@ export const aboutSchema = z.object({
 export const siteConfigSchema = z.object({
   logoText: optionalTextField(1, 80),
   logoImage: optionalUrlField(500),
-  portfolioTheme: z.enum(PORTFOLIO_THEME_IDS).optional().default('editorial-bento'),
+  portfolioTheme: z.union([z.enum(PORTFOLIO_THEME_IDS), z.literal('random')]).optional().default('editorial-bento'),
+  portfolioThemeRotationMinutes: z.number().int().min(0).max(60 * 24 * 30).optional(),
   portfolioThemeRandomPool: z.array(z.enum(PORTFOLIO_THEME_IDS)).min(1).optional(),
   navigation: z
     .object({

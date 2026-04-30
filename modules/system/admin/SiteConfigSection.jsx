@@ -14,11 +14,14 @@ import { PORTFOLIO_THEMES, isPortfolioThemeId, normalizePortfolioThemeRandomPool
 import { notifyRealtimeUpdate, revalidatePublicData } from '@/lib/realtime';
 import { buttonStyles, cardStyles, fetcher, inputStyles, withFieldError } from '@/modules/system/admin/settingsShared';
 
+const isThemeMode = (value) => value === 'random' || isPortfolioThemeId(value);
+
 export default function SiteConfigSection() {
   const [siteConfig, setSiteConfig] = useState({
     logoText: '',
     logoImage: '',
     portfolioTheme: 'editorial-bento',
+    portfolioThemeRotationMinutes: 0,
     portfolioThemeRandomPool: PORTFOLIO_THEMES.map((theme) => theme.value),
   });
   const [saving, setSaving] = useState(false);
@@ -35,9 +38,13 @@ export default function SiteConfigSection() {
       logoText: typeof siteConfigData?.logoText === 'string' ? siteConfigData.logoText : '',
       logoImage: typeof siteConfigData?.logoImage === 'string' ? siteConfigData.logoImage : '',
       portfolioTheme:
-        isPortfolioThemeId(siteConfigData?.portfolioTheme)
+        isThemeMode(siteConfigData?.portfolioTheme)
           ? siteConfigData.portfolioTheme
           : 'editorial-bento',
+      portfolioThemeRotationMinutes:
+        typeof siteConfigData?.portfolioThemeRotationMinutes === 'number'
+          ? siteConfigData.portfolioThemeRotationMinutes
+          : 0,
       portfolioThemeRandomPool: normalizePortfolioThemeRandomPool(siteConfigData?.portfolioThemeRandomPool),
     });
     setFormError('');
@@ -78,6 +85,7 @@ export default function SiteConfigSection() {
             logoText: siteConfig.logoText.trim(),
             logoImage: siteConfig.logoImage.trim(),
             portfolioTheme: siteConfig.portfolioTheme,
+            portfolioThemeRotationMinutes: siteConfig.portfolioThemeRotationMinutes,
             portfolioThemeRandomPool: siteConfig.portfolioThemeRandomPool,
           }),
         }),
@@ -112,7 +120,7 @@ export default function SiteConfigSection() {
     }
 
     const nextTheme = pool[Math.floor(Math.random() * pool.length)];
-    setSiteConfig((previous) => ({ ...previous, portfolioTheme: nextTheme }));
+    setSiteConfig((previous) => ({ ...previous, portfolioTheme: 'random' }));
     setFieldErrors((current) => clearFieldErrors(clearFieldErrors(current, 'portfolioTheme'), 'portfolioThemeRandomPool'));
   };
 
@@ -187,6 +195,56 @@ export default function SiteConfigSection() {
               </button>
             </div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div
+                className={`rounded-xl border p-4 transition ${
+                  siteConfig.portfolioTheme === 'random'
+                    ? 'border-cyan-400 bg-cyan-50 text-slate-950 dark:border-cyan-300 dark:bg-cyan-950/40 dark:text-slate-100'
+                    : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900'
+                }`}
+              >
+                <label className="flex cursor-pointer gap-3">
+                  <input
+                    type="radio"
+                    name="portfolioTheme"
+                    value="random"
+                    checked={siteConfig.portfolioTheme === 'random'}
+                    onChange={() => {
+                      setSiteConfig((previous) => ({ ...previous, portfolioTheme: 'random' }));
+                      setFieldErrors((current) => clearFieldErrors(current, 'portfolioTheme'));
+                    }}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="block text-sm font-semibold">Random</span>
+                    <span className="mt-1 block text-sm text-slate-500">
+                      Rotate between the themes selected below.
+                    </span>
+                  </span>
+                </label>
+
+                {siteConfig.portfolioTheme === 'random' ? (
+                  <label className="mt-4 block border-t border-slate-200 pt-3 text-xs font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                    Rotation interval (minutes). 0 = every visit
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      max={60 * 24 * 30}
+                      value={siteConfig.portfolioThemeRotationMinutes ?? 0}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        setSiteConfig((previous) => ({
+                          ...previous,
+                          portfolioThemeRotationMinutes: Number.isFinite(nextValue) ? Math.max(0, Math.min(nextValue, 60 * 24 * 30)) : 0,
+                        }));
+                        setFieldErrors((current) => clearFieldErrors(current, 'portfolioThemeRotationMinutes'));
+                      }}
+                      className={withFieldError(inputStyles, Boolean(getFieldError(fieldErrors, 'portfolioThemeRotationMinutes')))}
+                    />
+                    <FieldErrorText error={getFieldError(fieldErrors, 'portfolioThemeRotationMinutes')} />
+                  </label>
+                ) : null}
+              </div>
               {PORTFOLIO_THEMES.map((theme) => {
                 const selected = siteConfig.portfolioTheme === theme.value;
                 const includedInRandom = siteConfig.portfolioThemeRandomPool.includes(theme.value);

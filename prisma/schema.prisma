@@ -116,6 +116,9 @@ model SiteConfig {
   logoImage      String?
   navigation     Json?
   portfolioTheme String   @default("editorial-bento")
+  /// When portfolioTheme is "random", rotate the chosen theme after this many minutes.
+  /// 0 or null means "every visit".
+  portfolioThemeRotationMinutes Int?
   portfolioThemeRandomPool Json?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

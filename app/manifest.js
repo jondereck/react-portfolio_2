@@ -1,7 +1,7 @@
 export default function manifest() {
   return {
-    name: 'Portfolio',
-    short_name: 'Portfolio',
+    name: 'JDN',
+    short_name: 'JDN',
     description: 'Install the portfolio for faster access on mobile and desktop.',
     start_url: '/',
     scope: '/',

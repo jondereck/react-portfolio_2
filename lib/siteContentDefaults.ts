@@ -52,5 +52,6 @@ export const defaultSiteConfig = {
   logoImage: '',
   navigation: defaultNavigation,
   portfolioTheme: DEFAULT_PORTFOLIO_THEME,
+  portfolioThemeRotationMinutes: null,
   portfolioThemeRandomPool: DEFAULT_PORTFOLIO_THEME_RANDOM_POOL,
 };

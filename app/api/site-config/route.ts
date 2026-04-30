@@ -16,6 +16,7 @@ type ConfigPayload = {
   logoImage?: unknown;
   navigation?: unknown;
   portfolioTheme?: unknown;
+  portfolioThemeRotationMinutes?: unknown;
   portfolioThemeRandomPool?: unknown;
 };
 
@@ -30,6 +31,7 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
     logoImage?: unknown;
     navigation?: unknown;
     portfolioTheme?: unknown;
+    portfolioThemeRotationMinutes?: unknown;
     portfolioThemeRandomPool?: unknown;
   };
   if (body.data && typeof body.data === 'object') {
@@ -38,6 +40,7 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
       logoImage?: unknown;
       navigation?: unknown;
       portfolioTheme?: unknown;
+      portfolioThemeRotationMinutes?: unknown;
       portfolioThemeRandomPool?: unknown;
     };
     return {
@@ -45,6 +48,7 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
       logoImage: nested.logoImage,
       navigation: nested.navigation,
       portfolioTheme: nested.portfolioTheme,
+      portfolioThemeRotationMinutes: nested.portfolioThemeRotationMinutes,
       portfolioThemeRandomPool: nested.portfolioThemeRandomPool,
     };
   }
@@ -54,6 +58,7 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
     logoImage: body.logoImage,
     navigation: body.navigation,
     portfolioTheme: body.portfolioTheme,
+    portfolioThemeRotationMinutes: body.portfolioThemeRotationMinutes,
     portfolioThemeRandomPool: body.portfolioThemeRandomPool,
   };
 };
@@ -64,6 +69,7 @@ const normalizeSiteConfig = (
     logoImage: string | null;
     navigation: unknown;
     portfolioTheme?: string | null;
+    portfolioThemeRotationMinutes?: number | null;
     portfolioThemeRandomPool?: unknown;
   } | null,
 ) => {
@@ -73,6 +79,10 @@ const normalizeSiteConfig = (
     navigation: config?.navigation ?? defaultSiteConfig.navigation,
     portfolioTheme:
       typeof config?.portfolioTheme === 'string' ? config.portfolioTheme : defaultSiteConfig.portfolioTheme,
+    portfolioThemeRotationMinutes:
+      typeof config?.portfolioThemeRotationMinutes === 'number'
+        ? config.portfolioThemeRotationMinutes
+        : defaultSiteConfig.portfolioThemeRotationMinutes,
     portfolioThemeRandomPool: normalizePortfolioThemeRandomPool(config?.portfolioThemeRandomPool),
   });
 
@@ -85,6 +95,8 @@ const normalizeSiteConfig = (
     logoImage: parsed.data.logoImage ?? defaultSiteConfig.logoImage,
     navigation: parsed.data.navigation ?? defaultSiteConfig.navigation,
     portfolioTheme: parsed.data.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
+    portfolioThemeRotationMinutes:
+      parsed.data.portfolioThemeRotationMinutes ?? defaultSiteConfig.portfolioThemeRotationMinutes,
     portfolioThemeRandomPool: parsed.data.portfolioThemeRandomPool ?? defaultSiteConfig.portfolioThemeRandomPool,
   };
 };
@@ -132,6 +144,7 @@ export async function PUT(request: Request) {
       logoImage: typeof payload.logoImage === 'string' ? payload.logoImage.trim() : payload.logoImage,
       navigation: payload.navigation,
       portfolioTheme: payload.portfolioTheme,
+      portfolioThemeRotationMinutes: payload.portfolioThemeRotationMinutes,
       portfolioThemeRandomPool: payload.portfolioThemeRandomPool,
     });
 
@@ -144,6 +157,7 @@ export async function PUT(request: Request) {
       !parsed.data.logoImage &&
       !parsed.data.navigation &&
       !parsed.data.portfolioTheme &&
+      parsed.data.portfolioThemeRotationMinutes === undefined &&
       !parsed.data.portfolioThemeRandomPool
     ) {
       return createFormErrorResponse(
@@ -164,6 +178,10 @@ export async function PUT(request: Request) {
         logoImage: parsed.data.logoImage ?? normalizedCurrent.logoImage ?? null,
         navigation: parsed.data.navigation ?? normalizedCurrent.navigation ?? defaultSiteConfig.navigation,
         portfolioTheme: parsed.data.portfolioTheme ?? normalizedCurrent.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
+        portfolioThemeRotationMinutes:
+          parsed.data.portfolioThemeRotationMinutes ??
+          normalizedCurrent.portfolioThemeRotationMinutes ??
+          defaultSiteConfig.portfolioThemeRotationMinutes,
         portfolioThemeRandomPool:
           parsed.data.portfolioThemeRandomPool ??
           normalizedCurrent.portfolioThemeRandomPool ??
@@ -175,6 +193,10 @@ export async function PUT(request: Request) {
         logoImage: parsed.data.logoImage ?? normalizedCurrent.logoImage ?? null,
         navigation: parsed.data.navigation ?? normalizedCurrent.navigation ?? defaultSiteConfig.navigation,
         portfolioTheme: parsed.data.portfolioTheme ?? normalizedCurrent.portfolioTheme ?? defaultSiteConfig.portfolioTheme,
+        portfolioThemeRotationMinutes:
+          parsed.data.portfolioThemeRotationMinutes ??
+          normalizedCurrent.portfolioThemeRotationMinutes ??
+          defaultSiteConfig.portfolioThemeRotationMinutes,
         portfolioThemeRandomPool:
           parsed.data.portfolioThemeRandomPool ??
           normalizedCurrent.portfolioThemeRandomPool ??
@@ -191,6 +213,7 @@ export async function PUT(request: Request) {
           parsed.data.navigation ? 'navigation' : null,
           parsed.data.logoText !== undefined || parsed.data.logoImage !== undefined ? 'branding' : null,
           parsed.data.portfolioTheme !== undefined ? 'portfolio_theme' : null,
+          parsed.data.portfolioThemeRotationMinutes !== undefined ? 'portfolio_theme_rotation' : null,
           parsed.data.portfolioThemeRandomPool !== undefined ? 'portfolio_theme_random_pool' : null,
         ].filter(Boolean),
       },

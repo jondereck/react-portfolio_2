@@ -35,6 +35,8 @@ const parseHexColor = (hex) => {
   };
 };
 
+const transparentBackground = { r: 0, g: 0, b: 0, alpha: 0 };
+
 const buildSquarePng = async ({ logoBuffer, size, paddingRatio, backgroundHex }) => {
   const padding = Math.round(size * paddingRatio);
   const inner = Math.max(1, size - padding * 2);
@@ -55,7 +57,7 @@ const buildSquarePng = async ({ logoBuffer, size, paddingRatio, backgroundHex })
       width: size,
       height: size,
       channels: 4,
-      background: parseHexColor(backgroundHex),
+      background: backgroundHex ? parseHexColor(backgroundHex) : transparentBackground,
     },
   })
     .composite([
@@ -90,12 +92,12 @@ async function main() {
   }
 
   const outputs = [
-    { filename: 'logo192.png', size: 192, paddingRatio: 0.06 },
-    { filename: 'logo512.png', size: 512, paddingRatio: 0.06 },
-    { filename: 'logo512-maskable.png', size: 512, paddingRatio: 0.14 },
-    { filename: 'apple-touch-icon.png', size: 180, paddingRatio: 0.08 },
-    { filename: 'favicon-32x32.png', size: 32, paddingRatio: 0.04 },
-    { filename: 'favicon-16x16.png', size: 16, paddingRatio: 0.04 },
+    { filename: 'logo192.png', size: 192, paddingRatio: 0.03 },
+    { filename: 'logo512.png', size: 512, paddingRatio: 0.03 },
+    { filename: 'logo512-maskable.png', size: 512, paddingRatio: 0.1 },
+    { filename: 'apple-touch-icon.png', size: 180, paddingRatio: 0.04 },
+    { filename: 'favicon-32x32.png', size: 32, paddingRatio: 0, transparent: true },
+    { filename: 'favicon-16x16.png', size: 16, paddingRatio: 0, transparent: true },
   ];
 
   await fs.mkdir(publicDir, { recursive: true });
@@ -106,7 +108,7 @@ async function main() {
       logoBuffer: inputLogo,
       size: output.size,
       paddingRatio: output.paddingRatio,
-      backgroundHex: ICON_BG,
+      backgroundHex: output.transparent ? null : ICON_BG,
     });
     generatedBuffers.set(output.filename, buffer);
     await fs.writeFile(resolvePublicPath(output.filename), buffer);
@@ -115,8 +117,8 @@ async function main() {
   const favicon48 = await buildSquarePng({
     logoBuffer: inputLogo,
     size: 48,
-    paddingRatio: 0.04,
-    backgroundHex: ICON_BG,
+    paddingRatio: 0,
+    backgroundHex: null,
   });
 
   const icoBuffer = await pngToIco([
