@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useMemo, useState } from 'react';
-import { LayoutPanelLeft, LogOut, User, X } from 'lucide-react';
+import { ArrowLeft, LogOut, Menu, User, X } from 'lucide-react';
 import AdminBreadcrumbs from '@/components/admin/layout/AdminBreadcrumbs';
 import { adminNavigationSections } from '@/components/admin/navigation/admin-nav-config';
 
@@ -34,9 +34,11 @@ const pageTitles = {
 
 export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCollapsed = false, onToggleSidebar, accountName = '' }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const title = useMemo(() => pageTitles[pathname] ?? 'Admin Control Center', [pathname]);
+  const canGoBack = useMemo(() => pathname !== '/admin' && pathname !== '/admin/login', [pathname]);
   const resolvedAccountName = String(accountName || '').trim();
   const accountInitial = resolvedAccountName.slice(0, 1).toUpperCase();
 
@@ -58,7 +60,27 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCol
         <div className="md:hidden">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-2">
-              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
+              <div className="flex items-center gap-2">
+                {canGoBack ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && window.history.length > 1) {
+                        router.back();
+                        return;
+                      }
+                      router.push('/admin');
+                    }}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                    aria-label="Go back"
+                    title="Go back"
+                  >
+                    <ArrowLeft className="size-4" />
+                  </button>
+                ) : null}
+
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
+              </div>
               <h1 className="text-2xl font-bold leading-tight text-slate-900 dark:text-slate-100">{title}</h1>
             </div>
 
@@ -77,7 +99,27 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCol
 
         <div className="hidden md:flex md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
+            <div className="flex items-center gap-2">
+              {canGoBack ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof window !== 'undefined' && window.history.length > 1) {
+                      router.back();
+                      return;
+                    }
+                    router.push('/admin');
+                  }}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  aria-label="Go back"
+                  title="Go back"
+                >
+                  <ArrowLeft className="size-4" />
+                </button>
+              ) : null}
+
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
+            </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{title}</h1>
             <div>
               <AdminBreadcrumbs />
@@ -93,7 +135,7 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCol
                 aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               >
-                <LayoutPanelLeft className="size-5" />
+                <Menu className="size-5" />
               </button>
             ) : null}
           </div>

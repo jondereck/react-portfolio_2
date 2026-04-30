@@ -309,12 +309,7 @@ function Sidebar({ config, links, darkMode, onToggleDark, profileSlug }) {
           <div className="mt-5 rounded-[26px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
             <span className="inline-flex rounded-full border-2 border-[#101010] bg-[#ff6a2a] px-4 py-2 text-xs font-black text-white">Recent Project</span>
             <h3 className="mt-4 line-clamp-2 text-xl font-black leading-tight text-[#101010]">{projectTitle}</h3>
-            {projectSummary ? (
-              <div className="relative mt-3 max-h-[132px] overflow-hidden">
-                <p className="text-sm leading-7 text-[#5f5f5f]">{projectSummary}</p>
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#fffdf8] to-transparent" />
-              </div>
-            ) : null}
+
             {projectHighlights.length > 0 ? (
               <div className="mt-4 flex flex-wrap gap-2">
                 {projectHighlights.map((item) => (
@@ -385,12 +380,25 @@ function CtaLink({ href, children, className }) {
   );
 }
 
-function SectionTitle({ eyebrow, title, desc, dark = false }) {
+function SectionTitle({ eyebrow, title, desc, dark = false, align = 'left' }) {
+  const centered = align === 'center';
   return (
-    <div>
+    <div className={centered ? 'text-center' : ''}>
       <small className={cx('block text-xs font-black uppercase', dark ? 'text-[#ff6a2a]' : 'text-[#ff6a2a]')}>{eyebrow}</small>
-      <h2 className={cx('mt-3 max-w-[14ch] text-4xl font-black leading-[0.95] md:text-6xl', dark ? 'text-white' : 'text-[#101010]')}>{title}</h2>
-      {desc ? <p className={cx('mt-4 max-w-3xl text-base leading-8', dark ? 'text-white/80' : 'text-[#5f5f5f]')}>{desc}</p> : null}
+      <h2
+        className={cx(
+          'mt-3 max-w-[14ch] text-4xl font-black leading-[0.95] md:text-6xl',
+          centered ? 'mx-auto' : '',
+          dark ? 'text-white' : 'text-[#101010]',
+        )}
+      >
+        {title}
+      </h2>
+      {desc ? (
+        <p className={cx('mt-4 max-w-3xl text-base leading-8', centered ? 'mx-auto' : '', dark ? 'text-white/80' : 'text-[#5f5f5f]')}>
+          {desc}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -550,19 +558,19 @@ function AboutSection({ about }) {
   return (
     <section id="about" className="mt-7">
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="flex min-h-[320px] items-end rounded-[28px] border-[3px] border-[#101010] bg-[linear-gradient(135deg,#141414,#343434)] p-7 text-white shadow-[8px_8px_0_#101010]">
-          <SectionTitle
-            dark
-            eyebrow="About"
-            title={about?.title || 'About'}
-            desc={about?.body}
-          />
+        <div className="flex min-h-[320px] items-center justify-center rounded-[28px] border-[3px] border-[#101010] bg-[linear-gradient(135deg,#141414,#343434)] p-7 text-white shadow-[8px_8px_0_#101010]">
+          <SectionTitle dark align="center" eyebrow="About" title={about?.title || 'About'} desc={about?.body} />
         </div>
         {cards.length > 0 ? (
           <div className="grid gap-4">
             {cards.map((card, index) => (
-              <article key={`${card.label}-${index}`} className="grid grid-cols-[auto_1fr] gap-4 rounded-[24px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
-                <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[#ff6a2a] font-black text-white shadow-[4px_4px_0_#101010]">{String(index + 1).padStart(2, '0')}</div>
+              <article
+                key={`${card.label}-${index}`}
+                className="grid grid-cols-[auto_1fr] gap-4 rounded-[24px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]"
+              >
+                <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[#ff6a2a] font-black text-white shadow-[4px_4px_0_#101010]">
+                  {String(index + 1).padStart(2, '0')}
+                </div>
                 <div>
                   <h3 className="text-xl font-black">{card.label}</h3>
                   <p className="mt-2 text-sm leading-7 text-[#5f5f5f]">{card.value}</p>
@@ -716,12 +724,16 @@ function WorkSection({ profileSlug }) {
 function SkillsExperienceSection({ profileSlug }) {
   const { data: skillsData, error: skillsError, isLoading: skillsLoading } = useSWR(withProfile('/api/skills', profileSlug), fetcher);
   const { data: experienceData, error: experienceError, isLoading: experienceLoading } = useSWR(withProfile('/api/experience', profileSlug), fetcher);
+  const [showAllSkills, setShowAllSkills] = useState(false);
   const skills = Array.isArray(skillsData) ? skillsData : [];
   const experienceItems = Array.isArray(experienceData) ? experienceData : [];
   const loading = skillsLoading || experienceLoading;
   const error = skillsError || experienceError;
   const hasSkills = skills.length > 0;
   const hasExperience = experienceItems.length > 0;
+  const skillsPreviewLimit = 8;
+  const shouldClampSkills = skills.length > skillsPreviewLimit;
+  const visibleSkills = showAllSkills || !shouldClampSkills ? skills : skills.slice(0, skillsPreviewLimit);
 
   if (!loading && !error && !hasSkills && !hasExperience) {
     return null;
@@ -735,8 +747,8 @@ function SkillsExperienceSection({ profileSlug }) {
           <SectionTitle eyebrow="Skills" title="Skills." />
           {loading ? <p className="mt-4 text-sm font-bold text-[#5f5f5f]">Loading experience data...</p> : null}
           {error ? <p className="mt-4 text-sm font-bold text-rose-700">{error.message}</p> : null}
-          <div className="mt-6 grid gap-4">
-            {skills.map((skill) => (
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {visibleSkills.map((skill) => (
               <div key={skill.id} className="rounded-[20px] border-2 border-[#101010] bg-[#e8dfd2] p-4">
                 <div className="mb-3 flex items-center justify-between gap-3 font-black">
                   <span className="truncate">{skill.name}</span>
@@ -748,6 +760,17 @@ function SkillsExperienceSection({ profileSlug }) {
               </div>
             ))}
           </div>
+          {shouldClampSkills ? (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowAllSkills((value) => !value)}
+                className="rounded-full border-2 border-[#101010] bg-[#fffdf8] px-5 py-3 text-sm font-black text-[#101010] shadow-[6px_6px_0_#101010] transition hover:-translate-y-0.5"
+              >
+                {showAllSkills ? 'Show less' : 'Show all skills'}
+              </button>
+            </div>
+          ) : null}
         </div>
         ) : null}
 

@@ -157,6 +157,24 @@ const normalizeDescriptions = (value) => {
   return [];
 };
 
+const getProjectTimestamp = (project) => {
+  const createdAt = project?.createdAt ? new Date(project.createdAt).getTime() : Number.NaN;
+  if (Number.isFinite(createdAt)) return createdAt;
+
+  const updatedAt = project?.updatedAt ? new Date(project.updatedAt).getTime() : Number.NaN;
+  if (Number.isFinite(updatedAt)) return updatedAt;
+
+  return Number.NEGATIVE_INFINITY;
+};
+
+const getRecentProjects = (projects, limit = 2) => {
+  if (!Array.isArray(projects) || projects.length === 0) return [];
+
+  return [...projects]
+    .sort((left, right) => getProjectTimestamp(right) - getProjectTimestamp(left))
+    .slice(0, Math.max(0, limit));
+};
+
 const toIsoDate = (value) => {
   if (!value) return '';
   const date = new Date(value);
@@ -437,7 +455,19 @@ function Hero({ hero, about, profileSlug }) {
   ].filter((item) => item?.label && item?.value).slice(0, 3);
   const portraitHighlight = normalizedHighlights[0]?.value?.split(/[.,\n]/)[0]?.slice(0, 12) || '';
   const portraitLabel = normalizedHighlights[0]?.label || '';
-  const sideCards = aboutHighlights.slice(0, 2);
+  const recentProjects = getRecentProjects(projects, 2);
+  const sideCards =
+    recentProjects.length > 0
+      ? recentProjects.map((project, index) => ({
+          label:
+            typeof project?.badge === 'string' && project.badge.trim()
+              ? project.badge.trim()
+              : index === 0
+                ? 'Recent project'
+                : 'Also recent',
+          value: typeof project?.title === 'string' && project.title.trim() ? project.title.trim() : 'Project',
+        }))
+      : aboutHighlights.slice(0, 2);
   const eyebrow = typeof hero?.eyebrow === 'string' ? hero.eyebrow.trim() : '';
   const title = typeof hero?.title === 'string' ? hero.title.trim() : '';
   const primaryCtaLabel = typeof hero?.primaryCtaLabel === 'string' ? hero.primaryCtaLabel.trim() : '';

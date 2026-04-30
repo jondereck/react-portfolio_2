@@ -6,6 +6,7 @@ import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import EditorialBentoPortfolio from './components/editorial/EditorialBentoPortfolio';
 import MinimalistEditorialPortfolio from './components/editorial/MinimalistEditorialPortfolio';
 import NeoEditorialPortfolio from './components/editorial/NeoEditorialPortfolio';
+import ClassicPortfolio from './components/ClassicPortfolio';
 import { isPortfolioThemeId } from '@/lib/portfolioThemes';
 import { REALTIME_EVENT, REALTIME_SIGNAL_KEY, revalidatePublicData } from '@/lib/realtime';
 
@@ -73,7 +74,7 @@ const normalizeRotationMinutes = (value) => {
 };
 
 const resolveRandomTheme = ({ pool, rotationMinutes, profileSlug }) => {
-  const candidates = Array.isArray(pool) ? pool.filter((value) => isPortfolioThemeId(value) && value !== 'classic') : [];
+  const candidates = Array.isArray(pool) ? pool.filter((value) => isPortfolioThemeId(value)) : [];
   if (candidates.length === 0) {
     return null;
   }
@@ -147,10 +148,9 @@ function App({ profileSlug = null }) {
   const isRandomMode = portfolioTheme === 'random';
   const randomPoolHasCandidates = isRandomMode
     ? Array.isArray(siteConfig?.portfolioThemeRandomPool) &&
-      siteConfig.portfolioThemeRandomPool.some((value) => isPortfolioThemeId(value) && value !== 'classic')
+      siteConfig.portfolioThemeRandomPool.some((value) => isPortfolioThemeId(value))
     : true;
-  const hasValidTheme =
-    (isRandomMode || (isPortfolioThemeId(portfolioTheme) && portfolioTheme !== 'classic')) && randomPoolHasCandidates;
+  const hasValidTheme = (isRandomMode || isPortfolioThemeId(portfolioTheme)) && randomPoolHasCandidates;
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -303,6 +303,22 @@ function App({ profileSlug = null }) {
           profileSlug={profileSlug}
           siteContent={siteContent}
           siteConfig={siteConfig}
+        />
+        <PwaInstallPrompt />
+      </div>
+    );
+  }
+
+  if (resolvedTheme === 'classic') {
+    return (
+      <div>
+        {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
+        <ClassicPortfolio
+          profileSlug={profileSlug}
+          siteContent={siteContent}
+          siteConfig={siteConfig}
+          darkMode={darkMode}
+          onToggleDark={toggleDark}
         />
         <PwaInstallPrompt />
       </div>

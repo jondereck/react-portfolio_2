@@ -3,14 +3,13 @@
 import Link from 'next/link';
 import { Menu, Transition } from '@headlessui/react';
 import {
-  ChevronLeft,
-  ChevronRight,
   Compass,
   Globe,
   FolderOpen,
   Images,
   LayoutDashboard,
   Map,
+  Menu as MenuIcon,
   Plug,
   LogOut,
   Settings,
@@ -80,7 +79,7 @@ export default function CollapsibleSidebar({
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+            <MenuIcon className="size-4" />
           </button>
         </div>
 
