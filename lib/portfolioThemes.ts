@@ -10,6 +10,11 @@ export const PORTFOLIO_THEMES = [
     description: 'Sticky side rail, orange accent, case-study blocks, and heavy ink borders.',
   },
   {
+    value: 'immersive-3d',
+    title: 'Immersive 3D',
+    description: 'Dark sci-fi glass portfolio with depth, glow, spotlight, and motion.',
+  },
+  {
     value: 'minimalist-editorial',
     title: 'Minimalist Editorial',
     description: 'Monochrome magazine layout with quiet cards, soft portrait shapes, and thin dividers.',
@@ -24,6 +29,7 @@ export const PORTFOLIO_THEMES = [
 export const PORTFOLIO_THEME_IDS = [
   'editorial-bento',
   'neo-editorial',
+  'immersive-3d',
   'minimalist-editorial',
   'classic',
 ] as const;

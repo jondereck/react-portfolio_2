@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
 import EditorialBentoPortfolio from './components/editorial/EditorialBentoPortfolio';
+import Immersive3DPortfolio from './components/editorial/Immersive3DPortfolio';
 import MinimalistEditorialPortfolio from './components/editorial/MinimalistEditorialPortfolio';
 import NeoEditorialPortfolio from './components/editorial/NeoEditorialPortfolio';
 import ClassicPortfolio from './components/ClassicPortfolio';
@@ -284,6 +285,22 @@ function App({ profileSlug = null }) {
       <div>
         {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
         <NeoEditorialPortfolio
+          profileSlug={profileSlug}
+          siteContent={siteContent}
+          siteConfig={siteConfig}
+          darkMode={darkMode}
+          onToggleDark={toggleDark}
+        />
+        <PwaInstallPrompt />
+      </div>
+    );
+  }
+
+  if (resolvedTheme === 'immersive-3d') {
+    return (
+      <div>
+        {showThemeFade ? <div className="pointer-events-none fixed inset-0 z-[60] animate-pulse bg-slate-950/10 dark:bg-white/10" /> : null}
+        <Immersive3DPortfolio
           profileSlug={profileSlug}
           siteContent={siteContent}
           siteConfig={siteConfig}
