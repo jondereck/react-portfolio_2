@@ -215,3 +215,8 @@ export const portfolioSchema = z.object({
   isFeatured: z.boolean().optional().default(false),
   isPublished: publishField(),
 });
+
+export const portfolioReorderSchema = z.object({
+  featuredIds: z.array(z.number().int().positive()).default([]),
+  regularIds: z.array(z.number().int().positive()).default([]),
+});

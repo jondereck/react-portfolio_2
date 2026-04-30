@@ -90,7 +90,7 @@ const Certificates = ({ profileSlug = null }) => {
             className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
           >
             {isPdfAssetUrl(item.image) ? (
-              <div className="flex h-48 w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
+              <div className="flex h-56 w-full items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900">
                 <div className="text-center">
                   <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/80 text-rose-600 shadow-sm dark:bg-slate-950/70 dark:text-rose-300">
                     <FileText className="h-7 w-7" />
@@ -101,7 +101,9 @@ const Certificates = ({ profileSlug = null }) => {
               </div>
             ) : (
               <button type="button" className="w-full" onClick={() => setSelectedImage(item.image)}>
-                <img src={item.image} alt={`${item.title} certificate`} className="h-48 w-full object-cover" />
+                <div className="grid h-56 w-full place-items-center bg-white p-3">
+                  <img src={item.image} alt={`${item.title} certificate`} className="h-full w-full object-contain" />
+                </div>
               </button>
             )}
             <div className="space-y-2 p-4">

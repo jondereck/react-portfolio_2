@@ -104,6 +104,19 @@ export async function POST(request: Request) {
     }
     const parsed = await buildPortfolioInput(data, imageFile);
 
+    const hasExplicitSortOrder =
+      typeof data?.sortOrder !== 'undefined' && data?.sortOrder !== null && String(data.sortOrder).trim() !== '';
+    const nextSortOrder = hasExplicitSortOrder
+      ? (parsed.sortOrder ?? 0)
+      : await (async () => {
+          const min = await prisma.portfolio.aggregate({
+            where: { profileId: profile.id },
+            _min: { sortOrder: true },
+          });
+          const currentMin = typeof min._min.sortOrder === 'number' ? min._min.sortOrder : 0;
+          return currentMin - 1;
+        })();
+
     const createData: Record<string, unknown> = {
       profileId: profile.id,
       title: parsed.title,
@@ -115,7 +128,7 @@ export async function POST(request: Request) {
       badge: parsed.badge,
       repoUrl: parsed.repoUrl ?? null,
       demoUrl: parsed.demoUrl ?? null,
-      sortOrder: parsed.sortOrder ?? 0,
+      sortOrder: nextSortOrder,
       isFeatured: parsed.isFeatured ?? false,
       isPublished: parsed.isPublished ?? true,
     };

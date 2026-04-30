@@ -9,7 +9,8 @@ import { normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
 import { useLoadingStore } from '@/store/loading';
 import { isSafeHttpUrl } from '@/lib/url-safety';
-import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl } from '@/lib/certificates';
+import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl, toCloudinaryPdfPreviewUrl } from '@/lib/certificates';
+import { Dialog, DialogContent } from '@/src/components/ui/dialog';
 
 const cx = (...classes) => classes.filter(Boolean).join(' ');
 const NEO_ADMIN_CLICK_WINDOW_MS = 550;
@@ -89,6 +90,28 @@ const getMostUsedTech = (projects) => {
     });
   });
   return [...counts.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))[0]?.[0] ?? '';
+};
+
+const getProjectTimestamp = (project) => {
+  const createdAt = project?.createdAt ? new Date(project.createdAt).getTime() : Number.NaN;
+  if (Number.isFinite(createdAt)) return createdAt;
+
+  const updatedAt = project?.updatedAt ? new Date(project.updatedAt).getTime() : Number.NaN;
+  if (Number.isFinite(updatedAt)) return updatedAt;
+
+  return Number.NEGATIVE_INFINITY;
+};
+
+const getRecentProject = (projects) => {
+  if (!Array.isArray(projects) || projects.length === 0) return null;
+
+  return [...projects].sort((left, right) => getProjectTimestamp(right) - getProjectTimestamp(left))[0] ?? projects[0] ?? null;
+};
+
+const getProjectSummary = (project) => {
+  if (typeof project?.description === 'string' && project.description.trim()) return project.description.trim();
+  if (typeof project?.summary === 'string' && project.summary.trim()) return project.summary.trim();
+  return normalizeDescriptions(project?.descriptions)[0] ?? '';
 };
 
 function Icon({ name, className = 'h-5 w-5' }) {
@@ -266,38 +289,45 @@ function NavLinks({ links, onNavigate, compact = false }) {
   );
 }
 
-function Sidebar({ config, links, darkMode, onToggleDark, siteContent }) {
-  const contact = siteContent?.contact && typeof siteContent.contact === 'object' ? siteContent.contact : null;
-  const highlight = Array.isArray(siteContent?.about?.highlights) ? siteContent.about.highlights[0] : null;
-  const sidebarItems = [
-    contact?.email ? { label: 'Email', value: contact.email, href: `mailto:${contact.email}` } : null,
-    contact?.location ? { label: 'Location', value: contact.location } : null,
-    contact?.calendarLink && isSafeHttpUrl(contact.calendarLink) ? { label: 'Calendar', value: 'Book a call', href: contact.calendarLink } : null,
+function Sidebar({ config, links, darkMode, onToggleDark, profileSlug }) {
+  const { data: projectsData } = useSWR(withProfile('/api/portfolio', profileSlug), fetcher);
+  const projects = Array.isArray(projectsData) ? projectsData : Array.isArray(projectsData?.projects) ? projectsData.projects : [];
+  const recentProject = getRecentProject(projects);
+  const projectTitle = typeof recentProject?.title === 'string' ? recentProject.title.trim() : '';
+  const projectSummary = getProjectSummary(recentProject);
+  const projectTech = normalizeTech(recentProject?.tech ?? recentProject?.techStack).slice(0, 2);
+  const projectHighlights = [
+    recentProject?.badge ? String(recentProject.badge).trim() : '',
+    ...projectTech,
   ].filter(Boolean);
 
   return (
-    <aside className="sticky top-0 hidden h-screen flex-col justify-between gap-5 border-r-[3px] border-[#101010] bg-[#fffdf8]/85 p-7 backdrop-blur-xl xl:flex">
+    <aside className="sticky top-0 hidden h-screen flex-col gap-5 overflow-y-auto overscroll-contain border-r-[3px] border-[#101010] bg-[#fffdf8]/85 p-7 backdrop-blur-xl xl:flex">
       <div>
         <Logo config={config} />
-        {highlight || sidebarItems.length > 0 ? (
+        {projectTitle ? (
           <div className="mt-5 rounded-[26px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
-            {highlight ? (
-              <>
-                <span className="inline-flex rounded-full border-2 border-[#101010] bg-[#ff6a2a] px-4 py-2 text-xs font-black text-white">{highlight.label}</span>
-                <p className="mt-4 text-sm leading-8 text-[#5f5f5f]">{highlight.value}</p>
-              </>
+            <span className="inline-flex rounded-full border-2 border-[#101010] bg-[#ff6a2a] px-4 py-2 text-xs font-black text-white">Recent Project</span>
+            <h3 className="mt-4 line-clamp-2 text-xl font-black leading-tight text-[#101010]">{projectTitle}</h3>
+            {projectSummary ? (
+              <div className="relative mt-3 max-h-[132px] overflow-hidden">
+                <p className="text-sm leading-7 text-[#5f5f5f]">{projectSummary}</p>
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-[#fffdf8] to-transparent" />
+              </div>
             ) : null}
-            {sidebarItems.length > 0 ? (
-              <div className={cx('grid gap-2 text-sm font-black text-[#101010]', highlight ? 'mt-4 border-t-2 border-[#101010]/10 pt-4' : '')}>
-                {sidebarItems.map((item) =>
-                  item.href ? (
-                    <a key={item.label} href={item.href} target={isSafeHttpUrl(item.href) ? '_blank' : undefined} rel={isSafeHttpUrl(item.href) ? 'noreferrer' : undefined} className="break-words hover:text-[#ff6a2a]">
-                      {item.value}
-                    </a>
-                  ) : (
-                    <span key={item.label}>{item.value}</span>
-                  ),
-                )}
+            {projectHighlights.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {projectHighlights.map((item) => (
+                  <span key={item} className="rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-3 py-1 text-[11px] font-black text-[#101010]">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {!projectSummary && projectHighlights.length === 0 ? (
+              <div className="relative mt-4 max-h-[240px] overflow-hidden">
+                <p className="text-sm leading-8 text-[#5f5f5f]">Latest work from the project portfolio.</p>
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#fffdf8] to-transparent" />
               </div>
             ) : null}
           </div>
@@ -307,7 +337,7 @@ function Sidebar({ config, links, darkMode, onToggleDark, siteContent }) {
         </div>
       </div>
 
-      <div className="rounded-[26px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
+      <div className="mt-auto rounded-[26px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
         <h3 className="text-base font-black text-[#101010]">Display</h3>
         <ThemeButtons darkMode={darkMode} onToggleDark={onToggleDark} />
       </div>
@@ -365,7 +395,7 @@ function SectionTitle({ eyebrow, title, desc, dark = false }) {
   );
 }
 
-function DeviceMock({ heroImage = '', projects = [], skills = [], experience = [], aboutHighlights = [] }) {
+function DeviceMock({ heroImage = '', projects = [], skills = [], experience = [] }) {
   const image = getSafeImage(heroImage);
   const visualCards = [
     ...projects.slice(0, 3).map((project) => ({
@@ -379,10 +409,6 @@ function DeviceMock({ heroImage = '', projects = [], skills = [], experience = [
     ...experience.slice(0, 3).map((item) => ({
       label: item.company || 'Experience',
       value: item.title,
-    })),
-    ...aboutHighlights.slice(0, 3).map((item) => ({
-      label: item.label,
-      value: item.value,
     })),
   ].filter((item) => item.label && item.value).slice(0, 6);
 
@@ -402,8 +428,22 @@ function DeviceMock({ heroImage = '', projects = [], skills = [], experience = [
         {image ? (
           <div className="relative h-[315px]">
             <img src={image} alt="Portfolio hero visual" className="h-full w-full object-cover" />
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#101010]/75 to-transparent p-5 pt-20">
-              {visualCards[0]?.value ? <p className="line-clamp-2 text-2xl font-black text-white">{visualCards[0].value}</p> : null}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#101010]/70 via-[#101010]/20 to-transparent p-3 pt-16">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-2 backdrop-blur">
+                    <span className="h-1.5 w-1.5 rounded-full bg-white/85" />
+                    <span className="h-1 w-6 rounded-full bg-white/55" />
+                    <span className="h-1 w-3 rounded-full bg-white/35" />
+                  </div>
+                  <div className="hidden h-1 w-14 rounded-full bg-white/25 sm:block" />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="h-8 w-8 rounded-full border border-white/20 bg-white/10 backdrop-blur" />
+                  <span className="h-8 w-8 rounded-full border border-white/20 bg-white/10 backdrop-blur" />
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -436,7 +476,7 @@ function HeroSection({ hero, about, profileSlug }) {
     mainStack ? { value: mainStack, label: 'main stack' } : null,
     ...aboutHighlights.map((item) => ({ value: item.value, label: item.label })),
   ].filter((metric) => metric?.value && metric?.label).slice(0, 3);
-  const hasVisual = Boolean(getSafeImage(hero?.image) || projects.length || experienceItems.length || aboutHighlights.length);
+  const hasVisual = Boolean(getSafeImage(hero?.image) || projects.length || experienceItems.length);
   const eyebrow = typeof hero?.eyebrow === 'string' ? hero.eyebrow.trim() : '';
   const title = typeof hero?.title === 'string' ? hero.title.trim() : '';
   const primaryCtaLabel = typeof hero?.primaryCtaLabel === 'string' ? hero.primaryCtaLabel.trim() : '';
@@ -492,7 +532,7 @@ function HeroSection({ hero, about, profileSlug }) {
 
       {hasVisual ? (
         <div className="grid rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
-          <DeviceMock heroImage={hero?.image} projects={projects} experience={experienceItems} aboutHighlights={aboutHighlights} />
+          <DeviceMock heroImage={hero?.image} projects={projects} experience={experienceItems} />
         </div>
       ) : null}
     </section>
@@ -743,6 +783,7 @@ function SkillsExperienceSection({ profileSlug }) {
 function CertificatesSection({ profileSlug }) {
   const [activeCategory, setActiveCategory] = useState('All');
   const [page, setPage] = useState(1);
+  const [selectedCert, setSelectedCert] = useState(null);
   const itemsPerPage = 6;
   const { data, error } = useSWR(withProfile('/api/certificates', profileSlug), fetcher);
   const items = Array.isArray(data) ? data : [];
@@ -778,18 +819,39 @@ function CertificatesSection({ profileSlug }) {
           {pageItems.map((cert, index) => {
             const certificateImage = getSafeImage(cert.image);
             const isPdf = isPdfAssetUrl(cert.image);
+            const pdfPreview = isPdf && typeof cert.image === 'string' ? toCloudinaryPdfPreviewUrl(cert.image) : null;
+            const previewImage = pdfPreview || certificateImage;
             return (
               <article key={`${cert.id ?? 'cert'}-${cert.title}-${index}`} className="overflow-hidden rounded-[24px] border-2 border-[#101010] bg-[#fffdf8]">
-                <div className="grid min-h-[150px] place-items-center bg-[linear-gradient(135deg,#fff1ea,#fff9ef,#fff)] p-4">
-                  {certificateImage && !isPdf ? (
-                    <img src={certificateImage} alt={`${cert.title} certificate`} className="h-32 w-full rounded-[18px] border-2 border-[#101010] object-cover" />
-                  ) : (
-                    <div className="grid h-28 w-full max-w-[230px] place-items-center rounded-[18px] border-2 border-[#101010] bg-white p-3 text-center">
-                      <Icon name="file" className="h-8 w-8 text-[#ff6a2a]" />
-                      <p className="text-xs font-black">{isPdf ? 'PDF Certificate' : cert.credentialId || cert.issuer}</p>
-                    </div>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const imageUrl = previewImage || '';
+                    setSelectedCert(
+                      imageUrl
+                        ? { title: cert.title, imageUrl, pdfUrl: isPdf ? cert.image : null, isPdf }
+                        : null,
+                    );
+                  }}
+                  className="block w-full text-left"
+                >
+                  <div className="grid min-h-[210px] place-items-center bg-[linear-gradient(135deg,#fff1ea,#fff9ef,#fff)] p-4">
+                    {previewImage ? (
+                      <div className="grid w-full place-items-center rounded-[18px] border-2 border-[#101010] bg-white p-2">
+                        <img
+                          src={previewImage}
+                          alt={`${cert.title} certificate`}
+                          className="h-44 w-full object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid h-36 w-full max-w-[260px] place-items-center rounded-[18px] border-2 border-[#101010] bg-white p-3 text-center">
+                        <Icon name="file" className="h-9 w-9 text-[#ff6a2a]" />
+                        <p className="mt-2 text-xs font-black">{isPdf ? 'PDF Certificate' : cert.credentialId || cert.issuer}</p>
+                      </div>
+                    )}
+                  </div>
+                </button>
                 <div className="p-4">
                   <h3 className="text-base font-black leading-snug">{cert.title}</h3>
                   <p className="mt-2 text-sm font-bold text-[#5f5f5f]">{cert.issuer}</p>
@@ -816,6 +878,28 @@ function CertificatesSection({ profileSlug }) {
           </div>
         ) : null}
       </div>
+
+      <Dialog open={Boolean(selectedCert)} onOpenChange={(isOpen) => setSelectedCert(isOpen ? selectedCert : null)}>
+        <DialogContent className="w-[min(980px,calc(100%-24px))] max-w-none rounded-[28px] border-[3px] border-[#101010] bg-[#fffdf8] p-3 shadow-[10px_10px_0_#101010]">
+          {selectedCert?.isPdf && typeof selectedCert.pdfUrl === 'string' ? (
+            <iframe
+              title={selectedCert.title || 'Certificate preview'}
+              src={selectedCert.pdfUrl}
+              className="h-[80vh] w-full rounded-[22px] border-2 border-[#101010] bg-white"
+            />
+          ) : (
+            <div className="grid place-items-center rounded-[22px] border-2 border-[#101010] bg-white p-3">
+              {selectedCert?.imageUrl ? (
+                <img
+                  src={selectedCert.imageUrl}
+                  alt={selectedCert.title || 'Certificate preview'}
+                  className="max-h-[80vh] w-full object-contain"
+                />
+              ) : null}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -979,7 +1063,7 @@ export default function NeoEditorialPortfolio({ profileSlug = null, siteContent,
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(255,106,42,.10),transparent_22%),radial-gradient(circle_at_bottom_left,rgba(255,209,102,.16),transparent_24%),#f3efe7] font-sans text-[#101010] selection:bg-[#ff6a2a] selection:text-white">
       <MobileTopbar config={siteConfig} links={links} darkMode={darkMode} onToggleDark={onToggleDark} />
       <div className="grid min-h-screen xl:grid-cols-[300px_minmax(0,1fr)]">
-        <Sidebar config={siteConfig} links={links} darkMode={darkMode} onToggleDark={onToggleDark} siteContent={siteContent} />
+        <Sidebar config={siteConfig} links={links} darkMode={darkMode} onToggleDark={onToggleDark} profileSlug={profileSlug} />
         <main className="mx-auto w-[min(1380px,calc(100%-20px))] py-5 md:w-[min(1380px,calc(100%-32px))] md:py-7">
           <HeroSection hero={siteContent?.hero} about={siteContent?.about} profileSlug={profileSlug} />
           <AboutSection about={siteContent?.about} />

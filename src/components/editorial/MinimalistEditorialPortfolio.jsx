@@ -5,11 +5,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
-import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl } from '@/lib/certificates';
+import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl, toCloudinaryPdfPreviewUrl } from '@/lib/certificates';
 import { normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
 import { isSafeHttpUrl } from '@/lib/url-safety';
 import { useLoadingStore } from '@/store/loading';
+import { Dialog, DialogContent } from '@/src/components/ui/dialog';
 
 const ADMIN_CLICK_WINDOW_MS = 550;
 const initialForm = { name: '', email: '', message: '' };
@@ -507,6 +508,7 @@ function Experience({ items, loading, error }) {
 function Certificates({ items, error }) {
   const [activeCategory, setActiveCategory] = useState('All');
   const [page, setPage] = useState(1);
+  const [selectedCert, setSelectedCert] = useState(null);
   const itemsPerPage = 6;
   const sorted = useMemo(() => [...items].sort(compareCertificatesByIssuedAtDesc), [items]);
   const displayItems = sorted;
@@ -545,11 +547,23 @@ function Certificates({ items, error }) {
             const verifyLink = getSafeUrl(cert.link);
             const certificateImage = getSafeImage(cert.image);
             const isPdf = isPdfAssetUrl(cert.image);
+            const pdfPreview = isPdf && typeof cert.image === 'string' ? toCloudinaryPdfPreviewUrl(cert.image) : null;
+            const previewImage = pdfPreview || certificateImage;
             return (
               <article key={cert.id ?? `${cert.title}-${index}`} className="overflow-hidden rounded-3xl bg-white shadow-[0_18px_45px_rgba(0,0,0,.05)]">
-                <div className="grid h-44 place-items-center bg-[#fbfaf7]">
-                  {certificateImage && !isPdf ? (
-                    <img src={certificateImage} alt={`${cert.title} certificate`} className="h-full w-full object-cover object-center" />
+                <div className="grid h-56 place-items-center bg-[#fbfaf7]">
+                  {previewImage ? (
+                    <button
+                      type="button"
+                      className="h-full w-full"
+                      onClick={() => setSelectedCert({ title: cert.title, imageUrl: previewImage, pdfUrl: isPdf ? cert.image : null, isPdf })}
+                    >
+                      <div className="grid h-full w-full place-items-center bg-white/60 p-4">
+                        <div className="grid h-full w-full place-items-center rounded-2xl border border-neutral-200 bg-white p-2">
+                          <img src={previewImage} alt={`${cert.title} certificate`} className="h-full w-full object-contain" />
+                        </div>
+                      </div>
+                    </button>
                   ) : (
                     <div className="m-5 grid h-28 w-full max-w-xs place-items-center rounded-2xl border border-neutral-200 bg-white text-center">
                       <Icon name="certificate" className="h-8 w-8 text-neutral-500" />
@@ -587,6 +601,24 @@ function Certificates({ items, error }) {
           </div>
         ) : null}
       </div>
+
+      <Dialog open={Boolean(selectedCert)} onOpenChange={(isOpen) => setSelectedCert(isOpen ? selectedCert : null)}>
+        <DialogContent className="w-[min(980px,calc(100%-24px))] max-w-none rounded-3xl border border-neutral-200 bg-white p-3 shadow-[0_24px_70px_rgba(0,0,0,.12)]">
+          {selectedCert?.isPdf && typeof selectedCert.pdfUrl === 'string' ? (
+            <iframe
+              title={selectedCert.title || 'Certificate preview'}
+              src={selectedCert.pdfUrl}
+              className="h-[80vh] w-full rounded-2xl border border-neutral-200 bg-white"
+            />
+          ) : (
+            <div className="grid place-items-center rounded-2xl border border-neutral-200 bg-white p-3">
+              {selectedCert?.imageUrl ? (
+                <img src={selectedCert.imageUrl} alt={selectedCert.title || 'Certificate preview'} className="max-h-[80vh] w-full object-contain" />
+              ) : null}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

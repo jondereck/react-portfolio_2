@@ -4,6 +4,7 @@ import DataTable from '@/components/DataTable';
 import FormDialog from '@/components/FormDialog';
 import { useAdminData } from '@/hooks/useAdminData';
 import AdminSectionHeader from '@/components/admin/shared/AdminSectionHeader';
+import PortfolioProjectsArrangeTable from '@/modules/portfolio/admin/PortfolioProjectsArrangeTable';
 
 const cardStyles = 'rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900';
 
@@ -116,15 +117,27 @@ export default function PortfolioResourceSection({ resource }) {
       />
       <div className="p-6">
         {error ? <div className="mb-4 rounded bg-red-100 p-3 text-red-700">{error}</div> : null}
-        <DataTable
-          title={title}
-          listColumns={listColumns}
-          items={displayItems}
-          loading={loading}
-          deletingId={deletingId}
-          onEdit={openEdit}
-          onDelete={handleDelete}
-        />
+        {key === 'portfolio' ? (
+          <PortfolioProjectsArrangeTable
+            items={items}
+            loading={loading}
+            saving={saving}
+            deletingId={deletingId}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+            onRefresh={loadItems}
+          />
+        ) : (
+          <DataTable
+            title={title}
+            listColumns={listColumns}
+            items={displayItems}
+            loading={loading}
+            deletingId={deletingId}
+            onEdit={openEdit}
+            onDelete={handleDelete}
+          />
+        )}
       </div>
     </section>
   );
