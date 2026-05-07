@@ -2,7 +2,12 @@ export interface Env {
   CRON_SECRET?: string;
   TARGET_URL?: string;
   WORKER_TARGET_URL?: string;
+  UNCLOTHY_WORKER_STATE?: KVNamespace;
 }
+
+type KVNamespace = {
+  get(key: string): Promise<string | null>;
+};
 
 // Minimal runtime types so this file typechecks without relying on external
 // Cloudflare Workers type packages.
@@ -15,6 +20,8 @@ type ExecutionContext = {
   waitUntil(promise: Promise<unknown>): void;
 };
 
+const WORKER_ENABLED_KEY = 'unclothy:worker-enabled';
+
 async function readResponseBody(response: Response) {
   const contentType = (response.headers.get('content-type') || '').toLowerCase();
   if (contentType.includes('application/json')) {
@@ -24,6 +31,35 @@ async function readResponseBody(response: Response) {
 }
 
 async function pingWorker(env: Env) {
+  let workerEnabled = false;
+  try {
+    const value = await env.UNCLOTHY_WORKER_STATE?.get(WORKER_ENABLED_KEY);
+    workerEnabled = value === 'true';
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        tag: 'unclothy-cron',
+        ok: false,
+        skipped: true,
+        reason: 'state-read-failed',
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return;
+  }
+
+  if (!workerEnabled) {
+    console.log(
+      JSON.stringify({
+        tag: 'unclothy-cron',
+        ok: true,
+        skipped: true,
+        reason: 'disabled',
+      }),
+    );
+    return;
+  }
+
   const rawTargetUrl =
     (typeof env.TARGET_URL === 'string' && env.TARGET_URL.trim()) ||
     (typeof env.WORKER_TARGET_URL === 'string' && env.WORKER_TARGET_URL.trim()) ||

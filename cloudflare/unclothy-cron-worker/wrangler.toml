@@ -2,6 +2,10 @@ name = "unclothy-cron-worker"
 main = "src/index.ts"
 compatibility_date = "2026-04-22"
 
+[[kv_namespaces]]
+binding = "UNCLOTHY_WORKER_STATE"
+id = "REPLACE_WITH_UNCLOTHY_WORKER_KV_NAMESPACE_ID"
+
 [triggers]
 crons = ["* * * * *"]
 

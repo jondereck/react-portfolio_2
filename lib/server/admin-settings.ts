@@ -10,7 +10,7 @@ type AdminSettingsSnapshot = {
 };
 
 type IntegrationStatus = {
-  key: 'database' | 'cloudinary' | 'resend' | 'googleDrive' | 'unclothy';
+  key: 'database' | 'cloudinary' | 'resend' | 'googleDrive' | 'unclothy' | 'unclothyWorker';
   label: string;
   configured: boolean;
   state: 'connected' | 'warning' | 'disabled';
@@ -225,6 +225,21 @@ export async function getAdminSettingsDashboardData() {
         ? 'Unclothy integration is enabled globally. It is available to admins in Gallery → Media.'
         : 'Unclothy integration is enabled globally, but UNCLOTHY_API_KEY / UNCLOTHY_API_BASE_URL are missing.'
       : 'Unclothy integration is disabled by admin settings.',
+  });
+
+  const cloudflareWorkerControlConfigured = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID) &&
+    Boolean(process.env.CLOUDFLARE_API_TOKEN) &&
+    Boolean(process.env.UNCLOTHY_WORKER_KV_NAMESPACE_ID);
+  statuses.push({
+    key: 'unclothyWorker',
+    label: 'Unclothy Background Worker',
+    configured: settings.integrations.unclothyWorkerEnabled && cloudflareWorkerControlConfigured,
+    state: !settings.integrations.unclothyWorkerEnabled ? 'disabled' : cloudflareWorkerControlConfigured ? 'connected' : 'warning',
+    description: settings.integrations.unclothyWorkerEnabled
+      ? cloudflareWorkerControlConfigured
+        ? 'Cloudflare cron is allowed to process Unclothy tasks while the browser is closed.'
+        : 'Background worker is enabled, but Cloudflare KV control env variables are missing.'
+      : 'Cloudflare cron is paused by admin settings and should not wake the app while idle.',
   });
 
   statuses.push({

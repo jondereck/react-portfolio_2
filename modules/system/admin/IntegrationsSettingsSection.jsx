@@ -20,6 +20,7 @@ const emptyState = {
   googleDriveImportEnabled: true,
   mediaScrapeEnabled: false,
   unclothyEnabled: false,
+  unclothyWorkerEnabled: false,
   blurUnclothyGenerated: true,
   defaultGalleryView: 'cinematic',
 };
@@ -119,6 +120,7 @@ export default function IntegrationsSettingsSection() {
       googleDriveImportEnabled: data.settings.integrations.googleDriveImportEnabled !== false,
       mediaScrapeEnabled: data.settings.integrations.mediaScrapeEnabled === true,
       unclothyEnabled: data.settings.integrations.unclothyEnabled === true,
+      unclothyWorkerEnabled: data.settings.integrations.unclothyWorkerEnabled === true,
       blurUnclothyGenerated: data.settings.integrations.blurUnclothyGenerated !== false,
       defaultGalleryView: data.settings.integrations.defaultGalleryView === 'compact' ? 'compact' : 'cinematic',
     });
@@ -160,6 +162,7 @@ export default function IntegrationsSettingsSection() {
               googleDriveImportEnabled: integrations.googleDriveImportEnabled,
               mediaScrapeEnabled: integrations.mediaScrapeEnabled,
               unclothyEnabled: integrations.unclothyEnabled,
+              unclothyWorkerEnabled: integrations.unclothyWorkerEnabled,
               blurUnclothyGenerated: integrations.blurUnclothyGenerated,
               defaultGalleryView: integrations.defaultGalleryView,
             },
@@ -419,6 +422,16 @@ export default function IntegrationsSettingsSection() {
               onChange={(event) => {
                 setIntegrations((previous) => ({ ...previous, unclothyEnabled: event.target.checked }));
                 clearField('unclothyEnabled');
+              }}
+            />
+            <ToggleCard
+              title="Run Unclothy background worker"
+              description="Allows the Cloudflare cron to process queued generations while the browser is closed."
+              checked={integrations.unclothyWorkerEnabled}
+              error={getFieldError(fieldErrors, 'integrations.unclothyWorkerEnabled')}
+              onChange={(event) => {
+                setIntegrations((previous) => ({ ...previous, unclothyWorkerEnabled: event.target.checked }));
+                clearField('unclothyWorkerEnabled');
               }}
             />
             <ToggleCard

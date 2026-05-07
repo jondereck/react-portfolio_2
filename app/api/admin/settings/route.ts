@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { canManageGlobalSettings } from '@/lib/auth/roles';
 import { resolveRequestActor } from '@/lib/auth/session';
-import { bumpSessionVersion, getAdminSettingsDashboardData, logAdminAuditEvent, updateAdminSettings } from '@/lib/server/admin-settings';
+import { bumpSessionVersion, getAdminSettings, getAdminSettingsDashboardData, logAdminAuditEvent, updateAdminSettings } from '@/lib/server/admin-settings';
+import {
+  CloudflareUnclothyWorkerSyncError,
+  syncUnclothyWorkerEnabledToCloudflare,
+} from '@/lib/server/cloudflare-unclothy-worker';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { integrationsSettingsSchema, securitySettingsSchema } from '@/lib/validators';
 import { createFormErrorResponse, createZodFormErrorResponse, mergeFieldErrors } from '@/lib/server/form-responses';
@@ -71,6 +75,30 @@ export async function PUT(request: Request) {
         },
         400,
       );
+    }
+
+    if (nextIntegrations?.data && Object.prototype.hasOwnProperty.call(nextIntegrations.data, 'unclothyWorkerEnabled')) {
+      const currentSettings = await getAdminSettings({ fresh: true });
+      const nextWorkerEnabled = nextIntegrations.data.unclothyWorkerEnabled === true;
+      if (currentSettings.integrations.unclothyWorkerEnabled !== nextWorkerEnabled) {
+        try {
+          await syncUnclothyWorkerEnabledToCloudflare(nextWorkerEnabled);
+        } catch (error) {
+          if (error instanceof CloudflareUnclothyWorkerSyncError) {
+            return createFormErrorResponse(
+              {
+                error: error.message,
+                errorCode: error.errorCode,
+                fieldErrors: {
+                  'integrations.unclothyWorkerEnabled': [error.message],
+                },
+              },
+              502,
+            );
+          }
+          throw error;
+        }
+      }
     }
 
     if (nextIntegrations?.data || nextSecurity?.data) {

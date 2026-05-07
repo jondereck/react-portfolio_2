@@ -16,20 +16,30 @@ Your deployed Next.js app must have these env vars set (in production, not just 
 - `UNCLOTHY_API_KEY`
 - `UNCLOTHY_SETTINGS_PATH`
 - `CRON_SECRET` (must match what the Cloudflare Worker uses)
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN`
+- `UNCLOTHY_WORKER_KV_NAMESPACE_ID`
+
+The Cloudflare variables above let Admin Settings update the worker's KV switch. Without them, the app will block changes to the background-worker toggle so the UI does not drift from the deployed scheduler.
 
 ## 2) Deploy the Cloudflare scheduled Worker
 
 Worker code lives at `cloudflare/unclothy-cron-worker`.
 
-1. Update the target URL in `cloudflare/unclothy-cron-worker/wrangler.toml`:
+1. Create a Cloudflare KV namespace for worker state.
+2. Update `cloudflare/unclothy-cron-worker/wrangler.toml`:
    - `TARGET_URL = "https://<YOUR_PROD_DOMAIN>/api/admin/integrations/unclothy/worker"`
-2. Set the secret in Cloudflare (recommended):
+   - `id = "<YOUR_KV_NAMESPACE_ID>"` under `UNCLOTHY_WORKER_STATE`
+3. Set the secret in Cloudflare (recommended):
    - `cd cloudflare/unclothy-cron-worker`
    - `npx wrangler secret put CRON_SECRET`
-3. Deploy:
+4. Initialize the worker switch to off:
+   - `npx wrangler kv key put "unclothy:worker-enabled" "false" --binding UNCLOTHY_WORKER_STATE`
+5. Deploy:
    - `npx wrangler deploy`
 
 The schedule is already configured to run every minute (`* * * * *`).
+When `unclothy:worker-enabled` is not exactly `true`, the scheduled Worker exits before calling Vercel, so it should not wake Neon.
 
 ## 3) Quick verification
 

@@ -6,6 +6,7 @@ export const defaultAdminIntegrations = {
   googleDriveImportEnabled: true,
   mediaScrapeEnabled: false,
   unclothyEnabled: false,
+  unclothyWorkerEnabled: false,
   blurUnclothyGenerated: true,
   unclothyAlbumDefaults: {},
   defaultGalleryView: 'cinematic',

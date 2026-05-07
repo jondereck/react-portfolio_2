@@ -174,6 +174,7 @@ export const integrationsSettingsSchema = z.object({
   googleDriveImportEnabled: z.boolean().optional().default(true),
   mediaScrapeEnabled: z.boolean().optional().default(false),
   unclothyEnabled: z.boolean().optional().default(false),
+  unclothyWorkerEnabled: z.boolean().optional().default(false),
   blurUnclothyGenerated: z.boolean().optional().default(true),
   unclothyAlbumDefaults: z
     .record(
