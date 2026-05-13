@@ -4,11 +4,14 @@ import { useSyncExternalStore } from 'react';
 
 const listeners = new Set();
 const pollIntervalMs = 3500;
+const localWorkerTickIntervalMs = 7000;
 
 let hydrated = false;
 let polling = false;
 let pollTimer = null;
 let refreshInFlight = false;
+let workerTickInFlight = false;
+let lastWorkerTickAt = 0;
 let knownCompletedTaskIds = new Set();
 let snapshot = null;
 
@@ -115,6 +118,33 @@ export function hydrateFromLocalStorage() {
   hydrated = true;
 }
 
+function hasRunnableTasks() {
+  return state.queue.length > 0 || state.activeTasks.length > 0;
+}
+
+async function tickLocalWorkerIfNeeded() {
+  if (!hasRunnableTasks()) return;
+  if (workerTickInFlight) return;
+
+  const now = Date.now();
+  if (now - lastWorkerTickAt < localWorkerTickIntervalMs) {
+    return;
+  }
+
+  workerTickInFlight = true;
+  lastWorkerTickAt = now;
+  try {
+    await fetch('/api/admin/integrations/unclothy/worker', {
+      method: 'POST',
+      cache: 'no-store',
+    });
+  } catch {
+    // Ignore local fallback errors; status polling still updates UI.
+  } finally {
+    workerTickInFlight = false;
+  }
+}
+
 export async function refreshTasks() {
   if (refreshInFlight) return;
   refreshInFlight = true;
@@ -206,9 +236,17 @@ export function startRunner() {
   hydrateFromLocalStorage();
   if (polling) return;
   polling = true;
-  void refreshTasks();
+  void (async () => {
+    await refreshTasks();
+    await tickLocalWorkerIfNeeded();
+    await refreshTasks();
+  })();
   pollTimer = window.setInterval(() => {
-    void refreshTasks();
+    void (async () => {
+      await refreshTasks();
+      await tickLocalWorkerIfNeeded();
+      await refreshTasks();
+    })();
   }, pollIntervalMs);
 }
 
@@ -218,4 +256,5 @@ export function stopRunner() {
   }
   pollTimer = null;
   polling = false;
+  workerTickInFlight = false;
 }

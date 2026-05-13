@@ -85,7 +85,13 @@ function RunningTaskCard({ task, onOpenTask, onCancelActive }) {
           <button
             type="button"
             className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-            onClick={() => onOpenTask?.({ albumId: task.albumId, sourcePhotoId: task.sourcePhotoId })}
+            onClick={() =>
+              onOpenTask?.({
+                albumId: task.albumId,
+                sourcePhotoId: task.sourcePhotoId,
+                suppressNotFoundError: true,
+              })
+            }
           >
             <ImageIcon className="h-3.5 w-3.5" />
             Open
@@ -111,7 +117,13 @@ function QueuedTaskRow({ task, index, onOpenTask, onCancelQueued }) {
     <div className="flex items-center gap-2 rounded-[22px] border border-slate-200 bg-white p-3 text-slate-900 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50">
       <button
         type="button"
-        onClick={() => onOpenTask?.({ albumId: task.albumId, sourcePhotoId: task.sourcePhotoId })}
+        onClick={() =>
+          onOpenTask?.({
+            albumId: task.albumId,
+            sourcePhotoId: task.sourcePhotoId,
+            suppressNotFoundError: true,
+          })
+        }
         className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
         <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-100">
@@ -146,6 +158,7 @@ function HistoryRow({ task, onOpenTask }) {
   const openPayload = {
     albumId: task.albumId,
     sourcePhotoId: task.createdPhotoId || task.sourcePhotoId,
+    suppressNotFoundError: false,
   };
 
   return (

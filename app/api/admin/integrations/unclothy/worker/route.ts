@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
+import { canMutateContent } from '@/lib/auth/roles';
+import { requireAuthActor } from '@/lib/auth/session';
 import { createUnclothyEnvelope, createUnclothySuccessResponse, toUnclothyErrorResponse } from '@/lib/server/unclothy';
 import { processUnclothyQueueOnce } from '@/lib/server/unclothy-queue';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function isAuthorized(request: Request) {
+async function isAuthorized(request: Request) {
   const secret = process.env.CRON_SECRET;
   const authorization = request.headers.get('authorization') || '';
   if (secret && secret.trim() && authorization === `Bearer ${secret.trim()}`) {
@@ -16,11 +18,16 @@ function isAuthorized(request: Request) {
     return true;
   }
 
-  return false;
+  try {
+    const actor = await requireAuthActor(request);
+    return canMutateContent(actor.user.role);
+  } catch {
+    return false;
+  }
 }
 
 async function handleWorker(request: Request) {
-  if (!isAuthorized(request)) {
+  if (!(await isAuthorized(request))) {
     return NextResponse.json(
       createUnclothyEnvelope({
         success: false,

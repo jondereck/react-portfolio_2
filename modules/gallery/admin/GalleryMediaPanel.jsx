@@ -349,13 +349,14 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const openTask = (task) => {
     const albumId = task?.albumId ?? null;
     const photoId = normalizePhotoId(task?.sourcePhotoId ?? null);
+    const suppressNotFoundError = task?.suppressNotFoundError === true;
 
     if (!albumId || !photoId) {
       toast.error('Task is missing an album or image reference.');
       return;
     }
 
-    setPendingPreviewTask({ albumId, photoId });
+    setPendingPreviewTask({ albumId, photoId, suppressNotFoundError });
 
     if (albumId !== selectedAlbumId) {
       setSelectedAlbumId(albumId);
@@ -370,7 +371,9 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       return;
     }
 
-    toast.error('Media not found in the current album.');
+    if (!suppressNotFoundError) {
+      toast.error('Media not found in the current album.');
+    }
     setPendingPreviewTask(null);
   };
 
@@ -388,7 +391,9 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       return;
     }
 
-    toast.error('Media not found for that task.');
+    if (!pendingPreviewTask.suppressNotFoundError) {
+      toast.error('Media not found for that task.');
+    }
     setPendingPreviewTask(null);
   }, [loadingPhotos, pendingPreviewTask, photos, selectedAlbumId]);
 
