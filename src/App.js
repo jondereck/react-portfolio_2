@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import PwaInstallPrompt from '@/components/pwa/PwaInstallPrompt';
+import GlobalLoader from '@/components/GlobalLoader';
 import EditorialBentoPortfolio from './components/editorial/EditorialBentoPortfolio';
 import Immersive3DPortfolio from './components/editorial/Immersive3DPortfolio';
 import MinimalistEditorialPortfolio from './components/editorial/MinimalistEditorialPortfolio';
@@ -68,45 +69,6 @@ function PortfolioNotFound() {
   );
 }
 
-const normalizeRotationMinutes = (value) => {
-  const minutes = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
-  return Math.max(0, Math.min(Math.floor(minutes), 60 * 24 * 30));
-};
-
-const resolveRandomTheme = ({ pool, rotationMinutes, profileSlug }) => {
-  const candidates = Array.isArray(pool) ? pool.filter((value) => isPortfolioThemeId(value)) : [];
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const key = `portfolio_theme_rotation:${profileSlug || 'primary'}`;
-  const now = Date.now();
-  const rotationMs = rotationMinutes > 0 ? rotationMinutes * 60 * 1000 : 0;
-
-  try {
-    const raw = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      const storedTheme = typeof parsed?.theme === 'string' ? parsed.theme : '';
-      const storedAt = typeof parsed?.chosenAt === 'number' ? parsed.chosenAt : 0;
-      if (rotationMs > 0 && storedTheme && candidates.includes(storedTheme) && storedAt > 0 && now - storedAt < rotationMs) {
-        return storedTheme;
-      }
-    }
-  } catch {
-    // Ignore storage JSON errors and re-pick.
-  }
-
-  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
-  try {
-    window.localStorage.setItem(key, JSON.stringify({ theme: chosen, chosenAt: now }));
-  } catch {
-    // Ignore storage failures.
-  }
-  return chosen;
-};
-
 function App({ profileSlug = null }) {
   const [darkMode, setDarkMode] = useState(false);
   const [showThemeFade, setShowThemeFade] = useState(false);
@@ -145,13 +107,10 @@ function App({ profileSlug = null }) {
 
   const loading = siteContentLoading || siteConfigLoading;
   const loadError = siteContentError || siteConfigError;
-  const portfolioTheme = siteConfig?.portfolioTheme;
-  const isRandomMode = portfolioTheme === 'random';
-  const randomPoolHasCandidates = isRandomMode
-    ? Array.isArray(siteConfig?.portfolioThemeRandomPool) &&
-      siteConfig.portfolioThemeRandomPool.some((value) => isPortfolioThemeId(value))
-    : true;
-  const hasValidTheme = (isRandomMode || isPortfolioThemeId(portfolioTheme)) && randomPoolHasCandidates;
+  const requestsSettled =
+    (Boolean(siteContentData) || Boolean(siteContentError)) && (Boolean(siteConfigData) || Boolean(siteConfigError));
+  const activePortfolioTheme = siteConfig?.activePortfolioTheme;
+  const hasValidTheme = isPortfolioThemeId(activePortfolioTheme);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -239,22 +198,11 @@ function App({ profileSlug = null }) {
       return;
     }
 
-    if (isRandomMode) {
-      const rotationMinutes = normalizeRotationMinutes(siteConfig?.portfolioThemeRotationMinutes);
-      const picked = resolveRandomTheme({
-        pool: siteConfig?.portfolioThemeRandomPool,
-        rotationMinutes,
-        profileSlug,
-      });
-      setResolvedTheme(picked);
-      return;
-    }
+    setResolvedTheme(activePortfolioTheme);
+  }, [activePortfolioTheme, loadError, loading, siteConfig]);
 
-    setResolvedTheme(portfolioTheme);
-  }, [isRandomMode, loadError, loading, portfolioTheme, profileSlug, siteConfig]);
-
-  if (loading) {
-    return null;
+  if (loading || !requestsSettled) {
+    return <GlobalLoader forceVisible message="Opening portfolio" hint="Loading your site content and theme..." />;
   }
 
   if (loadError || !siteContentData || !siteConfig || !hasValidTheme) {
@@ -262,7 +210,7 @@ function App({ profileSlug = null }) {
   }
 
   if (!resolvedTheme) {
-    return <PortfolioNotFound />;
+    return <GlobalLoader forceVisible message="Opening portfolio" hint="Applying your selected theme..." />;
   }
 
   if (resolvedTheme === 'editorial-bento') {

@@ -13,7 +13,7 @@ import { useLoadingStore } from '@/store/loading';
 import { Dialog, DialogContent } from '@/src/components/ui/dialog';
 
 const cx = (...classes) => classes.filter(Boolean).join(' ');
-const ADMIN_CLICK_WINDOW_MS = 550;
+const ADMIN_CLICK_WINDOW_MS = 1600;
 const initialForm = { name: '', email: '', message: '' };
 
 const fetcher = (url) =>
@@ -160,18 +160,24 @@ function Logo({ config }) {
 
   const handleLogoClick = (event) => {
     if ('button' in event && event.button !== 0) return;
+    event.preventDefault();
     const nextCount = adminClickStateRef.current.count + 1;
     if (adminClickStateRef.current.timerId) window.clearTimeout(adminClickStateRef.current.timerId);
 
     if (nextCount >= 3) {
-      event.preventDefault();
       clearAdminClicks();
       window.location.assign('/admin/login');
       return;
     }
 
     adminClickStateRef.current.count = nextCount;
-    adminClickStateRef.current.timerId = window.setTimeout(clearAdminClicks, ADMIN_CLICK_WINDOW_MS);
+    adminClickStateRef.current.timerId = window.setTimeout(() => {
+      const finalCount = adminClickStateRef.current.count;
+      clearAdminClicks();
+      if (finalCount === 1) {
+        window.location.hash = 'home';
+      }
+    }, ADMIN_CLICK_WINDOW_MS);
   };
 
   useEffect(() => () => clearAdminClicks(), [clearAdminClicks]);
@@ -183,7 +189,7 @@ function Logo({ config }) {
       </span>
       <div>
         <h3>{logoText}</h3>
-        <p>Enhanced 3D Portfolio Theme</p>
+      
       </div>
     </a>
   );
@@ -246,9 +252,7 @@ function HeroVisual({ heroImage, projects }) {
         <div className="back-plate" />
         <div className="mid-plate" />
         <div className="front-card">
-          <div className="badge-float">New Theme Mode</div>
-          <div className="status-float">{latestProject?.title || 'Premium Visual System'}</div>
-          <div className="tag-float">{latestProject?.badge || 'Smart systems • Better presentation'}</div>
+
           {image ? (
             <img src={image} alt="Portfolio hero visual" className="hero-image" />
           ) : (
@@ -270,7 +274,6 @@ function HeroSection({ hero, about, profileSlug }) {
   const { data: experienceData } = useSWR(withProfile('/api/experience', profileSlug), fetcher);
   const projects = Array.isArray(projectsData) ? projectsData : Array.isArray(projectsData?.projects) ? projectsData.projects : [];
   const experienceItems = Array.isArray(experienceData) ? experienceData : [];
-  const aboutHighlights = Array.isArray(about?.highlights) ? about.highlights.slice(0, 3) : [];
   const mainStack = getMostUsedTech(projects);
   const experienceYears = formatExperienceYears(experienceItems);
   const eyebrow = typeof hero?.eyebrow === 'string' && hero.eyebrow.trim() ? hero.eyebrow.trim() : 'Immersive 3D Portfolio';
@@ -281,9 +284,8 @@ function HeroSection({ hero, about, profileSlug }) {
   const secondaryCtaHref = typeof hero?.secondaryCtaHref === 'string' && hero.secondaryCtaHref.trim() ? hero.secondaryCtaHref.trim() : '#contact';
   const pills = [
     mainStack || '3D / Glassmorphism',
-    'Interactive Tilt',
+    '',
     projects.length > 0 ? `${projects.length} Projects` : 'Responsive All Devices',
-    aboutHighlights[0]?.label || 'Premium Theme Option',
   ];
   const metrics = [
     { value: projects.length > 0 ? `${projects.length}+` : '3D', label: projects.length > 0 ? 'Projects designed' : 'Theme quality' },

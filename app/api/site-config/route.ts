@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { canMutateContent } from '@/lib/auth/roles';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { defaultSiteConfig } from '@/lib/siteContentDefaults';
-import { normalizePortfolioThemeRandomPool } from '@/lib/portfolioThemes';
+import { DEFAULT_PORTFOLIO_THEME, isPortfolioThemeId, normalizePortfolioThemeRandomPool } from '@/lib/portfolioThemes';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { siteConfigSchema } from '@/lib/validators';
 import { logAdminAuditEvent } from '@/lib/server/admin-settings';
@@ -11,7 +12,10 @@ import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } fro
 import { ensureSiteConfigForProfile } from '@/lib/profile/site-data';
 import { createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
+export const dynamic = 'force-dynamic';
+
 type ConfigPayload = {
+  action?: unknown;
   logoText?: unknown;
   logoImage?: unknown;
   navigation?: unknown;
@@ -27,6 +31,7 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
 
   const body = input as {
     data?: unknown;
+    action?: unknown;
     logoText?: unknown;
     logoImage?: unknown;
     navigation?: unknown;
@@ -36,6 +41,7 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
   };
   if (body.data && typeof body.data === 'object') {
     const nested = body.data as {
+      action?: unknown;
       logoText?: unknown;
       logoImage?: unknown;
       navigation?: unknown;
@@ -44,6 +50,7 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
       portfolioThemeRandomPool?: unknown;
     };
     return {
+      action: nested.action,
       logoText: nested.logoText,
       logoImage: nested.logoImage,
       navigation: nested.navigation,
@@ -54,6 +61,7 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
   }
 
   return {
+    action: body.action,
     logoText: body.logoText,
     logoImage: body.logoImage,
     navigation: body.navigation,
@@ -62,6 +70,167 @@ const extractConfigPayload = (input: unknown): ConfigPayload | null => {
     portfolioThemeRandomPool: body.portfolioThemeRandomPool,
   };
 };
+
+const ROTATION_STATE_KEY = '__portfolioThemeRotationState';
+
+type RotationStateEntry = {
+  currentTheme: string | null;
+  lastRotatedAt: string | null;
+  nextTheme: string | null;
+};
+
+const pickTheme = (pool: string[], previous: string | null) => {
+  if (pool.length === 0) return null;
+  if (pool.length === 1) return pool[0];
+  const candidates = previous ? pool.filter((theme) => theme !== previous) : pool;
+  const source = candidates.length > 0 ? candidates : pool;
+  return source[Math.floor(Math.random() * source.length)];
+};
+
+const getRotationStateMap = (value: Prisma.JsonValue | null | undefined) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value as Record<string, RotationStateEntry>;
+};
+
+const getRotationStateMapFromIntegrations = (value: unknown) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const raw = (value as Record<string, unknown>)[ROTATION_STATE_KEY] as Prisma.JsonValue;
+  return getRotationStateMap(raw);
+};
+
+const parseIsoMs = (value: string | null | undefined) => {
+  if (!value) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+function resolveRandomThemeRuntime(input: {
+  profileId: number;
+  portfolioTheme: string;
+  portfolioThemeRotationMinutes: number | null;
+  portfolioThemeRandomPool: string[];
+  stateEntry: RotationStateEntry | null;
+  nowMs: number;
+  forceRotate: boolean;
+  dryRun?: boolean;
+}) {
+  const warnings: string[] = [];
+  if (input.portfolioTheme !== 'random') {
+    return {
+      activeTheme: isPortfolioThemeId(input.portfolioTheme) ? input.portfolioTheme : DEFAULT_PORTFOLIO_THEME,
+      didRotate: false,
+      nextState: input.stateEntry,
+      status: null as null | Record<string, unknown>,
+      warnings,
+    };
+  }
+
+  const pool = normalizePortfolioThemeRandomPool(input.portfolioThemeRandomPool).filter(isPortfolioThemeId);
+  if (pool.length === 0) {
+    warnings.push('No random themes are included. Falling back to default theme.');
+    return {
+      activeTheme: DEFAULT_PORTFOLIO_THEME,
+      didRotate: false,
+      nextState: input.stateEntry,
+      status: {
+        mode: 'random',
+        intervalMinutes: Math.max(0, Number(input.portfolioThemeRotationMinutes) || 0),
+        includedThemes: [],
+        includedCount: 0,
+        warning: 'No random themes are included. Fallback is active.',
+      },
+      warnings,
+    };
+  }
+
+  if (pool.length === 1) {
+    warnings.push('Only one theme is included in random mode. Rotation will keep the same theme.');
+  }
+
+  const intervalMinutes = Math.max(0, Number(input.portfolioThemeRotationMinutes) || 0);
+  const intervalMs = intervalMinutes > 0 ? intervalMinutes * 60 * 1000 : 0;
+  const state = input.stateEntry ?? { currentTheme: null, lastRotatedAt: null, nextTheme: null };
+  const hasCurrent = Boolean(state.currentTheme && isPortfolioThemeId(state.currentTheme) && pool.includes(state.currentTheme));
+  const lastRotatedAtMs = parseIsoMs(state.lastRotatedAt);
+  const expired = intervalMs > 0 && (!lastRotatedAtMs || input.nowMs - lastRotatedAtMs >= intervalMs);
+  const shouldRotate = input.forceRotate || intervalMs === 0 || !hasCurrent || expired;
+
+  let currentTheme = hasCurrent ? (state.currentTheme as string) : null;
+  let lastRotatedAt = lastRotatedAtMs ? new Date(lastRotatedAtMs).toISOString() : null;
+  let didRotate = false;
+
+  if (shouldRotate) {
+    const picked = pickTheme(pool, hasCurrent ? state.currentTheme : null);
+    currentTheme = picked ?? pool[0];
+    lastRotatedAt = new Date(input.nowMs).toISOString();
+    didRotate = true;
+  }
+
+  const resolvedCurrent = currentTheme && isPortfolioThemeId(currentTheme) && pool.includes(currentTheme) ? currentTheme : pool[0];
+  const nextCandidate = pickTheme(pool, resolvedCurrent) ?? resolvedCurrent;
+  const baseMs = parseIsoMs(lastRotatedAt) ?? input.nowMs;
+  const nextRotationAtMs = intervalMs > 0 ? baseMs + intervalMs : null;
+  const msUntilNextRotation = nextRotationAtMs ? Math.max(0, nextRotationAtMs - input.nowMs) : null;
+
+  const nextState: RotationStateEntry = {
+    currentTheme: resolvedCurrent,
+    lastRotatedAt,
+    nextTheme: nextCandidate,
+  };
+
+  return {
+    activeTheme: resolvedCurrent,
+    didRotate: !input.dryRun && didRotate,
+    nextState,
+    status: {
+      mode: 'random',
+      intervalMinutes,
+      includedThemes: pool,
+      includedCount: pool.length,
+      currentTheme: resolvedCurrent,
+      nextTheme: nextCandidate,
+      lastRotatedAt,
+      nextRotationAt: nextRotationAtMs ? new Date(nextRotationAtMs).toISOString() : null,
+      msUntilNextRotation,
+      dueNow: intervalMs > 0 ? msUntilNextRotation === 0 : false,
+      warning:
+        pool.length === 1
+          ? 'Only one theme is included in random mode, so rotation cannot switch to another theme.'
+          : null,
+      note:
+        intervalMs === 0
+          ? '0 means every public portfolio visit may receive a new random theme.'
+          : null,
+    },
+    warnings,
+  };
+}
+
+async function updateRotationStateForProfile(profileId: number, state: RotationStateEntry) {
+  const adminSettings = await prisma.adminSettings.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      id: 1,
+      integrations: {},
+      security: {},
+    },
+    select: { integrations: true },
+  });
+  const integrations =
+    adminSettings.integrations && typeof adminSettings.integrations === 'object' && !Array.isArray(adminSettings.integrations)
+      ? ({ ...adminSettings.integrations } as Record<string, unknown>)
+      : {};
+  const map = getRotationStateMap(integrations[ROTATION_STATE_KEY] as Prisma.JsonValue);
+  map[String(profileId)] = state;
+  integrations[ROTATION_STATE_KEY] = map;
+  await prisma.adminSettings.update({
+    where: { id: 1 },
+    data: {
+      integrations: integrations as Prisma.InputJsonObject,
+    },
+  });
+}
 
 const normalizeSiteConfig = (
   config: {
@@ -109,8 +278,32 @@ export async function GET(request: Request) {
   }
 
   await ensureSiteConfigForProfile(profile.id);
-  const config = await prisma.siteConfig.findUnique({ where: { profileId: profile.id } });
-  return NextResponse.json(normalizeSiteConfig(config));
+  const [config, adminSettings] = await Promise.all([
+    prisma.siteConfig.findUnique({ where: { profileId: profile.id } }),
+    prisma.adminSettings.findUnique({ where: { id: 1 }, select: { integrations: true } }),
+  ]);
+  const normalized = normalizeSiteConfig(config);
+  const map = getRotationStateMapFromIntegrations(adminSettings?.integrations);
+  const currentState = map[String(profile.id)] ?? null;
+  const resolved = resolveRandomThemeRuntime({
+    profileId: profile.id,
+    portfolioTheme: normalized.portfolioTheme,
+    portfolioThemeRotationMinutes: normalized.portfolioThemeRotationMinutes ?? 0,
+    portfolioThemeRandomPool: normalized.portfolioThemeRandomPool,
+    stateEntry: currentState,
+    nowMs: Date.now(),
+    forceRotate: false,
+  });
+
+  if (resolved.didRotate && resolved.nextState) {
+    await updateRotationStateForProfile(profile.id, resolved.nextState);
+  }
+
+  return NextResponse.json({
+    ...normalized,
+    activePortfolioTheme: resolved.activeTheme,
+    randomThemeStatus: resolved.status,
+  });
 }
 
 export async function PUT(request: Request) {
@@ -204,6 +397,33 @@ export async function PUT(request: Request) {
       },
     });
 
+    const requestedAction = typeof payload.action === 'string' ? payload.action : '';
+    if (requestedAction === 'rotate_now' || requestedAction === 'preview_next') {
+      const normalizedUpdated = normalizeSiteConfig(updated);
+      const adminSettings = await prisma.adminSettings.findUnique({ where: { id: 1 }, select: { integrations: true } });
+      const map = getRotationStateMapFromIntegrations(adminSettings?.integrations);
+      const resolved = resolveRandomThemeRuntime({
+        profileId: profile.id,
+        portfolioTheme: normalizedUpdated.portfolioTheme,
+        portfolioThemeRotationMinutes: normalizedUpdated.portfolioThemeRotationMinutes ?? 0,
+        portfolioThemeRandomPool: normalizedUpdated.portfolioThemeRandomPool,
+        stateEntry: map[String(profile.id)] ?? null,
+        nowMs: Date.now(),
+        forceRotate: requestedAction === 'rotate_now',
+        dryRun: requestedAction === 'preview_next',
+      });
+
+      if (requestedAction === 'rotate_now' && resolved.nextState) {
+        await updateRotationStateForProfile(profile.id, resolved.nextState);
+      }
+
+      return NextResponse.json({
+        ...normalizedUpdated,
+        activePortfolioTheme: resolved.activeTheme,
+        randomThemeStatus: resolved.status,
+      });
+    }
+
     await logAdminAuditEvent({
       actorUserId: actor.user.id,
       targetProfileId: profile.id,
@@ -219,7 +439,24 @@ export async function PUT(request: Request) {
       },
     });
 
-    return NextResponse.json(normalizeSiteConfig(updated));
+    const normalizedUpdated = normalizeSiteConfig(updated);
+    const adminSettings = await prisma.adminSettings.findUnique({ where: { id: 1 }, select: { integrations: true } });
+    const map = getRotationStateMapFromIntegrations(adminSettings?.integrations);
+    const resolved = resolveRandomThemeRuntime({
+      profileId: profile.id,
+      portfolioTheme: normalizedUpdated.portfolioTheme,
+      portfolioThemeRotationMinutes: normalizedUpdated.portfolioThemeRotationMinutes ?? 0,
+      portfolioThemeRandomPool: normalizedUpdated.portfolioThemeRandomPool,
+      stateEntry: map[String(profile.id)] ?? null,
+      nowMs: Date.now(),
+      forceRotate: false,
+    });
+
+    return NextResponse.json({
+      ...normalizedUpdated,
+      activePortfolioTheme: resolved.activeTheme,
+      randomThemeStatus: resolved.status,
+    });
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) {

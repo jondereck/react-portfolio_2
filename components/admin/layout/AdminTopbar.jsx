@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useMemo, useState } from 'react';
-import { ArrowLeft, LogOut, Menu, User, X } from 'lucide-react';
+import { ArrowLeft, LogOut, User, X } from 'lucide-react';
 import AdminBreadcrumbs from '@/components/admin/layout/AdminBreadcrumbs';
 import { adminNavigationSections } from '@/components/admin/navigation/admin-nav-config';
 
@@ -32,7 +32,7 @@ const pageTitles = {
   '/admin/users': 'User Management',
 };
 
-export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCollapsed = false, onToggleSidebar, accountName = '' }) {
+export default function AdminTopbar({ onLogout, isLoggingOut = false, accountName = '' }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -126,19 +126,7 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, sidebarCol
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2">
-            {onToggleSidebar ? (
-              <button
-                type="button"
-                onClick={onToggleSidebar}
-                className="hidden h-10 w-10 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 lg:inline-flex"
-                aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-                title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                <Menu className="size-5" />
-              </button>
-            ) : null}
-          </div>
+          <div className="flex items-center justify-end gap-2" />
         </div>
       </header>
 
