@@ -7,7 +7,7 @@ binding = "UNCLOTHY_WORKER_STATE"
 id = "REPLACE_WITH_UNCLOTHY_WORKER_KV_NAMESPACE_ID"
 
 [triggers]
-crons = ["* * * * *"]
+crons = []
 
 # Public, deployed Next.js endpoint (NOT localhost).
 [vars]
