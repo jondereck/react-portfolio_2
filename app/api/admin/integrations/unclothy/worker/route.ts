@@ -7,6 +7,23 @@ import { processUnclothyQueueOnce } from '@/lib/server/unclothy-queue';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function getWorkerRequestSource(request: Request) {
+  const userAgent = (request.headers.get('user-agent') || '').toLowerCase();
+  if (userAgent.includes('unclothy-cron-worker')) {
+    return 'cloudflare-cron-worker';
+  }
+
+  if (request.headers.get('x-vercel-cron') === '1') {
+    return 'vercel-cron';
+  }
+
+  if (request.method === 'POST') {
+    return 'admin-browser-fallback';
+  }
+
+  return 'unknown';
+}
+
 function hasValidCronAuthorization(request: Request) {
   const secret = process.env.CRON_SECRET;
   const authorization = request.headers.get('authorization') || '';
@@ -31,11 +48,24 @@ async function hasValidAdminAuthorization(request: Request) {
 }
 
 async function handleWorker(request: Request) {
+  const source = getWorkerRequestSource(request);
+
   // GET is reserved for cron-style invocations and should not perform
   // session/database auth lookups when the cron secret is missing.
   const cronAuthorized = hasValidCronAuthorization(request);
   const adminAuthorized =
     request.method === 'POST' && !cronAuthorized ? await hasValidAdminAuthorization(request) : false;
+
+  console.info(
+    JSON.stringify({
+      tag: 'unclothy-worker-request',
+      at: new Date().toISOString(),
+      source,
+      method: request.method,
+      cronAuthorized,
+      adminAuthorized,
+    }),
+  );
 
   if (!cronAuthorized && !adminAuthorized) {
     return NextResponse.json(
@@ -50,8 +80,28 @@ async function handleWorker(request: Request) {
 
   try {
     const result = await processUnclothyQueueOnce();
+    console.info(
+      JSON.stringify({
+        tag: 'unclothy-worker-request',
+        at: new Date().toISOString(),
+        source,
+        method: request.method,
+        event: 'queue-pass-complete',
+        result,
+      }),
+    );
     return createUnclothySuccessResponse(result, 200, 'Unclothy worker completed one queue pass.');
   } catch (error) {
+    console.error(
+      JSON.stringify({
+        tag: 'unclothy-worker-request',
+        at: new Date().toISOString(),
+        source,
+        method: request.method,
+        event: 'queue-pass-failed',
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
     return toUnclothyErrorResponse(error, 'Unable to process Unclothy queue.');
   }
 }

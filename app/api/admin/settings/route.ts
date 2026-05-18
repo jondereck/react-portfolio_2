@@ -82,7 +82,19 @@ export async function PUT(request: Request) {
       const nextWorkerEnabled = nextIntegrations.data.unclothyWorkerEnabled === true;
       if (currentSettings.integrations.unclothyWorkerEnabled !== nextWorkerEnabled) {
         try {
-          await syncUnclothyWorkerEnabledToCloudflare(nextWorkerEnabled);
+          const syncResult = await syncUnclothyWorkerEnabledToCloudflare(nextWorkerEnabled);
+          console.info(
+            JSON.stringify({
+              tag: 'unclothy-worker-control',
+              event: 'admin-toggle-sync',
+              at: new Date().toISOString(),
+              actorUserId: actor.user.id,
+              previousEnabled: currentSettings.integrations.unclothyWorkerEnabled === true,
+              nextEnabled: nextWorkerEnabled,
+              scriptName: syncResult.scriptName,
+              schedules: syncResult.schedules,
+            }),
+          );
         } catch (error) {
           if (error instanceof CloudflareUnclothyWorkerSyncError) {
             return createFormErrorResponse(
