@@ -7,7 +7,7 @@ import { processUnclothyQueueOnce } from '@/lib/server/unclothy-queue';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function isAuthorized(request: Request) {
+function hasValidCronAuthorization(request: Request) {
   const secret = process.env.CRON_SECRET;
   const authorization = request.headers.get('authorization') || '';
   if (secret && secret.trim() && authorization === `Bearer ${secret.trim()}`) {
@@ -18,6 +18,10 @@ async function isAuthorized(request: Request) {
     return true;
   }
 
+  return false;
+}
+
+async function hasValidAdminAuthorization(request: Request) {
   try {
     const actor = await requireAuthActor(request);
     return canMutateContent(actor.user.role);
@@ -27,7 +31,13 @@ async function isAuthorized(request: Request) {
 }
 
 async function handleWorker(request: Request) {
-  if (!(await isAuthorized(request))) {
+  // GET is reserved for cron-style invocations and should not perform
+  // session/database auth lookups when the cron secret is missing.
+  const cronAuthorized = hasValidCronAuthorization(request);
+  const adminAuthorized =
+    request.method === 'POST' && !cronAuthorized ? await hasValidAdminAuthorization(request) : false;
+
+  if (!cronAuthorized && !adminAuthorized) {
     return NextResponse.json(
       createUnclothyEnvelope({
         success: false,
