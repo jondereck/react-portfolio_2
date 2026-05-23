@@ -11,7 +11,7 @@ import {
   getUnclothyTaskSettings,
   toUnclothyErrorResponse,
 } from '@/lib/server/unclothy';
-import { enqueueUnclothyGenerationTask, listUnclothyQueueTasksForUser } from '@/lib/server/unclothy-queue';
+import { enqueueUnclothyGenerationTask, listUnclothyQueueTasksForUser, processUnclothyQueueOnce } from '@/lib/server/unclothy-queue';
 import { unclothyCreateTaskSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 import { sanitizeUnclothyProviderSettings } from '@/lib/unclothy-settings';
@@ -146,7 +146,26 @@ export async function POST(request: Request) {
       settingsSnapshot: nextSettings,
     });
 
-    return createUnclothySuccessResponse({ task, task_id: task.id, status: 'queued' }, 201, 'Task queued successfully.');
+    let workerResult = null;
+    try {
+      workerResult = await processUnclothyQueueOnce();
+    } catch (workerError) {
+      console.warn(
+        JSON.stringify({
+          tag: 'unclothy-task-enqueue',
+          at: new Date().toISOString(),
+          event: 'immediate-worker-kick-failed',
+          taskId: task.id,
+          error: workerError instanceof Error ? workerError.message : String(workerError),
+        }),
+      );
+    }
+
+    return createUnclothySuccessResponse(
+      { task, task_id: task.id, status: 'queued', worker: workerResult },
+      201,
+      workerResult?.started ? 'Task queued and started.' : 'Task queued successfully.',
+    );
   } catch (error) {
     return toUnclothyErrorResponse(error, 'Unable to queue Unclothy task.');
   }
