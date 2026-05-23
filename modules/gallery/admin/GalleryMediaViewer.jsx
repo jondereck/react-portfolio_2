@@ -57,6 +57,7 @@ export default function GalleryMediaViewer({
   const [snapshot, setSnapshot] = useState(null);
   const [capturingSnapshot, setCapturingSnapshot] = useState(false);
   const [uploadingSnapshot, setUploadingSnapshot] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const generateSheetRef = useRef(null);
   const videoRef = useRef(null);
   const snapshotPlaybackRef = useRef(null);
@@ -83,6 +84,7 @@ export default function GalleryMediaViewer({
   useEffect(() => {
     if (!open) {
       setGenerateOpen(false);
+      setPreviewLoading(false);
       setSnapshot((current) => {
         if (current?.url) {
           URL.revokeObjectURL(current.url);
@@ -94,6 +96,7 @@ export default function GalleryMediaViewer({
   }, [open]);
 
   useEffect(() => {
+    setPreviewLoading(Boolean(photo));
     setSnapshot((current) => {
       if (current?.url) {
         URL.revokeObjectURL(current.url);
@@ -296,15 +299,14 @@ export default function GalleryMediaViewer({
       formData.append('caption', `${title} snapshot`);
       formData.append('sourceType', 'upload');
 
-      await fetchJson(`/api/gallery/albums/${snapshotAlbumId}/photos`, {
+      const created = await fetchJson(`/api/gallery/albums/${snapshotAlbumId}/photos`, {
         method: 'POST',
         body: formData,
       });
 
-      await Promise.all([
-        typeof controller?.loadPhotos === 'function' ? controller.loadPhotos(snapshotAlbumId) : Promise.resolve(),
-        typeof controller?.loadAlbums === 'function' ? controller.loadAlbums() : Promise.resolve(),
-      ]);
+      if (typeof controller?.addPhotoToState === 'function') {
+        controller.addPhotoToState(created);
+      }
       toast.success('Snapshot uploaded to album.');
       clearSnapshot();
     } catch (error) {
@@ -394,7 +396,7 @@ export default function GalleryMediaViewer({
                         <div className="absolute bottom-0 left-1/2 h-36 w-44 -translate-x-1/2 rounded-full bg-blue-200/20 blur-3xl dark:bg-blue-500/10" />
                       </div>
 
-                      <div className="relative z-10 flex h-full min-h-0 w-full items-center justify-center px-4 pt-4 pb-16 sm:px-6 sm:pt-6 sm:pb-20">
+                      <div className="relative z-10 flex h-full min-h-0 w-full items-center justify-center px-3 py-3 sm:px-6 sm:pt-6 sm:pb-20">
                         {(() => {
                           const previewCard = (
                             <div
@@ -414,6 +416,10 @@ export default function GalleryMediaViewer({
                                     className={`mx-auto block max-h-[56dvh] max-w-full object-contain sm:max-h-[62dvh] lg:max-h-[66dvh] ${
                                       shouldBlurPreview ? 'blur-md' : ''
                                     }`}
+                                    onLoadStart={() => setPreviewLoading(true)}
+                                    onLoadedData={() => setPreviewLoading(false)}
+                                    onCanPlay={() => setPreviewLoading(false)}
+                                    onError={() => setPreviewLoading(false)}
                                     controls
                                   />
                                 ) : (
@@ -423,6 +429,15 @@ export default function GalleryMediaViewer({
                                 <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.42),transparent_65%)] dark:bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.20),transparent_65%)]" />
                                 <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-32 bg-[linear-gradient(to_top,rgba(17,24,39,0.16),transparent)] dark:bg-[linear-gradient(to_top,rgba(2,6,23,0.55),transparent)]" />
                                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.02)_35%,rgba(15,23,42,0.08))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01)_35%,rgba(2,6,23,0.35))]" />
+
+                                {canSnapshot && previewLoading && !snapshot?.url ? (
+                                  <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-slate-950/35 backdrop-blur-[2px]">
+                                    <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/80 px-3 py-2 text-xs font-semibold text-white shadow-xl">
+                                      <Loader2 className="size-3.5 animate-spin" />
+                                      Loading video
+                                    </div>
+                                  </div>
+                                ) : null}
 
                                 {snapshot?.url ? (
                                   <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/70 p-3 backdrop-blur-sm sm:p-4">
@@ -520,7 +535,7 @@ export default function GalleryMediaViewer({
                         </div>
                       ) : null}
 
-                      <div className="absolute bottom-5 left-5 right-5 z-20 flex flex-wrap items-center justify-between gap-3">
+                      <div className="absolute bottom-5 left-5 right-5 z-20 hidden flex-wrap items-center justify-between gap-3 sm:flex">
                         <p className="text-xs text-slate-600 dark:text-slate-300/80">
                           {canSnapshot ? 'Take a snapshot while the video is playing or paused.' : 'Click Generate to open the settings panel.'}
                         </p>
@@ -583,47 +598,53 @@ export default function GalleryMediaViewer({
                   </aside>
                 </div>
 
-                <div className="border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:hidden">
+                <div className="border-t border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-950 sm:hidden">
                   {canGenerate || canSnapshot ? (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="flex items-center gap-2">
                       {canSnapshot ? (
                         <button
                           type="button"
-                          className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                           onClick={handleCaptureSnapshot}
                           disabled={capturingSnapshot}
+                          aria-label="Take snapshot"
+                          title="Snapshot"
                         >
-                          {capturingSnapshot ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Camera className="mr-2 size-4" />}
-                          Snapshot
+                          {capturingSnapshot ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                          <span className="sr-only">Snapshot</span>
                         </button>
                       ) : null}
                       {canGenerate ? (
                         <button
                           type="button"
-                          className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                          className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                           onClick={() => setGenerateOpen(true)}
+                          aria-label="Open generation settings"
+                          title="Generate"
                         >
-                          <Sparkles className="mr-2 size-4" />
-                          Generate
+                          <Sparkles className="size-4" />
+                          <span className="sr-only">Generate</span>
                         </button>
                       ) : null}
                       <button
                         type="button"
-                        className={`${canGenerate && canSnapshot ? 'col-span-2' : ''} inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800`}
+                        className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                         onClick={onClose}
+                        aria-label="Close preview"
+                        title="Close"
                       >
-                        <X className="mr-2 size-4" />
-                        Close
+                        <X className="size-4" />
+                        <span className="sr-only">Close</span>
                       </button>
                     </div>
                   ) : (
                     <button
                       type="button"
-                      className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                      className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
                       onClick={onClose}
                     >
-                      <X className="mr-2 size-4" />
-                      Close Preview
+                      <X className="size-4" />
+                      <span className="sr-only">Close Preview</span>
                     </button>
                   )}
                 </div>

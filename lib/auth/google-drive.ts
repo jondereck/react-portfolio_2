@@ -14,7 +14,13 @@ type GoogleTokenRefreshResponse = {
 };
 
 type GoogleUserInfoResponse = {
+  email?: string;
   picture?: string;
+};
+
+export type GoogleProfileInfo = {
+  email: string;
+  picture: string;
 };
 
 export function isGoogleDriveOAuthConfigured() {
@@ -112,7 +118,7 @@ export async function getGoogleDriveAccessTokenForUser(userId: string) {
   return resolveAccessTokenFromAccount(account);
 }
 
-export async function getGoogleProfileImageForUser(userId: string) {
+export async function getGoogleProfileForUser(userId: string): Promise<GoogleProfileInfo | null> {
   const accessToken = await getGoogleDriveAccessTokenForUser(userId);
   const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
     headers: {
@@ -126,12 +132,25 @@ export async function getGoogleProfileImageForUser(userId: string) {
   }
 
   const payload = (await response.json().catch(() => null)) as GoogleUserInfoResponse | null;
+  const email = typeof payload?.email === 'string' ? payload.email.trim().toLowerCase() : '';
   const picture = typeof payload?.picture === 'string' ? payload.picture.trim() : '';
   if (!picture || !/^https:\/\//i.test(picture)) {
     return null;
   }
 
-  return picture;
+  return {
+    email,
+    picture,
+  };
+}
+
+export async function getGoogleProfileImageForUser(userId: string) {
+  const profile = await getGoogleProfileForUser(userId);
+  if (!profile?.picture) {
+    return null;
+  }
+
+  return profile.picture;
 }
 
 async function getFallbackGoogleDriveAccount() {

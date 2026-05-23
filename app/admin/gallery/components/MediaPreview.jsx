@@ -10,6 +10,10 @@ export default function MediaPreview({
   className = 'h-full w-full object-cover',
   controls = false,
   mediaRef,
+  onLoadStart,
+  onLoadedData,
+  onCanPlay,
+  onError,
   mimeType,
   sourceType,
   sourceId,
@@ -28,11 +32,15 @@ export default function MediaPreview({
         className={className}
         controls={controls}
         crossOrigin="anonymous"
+        onLoadStart={onLoadStart}
+        onLoadedData={onLoadedData}
+        onCanPlay={onCanPlay}
+        onError={onError}
         playsInline
         preload="metadata"
       />
     );
   }
 
-  return <img src={resolvedUrl} alt={alt} className={className} />;
+  return <img src={resolvedUrl} alt={alt} className={className} onLoad={onLoadedData} onError={onError} />;
 }
