@@ -52,10 +52,17 @@ export async function GET(request: Request, context: RouteContext) {
     const contentType = response.headers.get('content-type') || 'application/octet-stream';
     headers.set('Content-Type', contentType);
     headers.set('Cache-Control', 'private, no-store, max-age=0');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
 
     const contentLength = response.headers.get('content-length');
     if (contentLength) {
       headers.set('Content-Length', contentLength);
+    }
+
+    const acceptRanges = response.headers.get('accept-ranges');
+    if (acceptRanges) {
+      headers.set('Accept-Ranges', acceptRanges);
     }
 
     const disposition = response.headers.get('content-disposition');

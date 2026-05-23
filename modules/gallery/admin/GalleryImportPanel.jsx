@@ -10,7 +10,6 @@ import {
   GalleryPanelCard,
   buttonStyles,
   ghostButtonStyles,
-  inputStyles,
 } from './galleryAdminShared';
 import GalleryCreateAlbumModal from './GalleryCreateAlbumModal';
 import GalleryBatchProgressCard from './GalleryBatchProgressCard';
@@ -59,6 +58,7 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
       breadcrumbs: [],
       mediaCount: null,
       selectedFileIds: [],
+      mediaTypeFilter: 'all',
     }));
   };
 
@@ -363,27 +363,14 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
                     </div>
                   ) : null}
 
-                  <form
-                    className="mt-4 grid gap-3 md:grid-cols-[120px_auto]"
-                    onSubmit={handleDriveImport}
-                  >
-                    <input
-                      className={inputStyles}
-                      type="number"
-                      min={1}
-                      max={200}
-                      value={driveForm.limit}
-                      onChange={(event) =>
-                        setDriveForm((previous) => ({ ...previous, limit: event.target.value }))
-                      }
-                      disabled={
-                        importingDrive ||
-                        driveConnection.loading ||
-                        !driveConnection.featureEnabled ||
-                        !driveConnection.oauthConfigured ||
-                        !driveConnection.connected
-                      }
-                    />
+                  <form className="mt-4 space-y-3" onSubmit={handleDriveImport}>
+                    {driveForm.folderId ? (
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {Array.isArray(driveForm.selectedFileIds) && driveForm.selectedFileIds.length > 0
+                          ? `${driveForm.selectedFileIds.length} selected media item(s) will be imported.`
+                          : 'No media selected means the whole selected folder will be imported.'}
+                      </p>
+                    ) : null}
                     <button className={buttonStyles} disabled={importDisabled}>
                       {importingDrive ? 'Importing...' : 'Import Folder'}
                     </button>
@@ -440,6 +427,8 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         selectedFolderId={driveForm.folderId}
+        selectedFileIds={driveForm.selectedFileIds}
+        selectedMediaTypeFilter={driveForm.mediaTypeFilter}
         onSelectFolder={(folder) => {
           setDriveForm((previous) => ({
             ...previous,
@@ -448,6 +437,7 @@ export default function GalleryImportPanel({ controller, embedded = false }) {
             breadcrumbs: Array.isArray(folder.breadcrumbs) ? folder.breadcrumbs : [],
             mediaCount: typeof folder.mediaCount === 'number' ? folder.mediaCount : null,
             selectedFileIds: Array.isArray(folder.selectedFileIds) ? folder.selectedFileIds : [],
+            mediaTypeFilter: folder.mediaTypeFilter || previous.mediaTypeFilter || 'all',
           }));
         }}
       />

@@ -137,9 +137,9 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     (Array.isArray(unclothyCompletedTasks) && unclothyCompletedTasks.length > 0);
 
   const resetMediaViewToDefault = useCallback(() => {
-    setActiveChip('all');
-    if (typeof setSortMode === 'function' && sortMode !== 'dateDesc') {
-      setSortMode('dateDesc');
+    setActiveChip('manual');
+    if (typeof setSortMode === 'function' && sortMode !== 'custom') {
+      setSortMode('custom');
     }
   }, [setSortMode, sortMode]);
 
@@ -161,7 +161,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   }, [startUnclothyRunner]);
 
   useEffect(() => {
-    // Media page default: All filter + newest-first sort.
+    // Media page default: manual order, with newly added media placed first.
     resetMediaViewToDefault();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

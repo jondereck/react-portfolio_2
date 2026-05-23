@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
 import Link from 'next/link';
 import { Menu, Transition } from '@headlessui/react';
@@ -46,8 +47,10 @@ export default function CollapsibleSidebar({
   onLogout,
   isLoggingOut = false,
   accountName = '',
+  accountImage = '',
 }) {
   const resolvedAccountName = String(accountName || '').trim();
+  const resolvedAccountImage = String(accountImage || '').trim();
   const accountInitial = resolvedAccountName.slice(0, 1).toUpperCase();
 
   return (
@@ -145,7 +148,13 @@ export default function CollapsibleSidebar({
               aria-label="Account menu"
             >
               <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm dark:bg-slate-50 dark:text-slate-900">
-                {accountInitial ? <span className="text-sm font-semibold">{accountInitial}</span> : <User className="size-5" />}
+                {resolvedAccountImage ? (
+                  <img src={resolvedAccountImage} alt="" className="h-full w-full rounded-full object-cover" referrerPolicy="no-referrer" />
+                ) : accountInitial ? (
+                  <span className="text-sm font-semibold">{accountInitial}</span>
+                ) : (
+                  <User className="size-5" />
+                )}
                 <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
               </div>
 

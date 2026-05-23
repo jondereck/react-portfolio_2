@@ -184,6 +184,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
       });
 
+      const googleImage = typeof user.image === 'string' && user.image.trim() ? user.image.trim() : null;
+      if (googleImage && !targetUser.image) {
+        await prisma.user.update({
+          where: { id: targetUser.id },
+          data: { image: googleImage },
+        });
+      }
+
       cookieStore.delete(GOOGLE_DRIVE_LINK_COOKIE);
 
       return '/admin/gallery/import?googleDrive=connected';

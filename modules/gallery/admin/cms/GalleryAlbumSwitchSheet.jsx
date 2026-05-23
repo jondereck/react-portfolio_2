@@ -23,7 +23,7 @@ function getAlbumCount(album) {
 }
 
 function getAlbumSortTime(album) {
-  const candidate = album?.createdAt || album?.updatedAt;
+  const candidate = album?.activityAt || album?.updatedAt || album?.createdAt;
   const date = candidate ? new Date(candidate) : null;
   return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
 }

@@ -12,6 +12,7 @@ const adminLastVisitedPathStorageKey = 'admin:lastVisitedPath';
 const authLastVisitedPathStorageKey = 'auth:lastVisitedPath';
 const sidebarCollapsedStorageKey = 'admin:sidebarCollapsed';
 const accountNameStorageKey = 'admin:accountDisplayName';
+const accountImageStorageKey = 'admin:accountImage';
 
 export default function AdminShell({ children }) {
   const pathname = usePathname();
@@ -22,6 +23,14 @@ export default function AdminShell({ children }) {
     if (typeof window === 'undefined') return '';
     try {
       return window.localStorage.getItem(accountNameStorageKey) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [accountImage, setAccountImage] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      return window.localStorage.getItem(accountImageStorageKey) || '';
     } catch {
       return '';
     }
@@ -61,13 +70,21 @@ export default function AdminShell({ children }) {
         const payload = await response.json().catch(() => ({}));
         const account = payload?.account ?? null;
         const resolvedName = String(account?.name || account?.email || '').trim();
-        if (!resolvedName) {
-          return;
-        }
+        const resolvedImage = String(account?.image || '').trim();
 
-        setAccountName(resolvedName);
+        if (resolvedName) {
+          setAccountName(resolvedName);
+        }
+        setAccountImage(resolvedImage);
         try {
-          window.localStorage.setItem(accountNameStorageKey, resolvedName);
+          if (resolvedName) {
+            window.localStorage.setItem(accountNameStorageKey, resolvedName);
+          }
+          if (resolvedImage) {
+            window.localStorage.setItem(accountImageStorageKey, resolvedImage);
+          } else {
+            window.localStorage.removeItem(accountImageStorageKey);
+          }
         } catch {
           // ignore persistence errors
         }
@@ -123,6 +140,7 @@ export default function AdminShell({ children }) {
             onLogout={handleLogout}
             isLoggingOut={isLoggingOut}
             accountName={accountName}
+            accountImage={accountImage}
           />
         </div>
 
@@ -134,6 +152,7 @@ export default function AdminShell({ children }) {
               sidebarCollapsed={sidebarCollapsed}
               onToggleSidebar={handleToggleSidebar}
               accountName={accountName}
+              accountImage={accountImage}
             />
             <main className="min-w-0 flex-1 space-y-6">{children}</main>
           </div>

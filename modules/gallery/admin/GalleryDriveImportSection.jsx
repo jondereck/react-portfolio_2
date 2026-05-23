@@ -275,6 +275,22 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
             )}
           </div>
 
+          {driveForm.folderId ? (
+            <form className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30" onSubmit={handleDriveImport}>
+              <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                {driveForm.folderName || 'Selected Google Drive folder'}
+              </p>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                {Array.isArray(driveForm.selectedFileIds) && driveForm.selectedFileIds.length > 0
+                  ? `${driveForm.selectedFileIds.length} selected media item(s) will be imported.`
+                  : 'No media selected means the whole selected folder will be imported.'}
+              </p>
+              <button type="submit" className={`${buttonStyles} mt-3 w-full`} disabled={importDisabled}>
+                {importingDrive ? 'Importing...' : 'Import Folder'}
+              </button>
+            </form>
+          ) : null}
+
           {importingDrive && importProgress ? (
             <GalleryBatchProgressCard
               progress={importProgress}
@@ -314,6 +330,8 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
             open={pickerOpen}
             onClose={() => setPickerOpen(false)}
             selectedFolderId={driveForm.folderId}
+            selectedFileIds={driveForm.selectedFileIds}
+            selectedMediaTypeFilter={driveForm.mediaTypeFilter}
             onSelectFolder={(folder) => {
               setDriveForm((previous) => ({
                 ...previous,
@@ -459,6 +477,23 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
               )}
             </div>
 
+            {driveForm.folderId ? (
+              <form className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" onSubmit={handleDriveImport}>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {Array.isArray(driveForm.selectedFileIds) && driveForm.selectedFileIds.length > 0
+                    ? `${driveForm.selectedFileIds.length} selected media item(s) will be imported.`
+                    : 'No media selected means the whole selected folder will be imported.'}
+                </p>
+                <button
+                  type="submit"
+                  className={buttonStyles}
+                  disabled={importDisabled}
+                >
+                  {importingDrive ? 'Importing...' : 'Import Folder'}
+                </button>
+              </form>
+            ) : null}
+
 
 
             {importingDrive && importProgress ? (
@@ -501,6 +536,8 @@ export default function GalleryDriveImportSection({ controller, selectedAlbum, v
               open={pickerOpen}
               onClose={() => setPickerOpen(false)}
               selectedFolderId={driveForm.folderId}
+              selectedFileIds={driveForm.selectedFileIds}
+              selectedMediaTypeFilter={driveForm.mediaTypeFilter}
               onSelectFolder={(folder) => {
                 setDriveForm((previous) => ({
                   ...previous,

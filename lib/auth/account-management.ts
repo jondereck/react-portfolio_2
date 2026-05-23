@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { writeAuditEvent } from '@/lib/audit/audit';
 import { hashPassword, verifyPassword } from '@/lib/password/password';
+import { getGoogleProfileImageForUser } from '@/lib/auth/google-drive';
 
 export async function getSelfAccount(userId: string) {
   const user = await prisma.user.findUnique({
@@ -20,10 +21,27 @@ export async function getSelfAccount(userId: string) {
     throw new Error('USER_NOT_FOUND');
   }
 
+  let image = user.image ?? '';
+  if (!image) {
+    try {
+      const googleImage = await getGoogleProfileImageForUser(user.id);
+      if (googleImage) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { image: googleImage },
+        });
+        image = googleImage;
+      }
+    } catch {
+      image = '';
+    }
+  }
+
   return {
     id: user.id,
     name: user.name ?? '',
     email: user.email,
+    image,
     role: user.role,
     isActive: user.isActive,
     profile: user.profile,
@@ -124,6 +142,7 @@ export async function updateSelfAccount(input: {
     id: updated.id,
     name: updated.name ?? '',
     email: updated.email,
+    image: updated.image ?? '',
     role: updated.role,
     isActive: updated.isActive,
     profile: updated.profile,
@@ -207,6 +226,7 @@ export async function updateSelfAccountNeon(input: {
     id: updated.id,
     name: updated.name ?? '',
     email: updated.email,
+    image: updated.image ?? '',
     role: updated.role,
     isActive: updated.isActive,
     profile: updated.profile,

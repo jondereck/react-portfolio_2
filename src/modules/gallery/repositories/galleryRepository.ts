@@ -47,7 +47,7 @@ const resolvePhotoOrderBy = (sort: GallerySort): Prisma.AlbumPhotoOrderByWithRel
     return [{ dateTaken: 'desc' }, { uploadedAt: 'desc' }, { id: 'desc' }];
   }
 
-  return [{ sortOrder: 'asc' }, { id: 'asc' }];
+  return [{ sortOrder: 'asc' }, { uploadedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }];
 };
 
 export class GalleryRepository {
@@ -122,8 +122,8 @@ export class GalleryRepository {
       include: {
         photos: {
           select: photoSelect,
-          // Keep manual arrangement first, then use stable fallbacks for legacy/duplicate values.
-          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+          // Keep manual arrangement first, then show newest media first for legacy/duplicate values.
+          orderBy: [{ sortOrder: 'asc' }, { uploadedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         },
       },
     });
@@ -139,8 +139,8 @@ export class GalleryRepository {
       include: {
         photos: {
           select: photoSelect,
-          // Keep manual arrangement first, then use stable fallbacks for legacy/duplicate values.
-          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+          // Keep manual arrangement first, then show newest media first for legacy/duplicate values.
+          orderBy: [{ sortOrder: 'asc' }, { uploadedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
         },
       },
     });
@@ -274,9 +274,9 @@ export class GalleryRepository {
     sourceType?: PhotoSourceType;
     sourceId?: string;
   }) {
-    const last = await prisma.albumPhoto.findFirst({
+    const first = await prisma.albumPhoto.findFirst({
       where: { albumId: data.albumId },
-      orderBy: [{ sortOrder: 'desc' }, { id: 'desc' }],
+      orderBy: [{ sortOrder: 'asc' }, { uploadedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
       select: { sortOrder: true },
     });
 
@@ -297,7 +297,7 @@ export class GalleryRepository {
         dateTaken: data.dateTaken,
         sourceType: data.sourceType ?? PhotoSourceType.upload,
         sourceId: data.sourceId ?? null,
-        sortOrder: (last?.sortOrder ?? -1) + 1,
+        sortOrder: (first?.sortOrder ?? 0) - 1,
       },
       select: photoSelect,
     });

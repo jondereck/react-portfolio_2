@@ -130,7 +130,13 @@ export function useGalleryAdminController() {
           return storedAlbumId;
         }
 
-        return nextAlbums[0]?.id ?? null;
+        const latestActivityAlbum = [...nextAlbums].sort((left, right) => {
+          const leftTime = new Date(left?.activityAt ?? left?.updatedAt ?? left?.createdAt ?? 0).getTime();
+          const rightTime = new Date(right?.activityAt ?? right?.updatedAt ?? right?.createdAt ?? 0).getTime();
+          return rightTime - leftTime;
+        })[0];
+
+        return latestActivityAlbum?.id ?? null;
       });
     } catch (error) {
       toast.error(error.message);

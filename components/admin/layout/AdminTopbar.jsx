@@ -1,4 +1,5 @@
 'use client';
+/* eslint-disable @next/next/no-img-element */
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -32,7 +33,24 @@ const pageTitles = {
   '/admin/users': 'User Management',
 };
 
-export default function AdminTopbar({ onLogout, isLoggingOut = false, accountName = '' }) {
+function AccountAvatar({ accountImage = '', accountInitial = '', className = 'h-11 w-11', iconClassName = 'size-4' }) {
+  const resolvedImage = String(accountImage || '').trim();
+
+  return (
+    <div className={`relative inline-flex shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 ${className}`}>
+      {resolvedImage ? (
+        <img src={resolvedImage} alt="" className="h-full w-full rounded-full object-cover" referrerPolicy="no-referrer" />
+      ) : accountInitial ? (
+        <span className="text-sm font-semibold">{accountInitial}</span>
+      ) : (
+        <User className={iconClassName} />
+      )}
+      <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
+    </div>
+  );
+}
+
+export default function AdminTopbar({ onLogout, isLoggingOut = false, accountName = '', accountImage = '' }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -87,12 +105,11 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, accountNam
             <button
               type="button"
               onClick={() => setIsMenuOpen(true)}
-              className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 shadow-sm transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              className="rounded-full transition hover:opacity-90"
               aria-label="Open admin menu"
               title="Open admin menu"
             >
-              {accountInitial ? <span className="text-sm font-semibold">{accountInitial}</span> : <User className="size-4" />}
-              <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
+              <AccountAvatar accountImage={accountImage} accountInitial={accountInitial} />
             </button>
           </div>
         </div>
@@ -205,10 +222,12 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, accountNam
                 <div className="border-t border-slate-200 px-4 py-4 dark:border-slate-800">
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-4 dark:border-slate-800 dark:bg-slate-950/40">
                     <div className="flex flex-col items-center text-center">
-                      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-slate-950 text-white shadow-sm dark:bg-slate-50 dark:text-slate-900">
-                        {accountInitial ? <span className="text-sm font-semibold">{accountInitial}</span> : <User className="size-5" />}
-                        <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
-                      </div>
+                      <AccountAvatar
+                        accountImage={accountImage}
+                        accountInitial={accountInitial}
+                        className="h-14 w-14 border-0 bg-slate-950 text-white dark:bg-slate-50 dark:text-slate-900"
+                        iconClassName="size-5"
+                      />
 
                       <div className="mt-3 min-w-0">
                         <p className="truncate text-base font-semibold text-slate-900 dark:text-slate-50">{resolvedAccountName || 'Account'}</p>
