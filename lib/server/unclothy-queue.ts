@@ -21,8 +21,8 @@ const DEFAULT_MAX_ATTEMPTS = 10;
 const BACKOFF_BASE_MS = 60_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
 const WORKER_BATCH_SIZE = 24;
-const WORKER_ADVISORY_LOCK_ID = BigInt(924_641_903);
 const POLL_INTERVAL_MS = 60_000;
+const INGEST_LEASE_MS = 5 * 60_000;
 
 const queueTaskInclude = {
   album: { select: { name: true } },
@@ -627,6 +627,25 @@ async function failOrAutoRetryTask(task: QueueTaskRecord, error: unknown, errorC
 }
 
 async function createProviderTask(task: QueueTaskRecord) {
+  const claim = await prisma.unclothyGenerationTask.updateMany({
+    where: {
+      id: task.id,
+      status: UnclothyGenerationTaskStatus.running,
+      phase: UnclothyGenerationTaskPhase.creating,
+      providerTaskId: null,
+      nextRunAt: { lte: new Date() },
+    },
+    data: {
+      statusText: 'Creating task...',
+      nextRunAt: new Date(Date.now() + INGEST_LEASE_MS),
+    },
+  });
+
+  if (claim.count !== 1) {
+    const current = await prisma.unclothyGenerationTask.findUnique({ where: { id: task.id } });
+    return current ?? task;
+  }
+
   const downloadPayload = await galleryService.getAlbumPhotoDownloadPayload(task.albumId, task.profileId, task.sourcePhotoId, true);
   if (!downloadPayload?.photo) {
     throw new RequestValidationError('Source image not found.', 404, undefined, 'SOURCE_IMAGE_NOT_FOUND');
@@ -702,46 +721,54 @@ export async function ingestUnclothyProviderOutput(task: QueueTaskRecord, taskPa
     throw new RequestValidationError('Provider task id is missing.', 409, undefined, 'UNCLOTHY_TASK_ID_MISSING');
   }
 
-  const lockRows = await prisma.$queryRaw<{ locked: boolean }[]>`
-    SELECT pg_try_advisory_lock(hashtext(${task.id})) AS locked
-  `;
-  const lockAcquired = lockRows?.[0]?.locked === true;
+  const ingestLeaseBefore = new Date(Date.now() - INGEST_LEASE_MS);
+  const ingestClaim = await prisma.unclothyGenerationTask.updateMany({
+    where: {
+      id: task.id,
+      providerTaskId: task.providerTaskId,
+      status: UnclothyGenerationTaskStatus.running,
+      createdPhotoId: null,
+      OR: [
+        { phase: { not: UnclothyGenerationTaskPhase.ingesting } },
+        { updatedAt: { lt: ingestLeaseBefore } },
+      ],
+    },
+    data: {
+      phase: UnclothyGenerationTaskPhase.ingesting,
+      percent: Math.max(task.percent ?? 0, 92),
+      statusText: 'Saving to album...',
+      nextRunAt: new Date(Date.now() + INGEST_LEASE_MS),
+    },
+  });
 
-  if (!lockAcquired) {
+  if (ingestClaim.count !== 1) {
     const current = await prisma.unclothyGenerationTask.findUnique({ where: { id: task.id } });
-    if (current?.status === UnclothyGenerationTaskStatus.completed || current?.createdPhotoId) {
+    if (
+      current?.status === UnclothyGenerationTaskStatus.completed ||
+      current?.createdPhotoId ||
+      current?.status === UnclothyGenerationTaskStatus.canceled
+    ) {
       return current;
     }
     throw new RequestValidationError('Unclothy task is already being saved.', 409, undefined, 'UNCLOTHY_TASK_INGEST_LOCKED');
   }
 
-  try {
-    const current = await prisma.unclothyGenerationTask.findUnique({ where: { id: task.id } });
-    if (!current) {
-      throw new RequestValidationError('Unclothy task not found.', 404, undefined, 'UNCLOTHY_TASK_NOT_FOUND');
-    }
+  const current = await prisma.unclothyGenerationTask.findUnique({ where: { id: task.id } });
+  if (!current) {
+    throw new RequestValidationError('Unclothy task not found.', 404, undefined, 'UNCLOTHY_TASK_NOT_FOUND');
+  }
 
-    if (current.status === UnclothyGenerationTaskStatus.completed || current.createdPhotoId) {
-      return current;
-    }
+  if (current.status === UnclothyGenerationTaskStatus.completed || current.createdPhotoId) {
+    return current;
+  }
 
-    if (current.status === UnclothyGenerationTaskStatus.canceled) {
-      return current;
-    }
+  if (current.status === UnclothyGenerationTaskStatus.canceled) {
+    return current;
+  }
 
-    if (!current.providerTaskId) {
-      throw new RequestValidationError('Provider task id is missing.', 409, undefined, 'UNCLOTHY_TASK_ID_MISSING');
-    }
-
-    await prisma.unclothyGenerationTask.update({
-      where: { id: current.id },
-      data: {
-        phase: UnclothyGenerationTaskPhase.ingesting,
-        percent: Math.max(current.percent ?? 0, 92),
-        statusText: 'Saving to album...',
-        nextRunAt: new Date(),
-      },
-    });
+  if (!current.providerTaskId) {
+    throw new RequestValidationError('Provider task id is missing.', 409, undefined, 'UNCLOTHY_TASK_ID_MISSING');
+  }
 
     const outputPayload = taskPayload ?? (await getUnclothyTask(current.providerTaskId));
     const output = extractTaskOutput(outputPayload as any);
@@ -837,20 +864,17 @@ export async function ingestUnclothyProviderOutput(task: QueueTaskRecord, taskPa
       },
     });
 
-    return prisma.unclothyGenerationTask.update({
-      where: { id: current.id },
-      data: {
-        status: UnclothyGenerationTaskStatus.completed,
-        phase: UnclothyGenerationTaskPhase.done,
-        percent: 100,
-        statusText: 'Saved.',
-        completedAt: new Date(),
-        createdPhotoId,
-      },
-    });
-  } finally {
-    await prisma.$executeRaw`SELECT pg_advisory_unlock(hashtext(${task.id}))`;
-  }
+  return prisma.unclothyGenerationTask.update({
+    where: { id: current.id },
+    data: {
+      status: UnclothyGenerationTaskStatus.completed,
+      phase: UnclothyGenerationTaskPhase.done,
+      percent: 100,
+      statusText: 'Saved.',
+      completedAt: new Date(),
+      createdPhotoId,
+    },
+  });
 }
 
 export async function ingestUnclothyQueueTaskById(taskId: string, taskPayload?: unknown) {
@@ -1115,87 +1139,75 @@ async function requeueFinalRetriesAfterQueueDrain() {
 }
 
 export async function processUnclothyQueueOnce() {
-  const lockRows = await prisma.$queryRaw<{ locked: boolean }[]>`
-    SELECT pg_try_advisory_lock(${WORKER_ADVISORY_LOCK_ID}) AS locked
-  `;
-  const lockAcquired = lockRows?.[0]?.locked === true;
+  const staleMinutes = getStaleMinutes();
+  const staleBefore = new Date(Date.now() - staleMinutes * 60_000);
 
-  if (!lockAcquired) {
-    return { started: 0, advanced: 0, failed: 0, counts: {}, locked: true };
-  }
+  const started = await startQueuedTasks();
+  // Capture time after starting queued tasks so newly-started tasks (nextRunAt=now)
+  // can be advanced in the same worker tick.
+  const runNow = new Date();
+  const running = await prisma.unclothyGenerationTask.findMany({
+    where: {
+      status: UnclothyGenerationTaskStatus.running,
+      nextRunAt: { lte: runNow },
+    },
+    orderBy: [{ nextRunAt: 'asc' }, { startedAt: 'asc' }, { createdAt: 'asc' }],
+    take: WORKER_BATCH_SIZE,
+  });
 
-  try {
-    const staleMinutes = getStaleMinutes();
-    const staleBefore = new Date(Date.now() - staleMinutes * 60_000);
+  let advanced = 0;
+  let failed = 0;
+  let autoRequeued = 0;
+  let finalRequeued = 0;
 
-    const started = await startQueuedTasks();
-    // Capture time after starting queued tasks so newly-started tasks (nextRunAt=now)
-    // can be advanced in the same worker tick.
-    const runNow = new Date();
-    const running = await prisma.unclothyGenerationTask.findMany({
-      where: {
-        status: UnclothyGenerationTaskStatus.running,
-        nextRunAt: { lte: runNow },
-      },
-      orderBy: [{ nextRunAt: 'asc' }, { startedAt: 'asc' }, { createdAt: 'asc' }],
-      take: WORKER_BATCH_SIZE,
-    });
-
-    let advanced = 0;
-    let failed = 0;
-    let autoRequeued = 0;
-    let finalRequeued = 0;
-
-    for (const task of running) {
-      try {
-        if (task.startedAt && task.startedAt < staleBefore) {
-          const updated = await failOrAutoRetryTask(task, new Error(`Timed out after ${staleMinutes} minutes. Please retry.`), 'UNCLOTHY_TASK_STALE');
-          if (updated.status === UnclothyGenerationTaskStatus.queued) {
-            autoRequeued += 1;
-          } else {
-            failed += 1;
-          }
-          continue;
-        }
-
-        await advanceRunningTask(task);
-        advanced += 1;
-      } catch (error) {
-        if (isTransientError(error)) {
-          await rescheduleAfterError(task, error);
-          continue;
-        }
-
-        const updated = await failOrAutoRetryTask(task, error);
+  for (const task of running) {
+    try {
+      if (task.startedAt && task.startedAt < staleBefore) {
+        const updated = await failOrAutoRetryTask(task, new Error(`Timed out after ${staleMinutes} minutes. Please retry.`), 'UNCLOTHY_TASK_STALE');
         if (updated.status === UnclothyGenerationTaskStatus.queued) {
           autoRequeued += 1;
         } else {
           failed += 1;
         }
+        continue;
+      }
+
+      await advanceRunningTask(task);
+      advanced += 1;
+    } catch (error) {
+      if (isTransientError(error)) {
+        await rescheduleAfterError(task, error);
+        continue;
+      }
+
+      const updated = await failOrAutoRetryTask(task, error);
+      if (updated.status === UnclothyGenerationTaskStatus.queued) {
+        autoRequeued += 1;
+      } else {
+        failed += 1;
       }
     }
-
-    finalRequeued = await requeueFinalRetriesAfterQueueDrain();
-
-    const activeCounts = await prisma.unclothyGenerationTask.groupBy({
-      by: ['status'],
-      where: {
-        status: {
-          in: [UnclothyGenerationTaskStatus.queued, UnclothyGenerationTaskStatus.running, UnclothyGenerationTaskStatus.failed],
-        },
-      },
-      _count: { _all: true },
-    });
-
-    return {
-      started: started.length,
-      advanced,
-      failed,
-      autoRequeued,
-      finalRequeued,
-      counts: Object.fromEntries(activeCounts.map((entry) => [entry.status, entry._count._all])),
-    };
-  } finally {
-    await prisma.$executeRaw`SELECT pg_advisory_unlock(${WORKER_ADVISORY_LOCK_ID})`;
   }
+
+  finalRequeued = await requeueFinalRetriesAfterQueueDrain();
+
+  const activeCounts = await prisma.unclothyGenerationTask.groupBy({
+    by: ['status'],
+    where: {
+      status: {
+        in: [UnclothyGenerationTaskStatus.queued, UnclothyGenerationTaskStatus.running, UnclothyGenerationTaskStatus.failed],
+      },
+    },
+    _count: { _all: true },
+  });
+
+  return {
+    started: started.length,
+    advanced,
+    failed,
+    autoRequeued,
+    finalRequeued,
+    counts: Object.fromEntries(activeCounts.map((entry) => [entry.status, entry._count._all])),
+    locked: false,
+  };
 }
