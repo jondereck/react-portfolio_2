@@ -3,10 +3,6 @@ import { writeAuditEvent } from '@/lib/audit/audit';
 import { hashPassword, verifyPassword } from '@/lib/password/password';
 import { getGoogleProfileForUser } from '@/lib/auth/google-drive';
 
-function normalizeEmail(value: string | null | undefined) {
-  return String(value || '').trim().toLowerCase();
-}
-
 export async function getSelfAccount(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -28,27 +24,12 @@ export async function getSelfAccount(userId: string) {
   let image = user.image ?? '';
   try {
     const googleProfile = await getGoogleProfileForUser(user.id);
-    const googleEmailMatchesUser = Boolean(
-      googleProfile?.email && normalizeEmail(googleProfile.email) === normalizeEmail(user.email),
-    );
-
-    if (!image && googleEmailMatchesUser && googleProfile?.picture) {
+    if (!image && googleProfile?.picture) {
       await prisma.user.update({
         where: { id: user.id },
         data: { image: googleProfile.picture },
       });
       image = googleProfile.picture;
-    } else if (
-      image &&
-      !googleEmailMatchesUser &&
-      googleProfile?.picture &&
-      image.trim() === googleProfile.picture.trim()
-    ) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { image: null },
-        });
-        image = '';
     }
   } catch {
     if (!image) image = '';

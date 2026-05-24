@@ -68,6 +68,7 @@ export default function GalleryMediaViewer({
   const [uploadingSnapshot, setUploadingSnapshot] = useState(false);
   const [downloadingMedia, setDownloadingMedia] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [unclothyAvailable, setUnclothyAvailable] = useState(false);
   const generateSheetRef = useRef(null);
   const videoRef = useRef(null);
   const snapshotPlaybackRef = useRef(null);
@@ -90,10 +91,12 @@ export default function GalleryMediaViewer({
   const generatingState = isRunningForThisPhoto ? 'running' : isQueuedForThisPhoto ? 'queued' : null;
   const isGeneratingPreview = Boolean(generatingState);
   const [statusIndex, setStatusIndex] = useState(0);
+  const canOpenGenerate = canGenerate && unclothyAvailable;
 
   useEffect(() => {
     if (!open) {
       setGenerateOpen(false);
+      setUnclothyAvailable(false);
       setPreviewLoading(false);
       setSnapshot((current) => {
         if (current?.url) {
@@ -104,6 +107,36 @@ export default function GalleryMediaViewer({
       snapshotPlaybackRef.current = null;
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !canGenerate) {
+      setUnclothyAvailable(false);
+      setGenerateOpen(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    fetchJson('/api/admin/integrations/unclothy', {
+      method: 'GET',
+      signal: controller.signal,
+    })
+      .then((data) => {
+        const result = data?.result && typeof data.result === 'object' ? data.result : data;
+        const available = result?.enabled === true && result?.configured === true;
+        setUnclothyAvailable(available);
+        if (!available) {
+          setGenerateOpen(false);
+        }
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') return;
+        setUnclothyAvailable(false);
+        setGenerateOpen(false);
+      });
+
+    return () => controller.abort();
+  }, [canGenerate, open]);
 
   useEffect(() => {
     setPreviewLoading(Boolean(photo));
@@ -170,10 +203,10 @@ export default function GalleryMediaViewer({
   useEffect(() => {
     if (!open) return;
     if (!openGenerate) return;
-    if (!canGenerate) return;
+    if (!canOpenGenerate) return;
     setGenerateOpen(true);
     onGenerateOpened?.();
-  }, [canGenerate, onGenerateOpened, open, openGenerate]);
+  }, [canOpenGenerate, onGenerateOpened, open, openGenerate]);
 
   const restoreVideoPlayback = () => {
     const video = videoRef.current;
@@ -394,7 +427,7 @@ export default function GalleryMediaViewer({
                         <span className="ml-2">Snapshot</span>
                       </button>
                     ) : null}
-                    {canGenerate ? (
+                    {canOpenGenerate ? (
                       <button
                         type="button"
                         className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
@@ -638,7 +671,7 @@ export default function GalleryMediaViewer({
                 </div>
 
                 <div className="border-t border-slate-200 bg-white px-2 py-1.5 pb-[calc(0.375rem_+_env(safe-area-inset-bottom))] dark:border-slate-800 dark:bg-slate-950 sm:hidden">
-                  {canGenerate || canSnapshot || canDownload ? (
+                  {canOpenGenerate || canSnapshot || canDownload ? (
                     <div className="flex items-center gap-2">
                       {canSnapshot ? (
                         <button
@@ -666,7 +699,7 @@ export default function GalleryMediaViewer({
                           <span className="sr-only">Download</span>
                         </button>
                       ) : null}
-                      {canGenerate ? (
+                      {canOpenGenerate ? (
                         <button
                           type="button"
                           className="inline-flex h-11 min-w-[44px] flex-1 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950"
