@@ -155,13 +155,11 @@ export default function CollapsibleSidebar({
                 ) : (
                   <User className="size-5" />
                 )}
-                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
               </div>
 
               {collapsed ? null : (
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-50">{resolvedAccountName || 'Account'}</p>
-                  <p className="truncate text-xs text-slate-500 dark:text-slate-400">Online</p>
                 </div>
               )}
             </Menu.Button>

@@ -21,15 +21,30 @@ export async function getSelfAccount(userId: string) {
     throw new Error('USER_NOT_FOUND');
   }
 
+  const normalizedUserEmail = String(user.email || '').trim().toLowerCase();
   let image = user.image ?? '';
   try {
     const googleProfile = await getGoogleProfileForUser(user.id);
-    if (!image && googleProfile?.picture) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { image: googleProfile.picture },
-      });
+    const normalizedGoogleEmail = String(googleProfile?.email || '').trim().toLowerCase();
+    const googleEmailMatchesUser = Boolean(normalizedGoogleEmail) && normalizedGoogleEmail === normalizedUserEmail;
+
+    if (googleEmailMatchesUser && googleProfile?.picture) {
+      if (image !== googleProfile.picture) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { image: googleProfile.picture },
+        });
+      }
       image = googleProfile.picture;
+    } else if (user.role === 'super_admin' && normalizedGoogleEmail && !googleEmailMatchesUser) {
+      // Super admin avatar must never come from a mismatched Google account.
+      if (image) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { image: null },
+        });
+      }
+      image = '';
     }
   } catch {
     if (!image) image = '';

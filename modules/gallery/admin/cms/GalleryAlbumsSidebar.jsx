@@ -166,7 +166,7 @@ export default function GalleryAlbumsSidebar({
                 <ChevronUp className="h-4 w-4" />
               </button>
 
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1.5 pb-1">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 pb-1">
                 {visibleAlbums.map((album) => {
                   const isActive = album.id === selectedAlbumId;
                   const coverUrl = resolveAlbumCoverUrl(album);
@@ -175,7 +175,7 @@ export default function GalleryAlbumsSidebar({
                     Boolean(coverPhoto) && shouldBlurPhoto(coverPhoto, { blurEnabled: blurUnclothyGenerated });
 
                   return (
-                    <div key={album.id} className="relative flex justify-center">
+                    <div key={album.id} className="relative flex justify-center ml-4">
                       <button
                         type="button"
                         onClick={() => onSelectAlbum?.(album.id)}

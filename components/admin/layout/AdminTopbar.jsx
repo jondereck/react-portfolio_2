@@ -45,7 +45,6 @@ function AccountAvatar({ accountImage = '', accountInitial = '', className = 'h-
       ) : (
         <User className={iconClassName} />
       )}
-      <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500 dark:border-slate-900" />
     </div>
   );
 }
