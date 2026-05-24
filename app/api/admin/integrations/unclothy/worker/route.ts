@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { requireAuthActor } from '@/lib/auth/session';
 import { createUnclothyEnvelope, createUnclothySuccessResponse, toUnclothyErrorResponse } from '@/lib/server/unclothy';
 import { processUnclothyQueueOnce } from '@/lib/server/unclothy-queue';
@@ -41,7 +41,7 @@ function hasValidCronAuthorization(request: Request) {
 async function hasValidAdminAuthorization(request: Request) {
   try {
     const actor = await requireAuthActor(request);
-    return canMutateContent(actor.user.role);
+    return canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate');
   } catch {
     return false;
   }

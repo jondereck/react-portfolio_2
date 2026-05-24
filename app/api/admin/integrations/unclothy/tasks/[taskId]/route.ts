@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { requireAuthActor } from '@/lib/auth/session';
 import { getAdminSettings } from '@/lib/server/admin-settings';
 import { createUnclothyEnvelope, createUnclothySuccessResponse, toUnclothyErrorResponse } from '@/lib/server/unclothy';
@@ -13,7 +13,7 @@ type RouteContext = { params: Promise<{ taskId: string }> };
 
 async function requireUnclothyActor(request: Request) {
   const actor = await requireAuthActor(request);
-  if (!canMutateContent(actor.user.role)) {
+  if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
     return {
       actor,
       response: NextResponse.json(

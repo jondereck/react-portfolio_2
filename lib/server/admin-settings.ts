@@ -2,11 +2,16 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { writeAuditEvent } from '@/lib/audit/audit';
 import { defaultAdminIntegrations, defaultAdminSecurity, defaultAdminSettings } from '@/lib/adminSettingsDefaults';
+import { normalizeRoleModuleAccess } from '@/lib/auth/module-access-config';
 import { integrationsSettingsSchema, securitySettingsSchema } from '@/lib/validators';
 
 type AdminSettingsSnapshot = {
   integrations: typeof defaultAdminIntegrations;
   security: typeof defaultAdminSecurity;
+};
+
+type AdminSecurityUpdate = Omit<Partial<typeof defaultAdminSecurity>, 'roleModuleAccess'> & {
+  roleModuleAccess?: unknown;
 };
 
 type IntegrationStatus = {
@@ -41,9 +46,12 @@ const normalizeIntegrations = (value: unknown) => {
 
 const normalizeSecurity = (value: unknown) => {
   const parsed = securitySettingsSchema.partial().safeParse(value);
+  const security = parsed.success ? parsed.data : {};
+
   return {
     ...defaultAdminSecurity,
-    ...(parsed.success ? parsed.data : {}),
+    ...security,
+    roleModuleAccess: normalizeRoleModuleAccess(security.roleModuleAccess),
   };
 };
 
@@ -93,7 +101,7 @@ export async function getAdminSettings(options?: { fresh?: boolean }): Promise<A
 
 export async function updateAdminSettings(input: {
   integrations?: Partial<typeof defaultAdminIntegrations>;
-  security?: Partial<typeof defaultAdminSecurity>;
+  security?: AdminSecurityUpdate;
 }) {
   const current = await getAdminSettings({ fresh: true });
   const nextIntegrations = {
@@ -103,6 +111,7 @@ export async function updateAdminSettings(input: {
   const nextSecurity = {
     ...current.security,
     ...(input.security ?? {}),
+    roleModuleAccess: normalizeRoleModuleAccess(input.security?.roleModuleAccess ?? current.security.roleModuleAccess),
   };
 
   const record = await prisma.adminSettings.upsert({

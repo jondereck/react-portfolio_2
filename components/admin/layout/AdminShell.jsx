@@ -5,6 +5,7 @@ import { signOut } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import AdminSidebar from '@/components/admin/navigation/AdminSidebar';
 import AdminTopbar from '@/components/admin/layout/AdminTopbar';
+import { adminNavigationSections, filterAdminNavigationSections } from '@/components/admin/navigation/admin-nav-config';
 import { useLoadingStore } from '@/store/loading';
 import UnclothyTaskNotifier from '@/components/admin/layout/UnclothyTaskNotifier';
 
@@ -19,6 +20,7 @@ export default function AdminShell({ children }) {
   const startGlobalLoading = useLoadingStore((state) => state.startLoading);
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [moduleAccess, setModuleAccess] = useState(null);
   const [accountName, setAccountName] = useState(() => {
     if (typeof window === 'undefined') return '';
     try {
@@ -69,9 +71,11 @@ export default function AdminShell({ children }) {
 
         const payload = await response.json().catch(() => ({}));
         const account = payload?.account ?? null;
+        const nextModuleAccess = payload?.moduleAccess && typeof payload.moduleAccess === 'object' ? payload.moduleAccess : {};
         const resolvedName = String(account?.name || account?.email || '').trim();
         const resolvedImage = String(account?.image || '').trim();
 
+        setModuleAccess(nextModuleAccess);
         if (resolvedName) {
           setAccountName(resolvedName);
         }
@@ -90,6 +94,7 @@ export default function AdminShell({ children }) {
         }
       } catch {
         // ignore account refresh errors and keep the last known label
+        setModuleAccess({});
       }
     };
 
@@ -117,6 +122,8 @@ export default function AdminShell({ children }) {
     }
   };
 
+  const navigationSections = filterAdminNavigationSections(adminNavigationSections, moduleAccess);
+
   const handleToggleSidebar = () => {
     setSidebarCollapsed((value) => {
       const next = !value;
@@ -141,6 +148,7 @@ export default function AdminShell({ children }) {
             isLoggingOut={isLoggingOut}
             accountName={accountName}
             accountImage={accountImage}
+            sections={navigationSections}
           />
         </div>
 
@@ -153,6 +161,7 @@ export default function AdminShell({ children }) {
               onToggleSidebar={handleToggleSidebar}
               accountName={accountName}
               accountImage={accountImage}
+              sections={navigationSections}
             />
             <main className="min-w-0 flex-1 space-y-6">{children}</main>
           </div>

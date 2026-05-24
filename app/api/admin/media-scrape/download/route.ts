@@ -2,7 +2,7 @@ import { PassThrough, Readable } from 'node:stream';
 import { NextResponse } from 'next/server';
 import archiver from 'archiver';
 import { z } from 'zod';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { resolveRequestActor } from '@/lib/auth/session';
 import { getAdminSettings, logAdminAuditEvent } from '@/lib/server/admin-settings';
 import { isRateLimited } from '@/lib/server/rate-limit';
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     if (!actor) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'mediaScraper', 'createUpdate'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

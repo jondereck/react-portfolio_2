@@ -26,6 +26,7 @@ const DEFAULT_SHORTCUTS = [
     icon: Folder,
     tone: 'emerald',
     href: '/admin/portfolio',
+    moduleId: 'portfolio',
     newTab: false,
     defaultEnabled: true,
   },
@@ -36,6 +37,7 @@ const DEFAULT_SHORTCUTS = [
     icon: Image,
     tone: 'sky',
     href: '/admin/gallery',
+    moduleId: 'gallery',
     newTab: false,
     defaultEnabled: true,
   },
@@ -46,6 +48,7 @@ const DEFAULT_SHORTCUTS = [
     icon: LayoutGrid,
     tone: 'amber',
     href: '/admin/gallery/import',
+    moduleId: 'gallery',
     newTab: false,
     defaultEnabled: true,
   },
@@ -76,6 +79,7 @@ const DEFAULT_SHORTCUTS = [
     icon: Settings,
     tone: 'slate',
     href: '/admin/portfolio/homepage',
+    moduleId: 'portfolio',
     newTab: false,
     defaultEnabled: false,
   },
@@ -382,9 +386,13 @@ function ManageShortcutsModal({
   );
 }
 
-export default function AdminDashboardShortcuts() {
+export default function AdminDashboardShortcuts({ moduleAccess = null }) {
   const shortcuts = useMemo(() => DEFAULT_SHORTCUTS, []);
-  const shortcutMap = useMemo(() => new Map(shortcuts.map((item) => [item.id, item])), [shortcuts]);
+  const accessibleShortcuts = useMemo(
+    () => shortcuts.filter((item) => !item.moduleId || moduleAccess?.[item.moduleId]?.view === true),
+    [moduleAccess, shortcuts],
+  );
+  const shortcutMap = useMemo(() => new Map(accessibleShortcuts.map((item) => [item.id, item])), [accessibleShortcuts]);
 
   const [savedConfig, setSavedConfig] = useState(() => buildDefaultConfig());
   const [draftConfig, setDraftConfig] = useState(() => buildDefaultConfig());
@@ -445,7 +453,7 @@ export default function AdminDashboardShortcuts() {
       <ManageShortcutsModal
         open={isManageOpen}
         onClose={handleCloseManage}
-        shortcuts={shortcuts}
+        shortcuts={accessibleShortcuts}
         config={draftConfig}
         onToggleEnabled={handleToggleEnabled}
         onMoveUp={handleMoveUp}

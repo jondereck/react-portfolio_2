@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getGoogleDriveAccessTokenForUser } from '@/lib/auth/google-drive';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { resolveRequestActor } from '@/lib/auth/session';
 
@@ -16,7 +16,7 @@ export async function GET(request: Request, context: RouteContext) {
     if (!actor) {
       throw new Error('UNAUTHENTICATED');
     }
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       throw new Error('FORBIDDEN');
     }
 

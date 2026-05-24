@@ -1,9 +1,8 @@
 import NavigationSettingsSection from '@/modules/system/admin/NavigationSettingsSection';
-import { requirePageRole } from '@/lib/auth/session';
-import { ADMIN_ROLES } from '@/lib/auth/roles';
+import { requirePageModuleAccess } from '@/lib/auth/session';
 
 export default async function AdminNavigationPage() {
-  await requirePageRole(ADMIN_ROLES);
+  await requirePageModuleAccess('navigation');
 
   return (
     <div className="space-y-6">

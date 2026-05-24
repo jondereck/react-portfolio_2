@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { getCloudinaryFolderPath } from '@/lib/server/admin-settings';
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
   try {
     const { actor } = await resolveManagedProfileFromRequest(request);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'createUpdate'))) {
       return createFormErrorResponse({ error: 'You are not allowed to upload media.', errorCode: 'FORBIDDEN' }, 403);
     }
 

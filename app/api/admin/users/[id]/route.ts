@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { USER_MANAGEMENT_ROLES } from '@/lib/auth/roles';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
-import { requireRole } from '@/lib/auth/session';
+import { requireModuleAccess, requireRole } from '@/lib/auth/session';
 import {
   approveManagedUser,
   changeManagedUserRole,
@@ -48,7 +48,6 @@ type RouteContext = {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const actor = await requireRole(USER_MANAGEMENT_ROLES, request);
     const { id } = await context.params;
     const parsed = actionSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -57,6 +56,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     switch (parsed.data.action) {
       case 'approve': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await approveManagedUser({
           actorUserId: actor.user.id,
           userId: id,
@@ -65,6 +65,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'reject': {
+        const actor = await requireModuleAccess('users', 'delete', request);
         await rejectManagedUser({
           actorUserId: actor.user.id,
           userId: id,
@@ -72,6 +73,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ ok: true });
       }
       case 'activate': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await setManagedUserActive({
           actorUserId: actor.user.id,
           userId: id,
@@ -80,6 +82,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'suspend': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await setManagedUserActive({
           actorUserId: actor.user.id,
           userId: id,
@@ -88,6 +91,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'change_role': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await changeManagedUserRole({
           actorUserId: actor.user.id,
           userId: id,
@@ -96,6 +100,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'reset_password': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await resetManagedUserPassword({
           actorUserId: actor.user.id,
           userId: id,
@@ -104,6 +109,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'transfer_super_admin': {
+        const actor = await requireRole(USER_MANAGEMENT_ROLES, request);
         const user = await transferSuperAdmin({
           actorUserId: actor.user.id,
           targetUserId: id,

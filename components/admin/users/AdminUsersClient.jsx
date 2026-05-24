@@ -8,6 +8,7 @@ import FieldErrorText from '@/components/forms/FieldErrorText';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
 import { clearFieldErrors, getFieldError, normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
+import RoleModuleAccessMatrix from '@/components/admin/users/RoleModuleAccessMatrix';
 
 const roleOptions = [
   { value: 'admin', label: 'Admin' },
@@ -194,6 +195,8 @@ export default function AdminUsersClient() {
           </p>
         </div>
       </section>
+
+      <RoleModuleAccessMatrix />
 
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <div className="space-y-1">

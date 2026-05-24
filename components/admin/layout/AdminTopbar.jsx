@@ -50,7 +50,13 @@ function AccountAvatar({ accountImage = '', accountInitial = '', className = 'h-
   );
 }
 
-export default function AdminTopbar({ onLogout, isLoggingOut = false, accountName = '', accountImage = '' }) {
+export default function AdminTopbar({
+  onLogout,
+  isLoggingOut = false,
+  accountName = '',
+  accountImage = '',
+  sections = adminNavigationSections,
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -191,7 +197,7 @@ export default function AdminTopbar({ onLogout, isLoggingOut = false, accountNam
 
                 <div className="flex-1 overflow-y-auto px-4 py-4">
                   <nav className="space-y-5">
-                    {adminNavigationSections.map((section) => (
+                    {sections.map((section) => (
                       <section key={section.title} className="space-y-2">
                         <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{section.title}</h3>
                         <div className="grid grid-cols-2 gap-2">

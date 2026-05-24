@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { aboutSchema, heroSchema, contactSchema, seoSchema } from '@/lib/validators';
 import { isRateLimited } from '@/lib/server/rate-limit';
@@ -36,7 +36,7 @@ export async function PUT(request: Request) {
   if (!actor || !profile) {
     return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
-  if (!canMutateContent(actor.user.role)) {
+  if (!(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'createUpdate'))) {
     return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 

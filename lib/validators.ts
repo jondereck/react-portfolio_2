@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ADMIN_MODULE_IDS, CONFIGURABLE_ACCESS_ROLES, MODULE_ACCESS_ACTIONS } from '@/lib/auth/module-access-config';
 import { PORTFOLIO_THEME_IDS } from './portfolioThemes';
 import { isAnchorOrSafeHttpUrl, isSafeHttpUrl } from '@/lib/url-safety';
 
@@ -200,6 +201,30 @@ export const securitySettingsSchema = z.object({
   mediaScrapeMaxZipFiles: z.number().int().min(1).max(200).optional(),
   mediaScrapeTimeoutMs: z.number().int().min(5_000).max(120_000).optional(),
   sessionVersion: z.number().int().min(1).max(999999).optional(),
+  roleModuleAccess: z
+    .object(
+      Object.fromEntries(
+        CONFIGURABLE_ACCESS_ROLES.map((role) => [
+          role,
+          z
+            .object(
+              Object.fromEntries(
+                ADMIN_MODULE_IDS.map((moduleId) => [
+                  moduleId,
+                  z
+                    .object(Object.fromEntries(MODULE_ACCESS_ACTIONS.map((action) => [action, z.boolean().optional()])))
+                    .partial()
+                    .optional(),
+                ]),
+              ),
+            )
+            .partial()
+            .optional(),
+        ]),
+      ),
+    )
+    .partial()
+    .optional(),
 });
 
 export const portfolioSchema = z.object({

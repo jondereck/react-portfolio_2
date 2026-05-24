@@ -7,6 +7,7 @@ import { getAdminSettings } from '@/lib/server/admin-settings';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 import { createFieldErrorResponse, createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 import { getNeonAuth } from '@/lib/auth/neon-server';
+import { getEffectiveRoleModuleAccess } from '@/lib/auth/module-access';
 
 const updateAccountSchema = z.object({
   name: z.string().trim().min(2).max(80),
@@ -26,13 +27,15 @@ const updateAccountSchema = z.object({
 export async function GET(request: Request) {
   try {
     const actor = await requireAuthActor(request);
-    const [account, settings] = await Promise.all([
+    const [account, settings, moduleAccess] = await Promise.all([
       getSelfAccount(actor.user.id),
       getAdminSettings(),
+      getEffectiveRoleModuleAccess(actor.user.role),
     ]);
     return NextResponse.json({
       account,
       actorSource: actor.source,
+      moduleAccess,
       sessionPolicy: {
         sessionTtlHours: settings.security.sessionTtlHours,
       },

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { isRateLimited } from '@/lib/server/rate-limit';
@@ -44,7 +44,7 @@ export async function POST(request: Request) {
 
   try {
     const { actor } = await resolveManagedProfileFromRequest(request);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'createUpdate'))) {
       return createFormErrorResponse({ error: 'You are not allowed to extract certificate data.', errorCode: 'FORBIDDEN' }, 403);
     }
 

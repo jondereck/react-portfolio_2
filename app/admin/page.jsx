@@ -1,16 +1,18 @@
 import AdminDashboardShortcuts from '@/components/admin/dashboard/AdminDashboardShortcuts';
 import { ADMIN_ROLES } from '@/lib/auth/roles';
 import { requirePageRole } from '@/lib/auth/session';
+import { getEffectiveRoleModuleAccess } from '@/lib/auth/module-access';
 
 export default async function AdminDashboardPage() {
-  await requirePageRole(ADMIN_ROLES);
+  const actor = await requirePageRole(ADMIN_ROLES);
+  const moduleAccess = await getEffectiveRoleModuleAccess(actor.user.role);
 
   return (
     <div className="space-y-6">
 
 
 
-      <AdminDashboardShortcuts />
+      <AdminDashboardShortcuts moduleAccess={moduleAccess} />
 
       <section id="future-modules" className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 dark:border-slate-700 dark:bg-slate-900/60">
         <h3 className="text-lg font-semibold">Future Modules</h3>
