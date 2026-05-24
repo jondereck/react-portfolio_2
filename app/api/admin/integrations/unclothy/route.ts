@@ -9,6 +9,7 @@ import {
   isUnclothyConfigured,
   toUnclothyErrorResponse,
 } from '@/lib/server/unclothy';
+import { getUnclothyUsageSummaryForUser, normalizeUnclothyGlobalConcurrentLimit } from '@/lib/server/unclothy-limits';
 
 export async function GET(request: Request) {
   try {
@@ -28,12 +29,17 @@ export async function GET(request: Request) {
     const settings = await getAdminSettings();
     const enabled = settings.integrations.unclothyEnabled === true;
     const configured = isUnclothyConfigured();
+    const quota = {
+      ...(await getUnclothyUsageSummaryForUser(actor.user)),
+      globalConcurrentGenerationLimit: normalizeUnclothyGlobalConcurrentLimit(settings.integrations.unclothyGlobalConcurrentGenerationLimit),
+    };
 
     if (!enabled || !configured) {
       return createUnclothySuccessResponse({
         enabled,
         configured,
         credits: null,
+        quota,
         settingsEnums: {},
         warnings: [],
       });
@@ -69,6 +75,7 @@ export async function GET(request: Request) {
       enabled,
       configured,
       credits,
+      quota,
       settingsEnums,
       warnings,
     });

@@ -50,6 +50,7 @@ export default function AdminUsersClient() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [feedback, setFeedback] = useState('');
   const [roleDrafts, setRoleDrafts] = useState({});
+  const [unclothyLimitDrafts, setUnclothyLimitDrafts] = useState({});
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -72,6 +73,15 @@ export default function AdminUsersClient() {
       setRoleDrafts(
         nextUsers.reduce((accumulator, user) => {
           accumulator[user.id] = user.role;
+          return accumulator;
+        }, {}),
+      );
+      setUnclothyLimitDrafts(
+        nextUsers.reduce((accumulator, user) => {
+          accumulator[user.id] = {
+            monthlyGenerationLimit: String(user.unclothyMonthlyGenerationLimit ?? user.unclothyUsage?.monthlyGenerationLimit ?? 0),
+            concurrentGenerationLimit: String(user.unclothyConcurrentGenerationLimit ?? user.unclothyUsage?.concurrentGenerationLimit ?? 1),
+          };
           return accumulator;
         }, {}),
       );
@@ -110,6 +120,40 @@ export default function AdminUsersClient() {
     }
 
     await loadUsers();
+  };
+
+  const saveUnclothyLimits = async (user) => {
+    const draft = unclothyLimitDrafts[user.id] ?? {};
+    const monthlyGenerationLimit = Number.parseInt(String(draft.monthlyGenerationLimit ?? ''), 10);
+    const concurrentGenerationLimit = Number.parseInt(String(draft.concurrentGenerationLimit ?? ''), 10);
+
+    if (
+      !Number.isInteger(monthlyGenerationLimit) ||
+      monthlyGenerationLimit < 0 ||
+      monthlyGenerationLimit > 10000 ||
+      !Number.isInteger(concurrentGenerationLimit) ||
+      concurrentGenerationLimit < 1 ||
+      concurrentGenerationLimit > 5
+    ) {
+      setError('Unclothy monthly limit must be 0-10000 and concurrent limit must be 1-5.');
+      return;
+    }
+
+    try {
+      await runAction(
+        user.id,
+        {
+          action: 'update_unclothy_limits',
+          monthlyGenerationLimit,
+          concurrentGenerationLimit,
+        },
+        `Updated Unclothy limits for ${user.email}.`,
+      );
+    } catch (requestError) {
+      const nextError = normalizeFormError(requestError, 'Unable to update Unclothy limits.');
+      setError(nextError.formError);
+      setFieldErrors(nextError.fieldErrors);
+    }
   };
 
   const handleManualCreate = async (event) => {
@@ -305,6 +349,7 @@ export default function AdminUsersClient() {
                   <th className="py-3 pr-4 font-medium">Role</th>
                   <th className="py-3 pr-4 font-medium">Status</th>
                   <th className="py-3 pr-4 font-medium">Profile</th>
+                  <th className="py-3 pr-4 font-medium">Unclothy</th>
                   <th className="py-3 pr-4 font-medium">Last login</th>
                   <th className="py-3 font-medium">Actions</th>
                 </tr>
@@ -360,6 +405,81 @@ export default function AdminUsersClient() {
                       <StatusBadge status={user.status} />
                     </td>
                     <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{user.profile?.slug || 'No profile'}</td>
+                    <td className="min-w-[20rem] py-3 pr-4">
+                      {user.role === 'super_admin' ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/40 dark:text-slate-300">
+                          Unlimited monthly quota. Global running cap still applies.
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="space-y-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                              Monthly
+                              <Input
+                                type="number"
+                                min="0"
+                                max="10000"
+                                inputMode="numeric"
+                                value={unclothyLimitDrafts[user.id]?.monthlyGenerationLimit ?? '0'}
+                                onChange={(event) =>
+                                  setUnclothyLimitDrafts((current) => ({
+                                    ...current,
+                                    [user.id]: {
+                                      ...(current[user.id] ?? {}),
+                                      monthlyGenerationLimit: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label className="space-y-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+                              Concurrent
+                              <Input
+                                type="number"
+                                min="1"
+                                max="5"
+                                inputMode="numeric"
+                                value={unclothyLimitDrafts[user.id]?.concurrentGenerationLimit ?? '1'}
+                                onChange={(event) =>
+                                  setUnclothyLimitDrafts((current) => ({
+                                    ...current,
+                                    [user.id]: {
+                                      ...(current[user.id] ?? {}),
+                                      concurrentGenerationLimit: event.target.value,
+                                    },
+                                  }))
+                                }
+                              />
+                            </label>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <span>
+                              Used{' '}
+                              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                {user.unclothyUsage?.usedThisMonth ?? 0}
+                              </span>
+                              /{user.unclothyUsage?.monthlyGenerationLimit ?? 0}
+                            </span>
+                            <span>
+                              Remaining{' '}
+                              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                {user.unclothyUsage?.remainingThisMonth ?? 0}
+                              </span>
+                            </span>
+                            <span>
+                              Active{' '}
+                              <span className="font-semibold text-slate-700 dark:text-slate-200">
+                                {user.unclothyUsage?.activeReserved ?? 0}
+                              </span>
+                              /{user.unclothyUsage?.concurrentGenerationLimit ?? 1}
+                            </span>
+                          </div>
+                          <Button type="button" size="sm" variant="outline" onClick={() => saveUnclothyLimits(user)}>
+                            Save limits
+                          </Button>
+                        </div>
+                      )}
+                    </td>
                     <td className="py-3 pr-4 text-slate-600 dark:text-slate-300">{formatDate(user.lastLoginAt)}</td>
                     <td className="py-3">
                       <div className="flex flex-wrap gap-2">

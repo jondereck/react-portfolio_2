@@ -11,6 +11,7 @@ import {
   resetManagedUserPassword,
   setManagedUserActive,
   transferSuperAdmin,
+  updateManagedUserUnclothyLimits,
 } from '@/lib/auth/user-management';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 import { createFieldErrorResponse, createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
@@ -39,6 +40,11 @@ const actionSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('transfer_super_admin'),
+  }),
+  z.object({
+    action: z.literal('update_unclothy_limits'),
+    monthlyGenerationLimit: z.number().int().min(0).max(10000),
+    concurrentGenerationLimit: z.number().int().min(1).max(5),
   }),
 ]);
 
@@ -116,6 +122,16 @@ export async function PATCH(request: Request, context: RouteContext) {
         });
         return NextResponse.json({ user, transferred: true });
       }
+      case 'update_unclothy_limits': {
+        const actor = await requireRole(USER_MANAGEMENT_ROLES, request);
+        const user = await updateManagedUserUnclothyLimits({
+          actorUserId: actor.user.id,
+          userId: id,
+          monthlyGenerationLimit: parsed.data.monthlyGenerationLimit,
+          concurrentGenerationLimit: parsed.data.concurrentGenerationLimit,
+        });
+        return NextResponse.json({ user });
+      }
       default:
         return createFormErrorResponse({ error: 'Unsupported action.', errorCode: 'UNSUPPORTED_ACTION' }, 400);
     }
@@ -133,6 +149,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           'TARGET_NOT_ACTIVE',
           'ALREADY_SUPER_ADMIN',
           'SUPER_ADMIN_LOCKED',
+          'UNCLOTHY_INVALID_LIMITS',
         ].includes(error.message)
       ) {
         const messageMap: Record<string, string> = {
@@ -143,6 +160,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           TARGET_NOT_ACTIVE: 'Target account must be active before transfer.',
           ALREADY_SUPER_ADMIN: 'That account already holds super admin.',
           SUPER_ADMIN_LOCKED: 'Use the transfer action to change the super admin account.',
+          UNCLOTHY_INVALID_LIMITS: 'Unclothy limits must be within the allowed range.',
         };
         if (error.message === 'INVALID_ROLE') {
           return createFieldErrorResponse({ field: 'role', message: messageMap[error.message], errorCode: 'INVALID_ROLE' });

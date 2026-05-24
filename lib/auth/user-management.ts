@@ -3,6 +3,15 @@ import { prisma } from '@/lib/prisma';
 import { writeAuditEvent } from '@/lib/audit/audit';
 import { ensureUserProfile } from '@/lib/auth/user-profiles';
 import { hashPassword } from '@/lib/password/password';
+import {
+  UNCLOTHY_CONCURRENT_LIMIT_MAX,
+  UNCLOTHY_MONTHLY_LIMIT_MAX,
+  buildUnclothyUsageSummary,
+  getUnclothyQuotaPeriod,
+  getUnclothyUsageCountsByUserIds,
+  normalizeUnclothyConcurrentLimit,
+  normalizeUnclothyMonthlyLimit,
+} from '@/lib/server/unclothy-limits';
 
 export const MANAGEABLE_ROLES: UserRole[] = ['admin', 'editor', 'viewer'];
 export const REGISTRATION_DEFAULT_ROLE: UserRole = 'viewer';
@@ -15,6 +24,8 @@ type ManagedUserRecord = {
   email: string;
   role: UserRole;
   isActive: boolean;
+  unclothyMonthlyGenerationLimit: number;
+  unclothyConcurrentGenerationLimit: number;
   emailVerified: Date | null;
   lastLoginAt: Date | null;
   createdAt: Date;
@@ -35,7 +46,10 @@ function assertManageableRole(role: string): asserts role is UserRole {
   }
 }
 
-function mapManagedUser(user: ManagedUserRecord) {
+function mapManagedUser(
+  user: ManagedUserRecord,
+  unclothyUsage?: ReturnType<typeof buildUnclothyUsageSummary>,
+) {
   const status = deriveManagedStatus(user);
   return {
     id: user.id,
@@ -48,6 +62,9 @@ function mapManagedUser(user: ManagedUserRecord) {
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
     profile: user.profile,
+    unclothyMonthlyGenerationLimit: normalizeUnclothyMonthlyLimit(user.unclothyMonthlyGenerationLimit),
+    unclothyConcurrentGenerationLimit: normalizeUnclothyConcurrentLimit(user.unclothyConcurrentGenerationLimit),
+    unclothyUsage: unclothyUsage ?? buildUnclothyUsageSummary(user, undefined),
     canTransferSuperAdmin: status === 'active' && user.role !== 'super_admin',
   };
 }
@@ -87,7 +104,10 @@ export async function listManagedUsers() {
     },
   });
 
-  return users.map(mapManagedUser);
+  const period = getUnclothyQuotaPeriod();
+  const usage = await getUnclothyUsageCountsByUserIds(users.map((user) => user.id), period);
+
+  return users.map((user) => mapManagedUser(user, buildUnclothyUsageSummary(user, usage.get(user.id), period)));
 }
 
 export async function registerPendingUser(input: {
@@ -357,6 +377,60 @@ export async function changeManagedUserRole(input: {
     targetType: 'user',
     targetId: updated.id,
     metadata: { role },
+  });
+
+  return mapManagedUser(updated);
+}
+
+export async function updateManagedUserUnclothyLimits(input: {
+  actorUserId: string;
+  userId: string;
+  monthlyGenerationLimit: number;
+  concurrentGenerationLimit: number;
+}) {
+  const user = await getManagedUserOrThrow(input.userId);
+  if (user.role === 'super_admin') {
+    throw new Error('SUPER_ADMIN_LOCKED');
+  }
+
+  if (
+    !Number.isInteger(input.monthlyGenerationLimit) ||
+    input.monthlyGenerationLimit < 0 ||
+    input.monthlyGenerationLimit > UNCLOTHY_MONTHLY_LIMIT_MAX ||
+    !Number.isInteger(input.concurrentGenerationLimit) ||
+    input.concurrentGenerationLimit < 1 ||
+    input.concurrentGenerationLimit > UNCLOTHY_CONCURRENT_LIMIT_MAX
+  ) {
+    throw new Error('UNCLOTHY_INVALID_LIMITS');
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      unclothyMonthlyGenerationLimit: input.monthlyGenerationLimit,
+      unclothyConcurrentGenerationLimit: input.concurrentGenerationLimit,
+    },
+    include: {
+      profile: {
+        select: {
+          id: true,
+          slug: true,
+          displayName: true,
+        },
+      },
+    },
+  });
+
+  await writeAuditEvent({
+    actorUserId: input.actorUserId,
+    targetProfileId: updated.profile?.id ?? null,
+    action: 'user_unclothy_limits_changed',
+    targetType: 'user',
+    targetId: updated.id,
+    metadata: {
+      monthlyGenerationLimit: input.monthlyGenerationLimit,
+      concurrentGenerationLimit: input.concurrentGenerationLimit,
+    },
   });
 
   return mapManagedUser(updated);

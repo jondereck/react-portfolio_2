@@ -176,6 +176,7 @@ export const integrationsSettingsSchema = z.object({
   mediaScrapeEnabled: z.boolean().optional().default(false),
   unclothyEnabled: z.boolean().optional().default(false),
   unclothyWorkerEnabled: z.boolean().optional().default(false),
+  unclothyGlobalConcurrentGenerationLimit: z.number().int().min(1).max(5).optional().default(5),
   blurUnclothyGenerated: z.boolean().optional().default(true),
   unclothyAlbumDefaults: z
     .record(

@@ -85,6 +85,14 @@ export async function PUT(request: Request) {
       return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
     }
 
+    if (
+      nextIntegrations?.data &&
+      Object.prototype.hasOwnProperty.call(nextIntegrations.data, 'unclothyGlobalConcurrentGenerationLimit') &&
+      !isSuperAdmin(actor.user.role)
+    ) {
+      return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
+    }
+
     if (forceSignOut && !(await canAccessAdminModuleAction(actor.user.role, 'security', 'configure'))) {
       return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
     }

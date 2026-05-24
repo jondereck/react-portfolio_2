@@ -84,6 +84,7 @@ export default function GalleryUnclothySection({
     enabled: false,
     configured: false,
     credits: null,
+    quota: null,
     settingsEnums: {},
     warnings: [],
   });
@@ -113,12 +114,13 @@ export default function GalleryUnclothySection({
         enabled: result.enabled === true,
         configured: result.configured === true,
         credits: typeof result.credits === 'number' ? result.credits : null,
+        quota: result.quota && typeof result.quota === 'object' ? result.quota : null,
         settingsEnums: result.settingsEnums && typeof result.settingsEnums === 'object' ? result.settingsEnums : {},
         warnings: Array.isArray(result.warnings) ? result.warnings.map(String).filter(Boolean) : [],
       });
     } catch (error) {
       toast.error(error?.message || 'Unable to load Unclothy status.');
-      setStatus({ loading: false, enabled: false, configured: false, credits: null, settingsEnums: {}, warnings: [] });
+      setStatus({ loading: false, enabled: false, configured: false, credits: null, quota: null, settingsEnums: {}, warnings: [] });
     }
   }, []);
 
@@ -206,7 +208,16 @@ export default function GalleryUnclothySection({
     return null;
   }, [selectedAlbumId, selectedPhoto, selectedPhotoId]);
 
-  const canEnqueue = status.enabled && status.configured && !selectionProblem;
+  const quotaProblem = useMemo(() => {
+    const quota = status.quota;
+    if (!quota || quota.unlimited === true) return null;
+    if (typeof quota.remainingThisMonth === 'number' && quota.remainingThisMonth <= 0) {
+      return 'Monthly generation limit reached. Ask a super admin to add more credits.';
+    }
+    return null;
+  }, [status.quota]);
+
+  const canEnqueue = status.enabled && status.configured && !selectionProblem && !quotaProblem;
 
   const selectedRunningTask = useMemo(() => {
     if (!selectedAlbumId || !selectedPhotoId) return null;
@@ -256,6 +267,8 @@ export default function GalleryUnclothySection({
       ? 'Queued'
     : displayTask
         ? phaseLabel || 'Queued'
+        : quotaProblem
+          ? 'Quota reached'
         : !status.enabled
           ? 'Disabled'
           : !status.configured
@@ -270,9 +283,15 @@ export default function GalleryUnclothySection({
         ? 'active'
         : isSelectionQueued
           ? 'active'
-          : !status.enabled || !status.configured
+          : quotaProblem
             ? 'warn'
-            : 'ready';
+            : !status.enabled || !status.configured
+              ? 'warn'
+              : 'ready';
+
+  const activeSlotLimit = status.quota?.unlimited
+    ? status.quota?.globalConcurrentGenerationLimit ?? 5
+    : status.quota?.concurrentGenerationLimit ?? 1;
 
   const quickInfoBadgeClassName =
     quickInfoBadgeTone === 'error'
@@ -333,7 +352,7 @@ export default function GalleryUnclothySection({
 
   const handleEnqueue = async () => {
     if (!canEnqueue) {
-      toast.error(selectionProblem || 'Complete all required fields first.');
+      toast.error(selectionProblem || quotaProblem || 'Complete all required fields first.');
       return;
     }
 
@@ -427,8 +446,8 @@ export default function GalleryUnclothySection({
           </span>
         </div>
 
-        {selectionProblem ? (
-          <p className="mt-3 text-sm text-amber-700 dark:text-amber-200">{selectionProblem}</p>
+        {selectionProblem || quotaProblem ? (
+          <p className="mt-3 text-sm text-amber-700 dark:text-amber-200">{selectionProblem || quotaProblem}</p>
         ) : null}
 
         {displayTask ? (
@@ -464,18 +483,42 @@ export default function GalleryUnclothySection({
           </div>
         ) : null}
 
-        <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Status</p>
             <p className="mt-1 font-semibold text-slate-900 dark:text-slate-50">{quickInfoStatusLabel}</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Credits</p>
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Provider</p>
             <p className="mt-1 flex items-baseline gap-1 font-semibold text-slate-900 dark:text-slate-50 whitespace-nowrap">
               <span className="tabular-nums">{status.credits ?? '\u2014'}</span>
               {typeof status.credits === 'number' ? (
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">remaining</span>
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">credits</span>
               ) : null}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Monthly</p>
+            <p className="mt-1 flex items-baseline gap-1 font-semibold text-slate-900 dark:text-slate-50 whitespace-nowrap">
+              {status.quota?.unlimited ? (
+                'Unlimited'
+              ) : (
+                <>
+                  <span className="tabular-nums">{status.quota?.remainingThisMonth ?? 0}</span>
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    /{status.quota?.monthlyGenerationLimit ?? 0} left
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30 sm:col-span-3">
+            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Active slots</p>
+            <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-50">
+              {status.quota?.activeReserved ?? 0}/{activeSlotLimit} reserved for this account
+              <span className="ml-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+                Global cap {status.quota?.globalConcurrentGenerationLimit ?? 5}
+              </span>
             </p>
           </div>
         </div>
@@ -504,8 +547,7 @@ export default function GalleryUnclothySection({
               Retry
             </button>
             <p className="w-full text-xs leading-5 text-slate-500 dark:text-slate-400">
-              Note: Credits are managed by the provider and are typically deducted when a task is created. Retrying the same task won’t create a
-              new request, so it should avoid spending credits again.
+              Failed and canceled jobs do not consume the monthly account quota. Provider credits are separate.
             </p>
           </div>
         ) : null}

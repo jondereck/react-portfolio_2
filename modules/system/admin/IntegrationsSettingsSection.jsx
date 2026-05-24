@@ -21,6 +21,7 @@ const emptyState = {
   mediaScrapeEnabled: false,
   unclothyEnabled: false,
   unclothyWorkerEnabled: false,
+  unclothyGlobalConcurrentGenerationLimit: '5',
   blurUnclothyGenerated: true,
   defaultGalleryView: 'cinematic',
 };
@@ -121,6 +122,7 @@ export default function IntegrationsSettingsSection() {
       mediaScrapeEnabled: data.settings.integrations.mediaScrapeEnabled === true,
       unclothyEnabled: data.settings.integrations.unclothyEnabled === true,
       unclothyWorkerEnabled: data.settings.integrations.unclothyWorkerEnabled === true,
+      unclothyGlobalConcurrentGenerationLimit: String(data.settings.integrations.unclothyGlobalConcurrentGenerationLimit ?? 5),
       blurUnclothyGenerated: data.settings.integrations.blurUnclothyGenerated !== false,
       defaultGalleryView: data.settings.integrations.defaultGalleryView === 'compact' ? 'compact' : 'cinematic',
     });
@@ -163,6 +165,7 @@ export default function IntegrationsSettingsSection() {
               mediaScrapeEnabled: integrations.mediaScrapeEnabled,
               unclothyEnabled: integrations.unclothyEnabled,
               unclothyWorkerEnabled: integrations.unclothyWorkerEnabled,
+              unclothyGlobalConcurrentGenerationLimit: Number.parseInt(String(integrations.unclothyGlobalConcurrentGenerationLimit), 10),
               blurUnclothyGenerated: integrations.blurUnclothyGenerated,
               defaultGalleryView: integrations.defaultGalleryView,
             },
@@ -434,6 +437,26 @@ export default function IntegrationsSettingsSection() {
                 clearField('unclothyWorkerEnabled');
               }}
             />
+            <div className={panelStyles}>
+              <TextField
+                label="Global active generations"
+                type="number"
+                min="1"
+                max="5"
+                inputMode="numeric"
+                value={integrations.unclothyGlobalConcurrentGenerationLimit}
+                icon={Sparkles}
+                error={getFieldError(fieldErrors, 'integrations.unclothyGlobalConcurrentGenerationLimit')}
+                onChange={(event) => {
+                  setIntegrations((previous) => ({ ...previous, unclothyGlobalConcurrentGenerationLimit: event.target.value }));
+                  clearField('unclothyGlobalConcurrentGenerationLimit');
+                }}
+                aria-invalid={Boolean(getFieldError(fieldErrors, 'integrations.unclothyGlobalConcurrentGenerationLimit'))}
+              />
+              <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                System-wide running cap. Maximum allowed value is 5.
+              </p>
+            </div>
             <ToggleCard
               title="NSFW blur in admin"
               description="Blurs media when the AI scan flags it as NSFW. Manual blur modes can override this per item."

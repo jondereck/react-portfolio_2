@@ -9,6 +9,7 @@ export const defaultAdminIntegrations = {
   mediaScrapeEnabled: false,
   unclothyEnabled: false,
   unclothyWorkerEnabled: false,
+  unclothyGlobalConcurrentGenerationLimit: 5,
   blurUnclothyGenerated: true,
   unclothyAlbumDefaults: {},
   defaultGalleryView: 'cinematic',

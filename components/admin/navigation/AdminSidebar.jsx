@@ -32,7 +32,7 @@ export default function AdminSidebar({
       collapsed={collapsed}
       onToggle={onToggle}
       brandKicker="Admin Control Center"
-      brandTitle="JDN System"
+      brandTitle=""
       sections={sections}
       pathname={pathname}
       isActivePath={isActivePath}
