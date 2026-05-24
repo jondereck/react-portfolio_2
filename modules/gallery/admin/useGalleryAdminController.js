@@ -39,6 +39,7 @@ export function useGalleryAdminController() {
   const [selectedAlbumId, setSelectedAlbumId] = useState(() => readStoredAlbumId());
   const [photos, setPhotos] = useState([]);
   const previousPhotoIdsRef = useRef([]);
+  const preserveSelectionOnNextPhotoSyncRef = useRef(false);
 
   const [loadingAlbums, setLoadingAlbums] = useState(true);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
@@ -240,6 +241,15 @@ export function useGalleryAdminController() {
     setArrangePhotos(photos);
 
     if (!idsUnchanged) {
+      if (preserveSelectionOnNextPhotoSyncRef.current) {
+        preserveSelectionOnNextPhotoSyncRef.current = false;
+        setOrderDirty(false);
+        setOrderHistory([]);
+        setDragSnapshotTaken(false);
+        setArrangeDragState({ isDragging: false, draggingCount: 0 });
+        return;
+      }
+
       setSelectedPhotoIds([]);
       setSelectionAnchorId(null);
       setOrderDirty(false);
@@ -300,6 +310,7 @@ export function useGalleryAdminController() {
     const ids = new Set((Array.isArray(photoIds) ? photoIds : [photoIds]).filter(Boolean));
     if (ids.size === 0) return;
 
+    preserveSelectionOnNextPhotoSyncRef.current = true;
     setPhotos((current) => current.filter((photo) => !ids.has(photo.id)));
     setSelectedPhotoIds((current) => current.filter((photoId) => !ids.has(photoId)));
     setSelectionAnchorId((current) => (ids.has(current) ? null : current));

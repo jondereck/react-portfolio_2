@@ -19,7 +19,6 @@ import {
   GalleryCmsModal,
   GalleryCmsShell,
   GalleryInspectorPanel,
-  GalleryTasksInspectorPanel,
   GalleryMediaGrid,
   GalleryMediaFilterModal,
   GalleryMediaToolbar,
@@ -61,7 +60,8 @@ function createPendingPreviewTask(albumId, photoId, options = {}) {
 }
 
 export default function GalleryMediaPanel({ controller, embedded = false }) {
-  const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v1';
+  const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v2';
+  const mediaGridColumnsStorageKey = 'gallery:mediaGridColumns:v1';
   const {
     albums,
     selectedAlbum,
@@ -113,9 +113,15 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
   const [mediaPage, setMediaPage] = useState(1);
   const [mediaPageSize, setMediaPageSize] = useState(48);
+  const [mediaGridColumns, setMediaGridColumns] = useState(() => {
+    if (typeof window === 'undefined') return 4;
+    const storedValue = Number(window.localStorage.getItem(mediaGridColumnsStorageKey));
+    return Number.isFinite(storedValue) ? Math.max(2, Math.min(6, storedValue)) : 4;
+  });
   const [manualSidebarCollapsed, setManualSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
+    if (typeof window === 'undefined') return true;
+    const storedValue = window.localStorage.getItem(sidebarCollapsedStorageKey);
+    return storedValue === null ? true : storedValue === 'true';
   });
 
   const unclothyQueue = useUnclothyTasksStore((state) => state.queue);
@@ -170,6 +176,11 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(sidebarCollapsedStorageKey, manualSidebarCollapsed ? 'true' : 'false');
   }, [manualSidebarCollapsed, sidebarCollapsedStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(mediaGridColumnsStorageKey, String(mediaGridColumns));
+  }, [mediaGridColumns, mediaGridColumnsStorageKey]);
 
   const loadGallerySettings = useCallback(async () => {
     try {
@@ -324,9 +335,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   useEffect(() => {
     // Selecting an image should auto-open the details panel on desktop.
     if (!isDesktop) return;
-    if (selectedPhotoIds.length === 0) return;
-    setDetailsOpenDesktop(true);
-  }, [isDesktop, selectedPhotoIds.length]);
+    setDetailsOpenDesktop(Boolean(selectedPhoto));
+  }, [isDesktop, selectedPhoto]);
 
   const handleOpenUpload = () => {
     if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches) {
@@ -549,7 +559,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
             searchValue={searchValue}
             onSearchChange={setSearchValue}
             onOpenFilter={handleOpenFilter}
-            onToggleDetails={() => setDetailsOpenDesktop((current) => !current)}
+            onToggleDetails={selectedPhoto ? () => setDetailsOpenDesktop((current) => !current) : undefined}
             detailsOpen={detailsOpenDesktop}
             detailsBadge={detailsBadge}
             onOpenImport={handleOpenImport}
@@ -600,6 +610,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   chips={chips}
                   onChipChange={handleChipChange}
                   onOpenFilter={handleOpenFilter}
+                  gridColumns={mediaGridColumns}
+                  onGridColumnsChange={setMediaGridColumns}
                 />
 
               {loadingPhotos ? (
@@ -626,6 +638,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                     onOpenPreview={handleOpenPreview}
                     inspectorOpen={Boolean(selectedPhoto)}
                     blurUnclothyGenerated={blurUnclothyGenerated}
+                    gridColumns={mediaGridColumns}
                     emptyState={
                       photos.length === 0 ? (
                         <GalleryEmptyState
@@ -638,7 +651,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                     }
                   />
 
-                  <div className="mt-4 flex flex-col gap-3 px-4 pb-2 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:px-6">
+                  <div className="mt-4 flex flex-col items-center gap-3 px-4 pb-2 text-center sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:text-left lg:px-6">
                     <div className="text-sm text-slate-600 dark:text-slate-300">
                       <span className="font-medium text-slate-900 dark:text-slate-50">Showing</span>{' '}
                       <span className="tabular-nums">
@@ -647,7 +660,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                       <span>of</span> <span className="tabular-nums font-medium">{mediaTotal}</span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
                       <label className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                         <span className="hidden sm:inline">Per page</span>
                         <select
@@ -846,21 +859,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   />
                 ) : null}
               </GalleryInspectorPanel>
-            ) : (
-              <GalleryTasksInspectorPanel
-                active={unclothyActive}
-                activeTasks={unclothyActiveTasks}
-                failedTasks={unclothyFailedTasks}
-                completedTasks={unclothyCompletedTasks}
-                queue={unclothyQueue}
-                onOpenTask={openTask}
-                onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
-                onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
-                onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
-                onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
-                onClearQueue={clearUnclothyQueue}
-              />
-            )
+            ) : null
           ) : null
         }
         mobileFooterActions={

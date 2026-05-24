@@ -2,8 +2,9 @@
 
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useMemo, useState } from 'react';
-import { Check, ChevronsUpDown, ExternalLink, Search, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Copy, ExternalLink, Search, X } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { buildPublicAlbumHref, getAdminMediaUrl } from '@/app/admin/gallery/utils';
 
@@ -265,16 +266,36 @@ export default function GalleryAlbumSwitchSheet({
                         </button>
 
                         {publicHref ? (
-                          <Link
-                            href={publicHref}
-                            aria-label="Open album"
-                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50 ${
-                              isSelected ? 'border-white/15 bg-white/10' : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/30'
-                            }`}
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </Link>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              aria-label="Copy album link"
+                              className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50 ${
+                                isSelected ? 'border-white/15 bg-white/10' : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/30'
+                              }`}
+                              onClick={async (event) => {
+                                event.stopPropagation();
+                                try {
+                                  await navigator.clipboard.writeText(publicHref);
+                                  toast.success('Album link copied');
+                                } catch {
+                                  toast.error('Unable to copy album link.');
+                                }
+                              }}
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                            <Link
+                              href={publicHref}
+                              aria-label="Open album"
+                              className={`inline-flex h-9 w-9 items-center justify-center rounded-xl border text-slate-600 transition hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50 ${
+                                isSelected ? 'border-white/15 bg-white/10' : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950/30'
+                              }`}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </Link>
+                          </div>
                         ) : null}
                       </div>
                     </div>

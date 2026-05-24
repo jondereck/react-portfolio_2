@@ -20,9 +20,19 @@ export default function GalleryMediaGrid({
   inspectorOpen = false,
   blurUnclothyGenerated = true,
   emptyState,
+  gridColumns = 4,
 }) {
   const orderedIds = useMemo(() => (Array.isArray(photos) ? photos.map((photo) => photo.id) : []), [photos]);
   const selectedCount = Array.isArray(selectedPhotoIds) ? selectedPhotoIds.length : 0;
+  const normalizedGridColumns = Math.max(2, Math.min(6, Number(gridColumns) || 4));
+  const mobileGridColumns = Math.max(1, Math.min(4, normalizedGridColumns));
+  const smallGridColumns = Math.max(2, Math.min(3, normalizedGridColumns));
+  const largeGridColumns = inspectorOpen
+    ? Math.max(3, Math.min(4, normalizedGridColumns))
+    : Math.max(3, Math.min(5, normalizedGridColumns));
+  const extraLargeGridColumns = inspectorOpen
+    ? Math.max(3, Math.min(4, normalizedGridColumns))
+    : normalizedGridColumns;
   const [touchSelecting, setTouchSelecting] = useState(false);
   const touchSelectStateRef = useRef({
     mode: 'idle',
@@ -42,8 +52,14 @@ export default function GalleryMediaGrid({
 
   return (
     <div
-      className={`grid grid-cols-2 gap-3 px-4 pb-6 sm:grid-cols-3 sm:px-5 lg:px-6 ${inspectorOpen ? 'xl:grid-cols-3' : 'xl:grid-cols-4'} ${selectedCount > 0 ? 'pb-32 lg:pb-28' : ''}`}
-      style={{ touchAction: touchSelecting ? 'none' : 'pan-y' }}
+      className={`grid grid-cols-[repeat(var(--gallery-grid-cols-mobile),minmax(0,1fr))] gap-3 px-4 pb-6 sm:grid-cols-[repeat(var(--gallery-grid-cols-sm),minmax(0,1fr))] sm:px-5 lg:grid-cols-[repeat(var(--gallery-grid-cols-lg),minmax(0,1fr))] lg:px-6 xl:grid-cols-[repeat(var(--gallery-grid-cols-xl),minmax(0,1fr))] ${selectedCount > 0 ? 'pb-32 lg:pb-28' : ''}`}
+      style={{
+        '--gallery-grid-cols-mobile': mobileGridColumns,
+        '--gallery-grid-cols-sm': smallGridColumns,
+        '--gallery-grid-cols-lg': largeGridColumns,
+        '--gallery-grid-cols-xl': extraLargeGridColumns,
+        touchAction: touchSelecting ? 'none' : 'pan-y',
+      }}
       onPointerMove={(event) => {
         if (event.pointerType !== 'touch') return;
 

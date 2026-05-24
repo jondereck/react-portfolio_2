@@ -9,7 +9,12 @@ export default function GalleryMediaToolbar({
   chips,
   onChipChange,
   onOpenFilter,
+  gridColumns = 4,
+  onGridColumnsChange,
 }) {
+  const canAdjustGrid = typeof onGridColumnsChange === 'function';
+  const mobileGridValue = Math.max(2, Math.min(4, Number(gridColumns) || 4));
+
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6 lg:py-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -27,7 +32,25 @@ export default function GalleryMediaToolbar({
           ) : null}
         </div>
 
-
+        {canAdjustGrid ? (
+          <label className="hidden min-w-[190px] items-center gap-3 text-sm text-slate-600 dark:text-slate-300 sm:flex">
+            <span className="shrink-0 font-medium text-slate-900 dark:text-slate-50">Grid</span>
+            <input
+              type="range"
+              min="2"
+              max="6"
+              step="1"
+              value={gridColumns}
+              onChange={(event) => {
+                const nextValue = Number(event.target.value);
+                onGridColumnsChange(Number.isFinite(nextValue) ? nextValue : 4);
+              }}
+              className="h-2 flex-1 accent-slate-900 dark:accent-slate-50"
+              aria-label="Media grid columns"
+            />
+            <span className="w-5 text-right tabular-nums">{gridColumns}</span>
+          </label>
+        ) : null}
       </div>
 
       <div className="mt-4 lg:hidden">
@@ -59,6 +82,26 @@ export default function GalleryMediaToolbar({
           );
         })}
       </div>
+
+      {canAdjustGrid ? (
+        <label className="mt-3 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300 sm:hidden">
+          <span className="shrink-0 font-medium text-slate-900 dark:text-slate-50">Grid</span>
+          <input
+            type="range"
+            min="2"
+            max="4"
+            step="1"
+            value={mobileGridValue}
+            onChange={(event) => {
+              const nextValue = Number(event.target.value);
+              onGridColumnsChange(Number.isFinite(nextValue) ? Math.max(2, Math.min(4, nextValue)) : 4);
+            }}
+            className="h-2 flex-1 accent-slate-900 dark:accent-slate-50"
+            aria-label="Media grid columns"
+          />
+          <span className="w-5 text-right tabular-nums">{mobileGridValue}</span>
+        </label>
+      ) : null}
     </div>
   );
 }

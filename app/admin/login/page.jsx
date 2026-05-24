@@ -692,7 +692,7 @@ export default function AdminLoginPage() {
         <p className="text-center text-sm text-slate-500">
           New to the workspace?{' '}
           <Link href="/register" className="font-semibold text-blue-600 transition hover:text-blue-700">
-            Create your Neon account
+            Create your account
           </Link>
         </p>
       </div>

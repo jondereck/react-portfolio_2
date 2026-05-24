@@ -110,7 +110,7 @@ export default function GalleryAlbumsSidebar({
       </section>
 
       <aside
-        className={`hidden border-r border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900 ${collapsed ? 'p-3' : 'p-5'}`}
+        className={`hidden h-full border-r border-slate-200 bg-white lg:block lg:overflow-hidden dark:border-slate-800 dark:bg-slate-900 ${collapsed ? 'p-4' : 'p-5'}`}
       >
         <div className="flex h-full flex-col">
           <div className={`flex items-center justify-between ${collapsed ? 'flex-col gap-2' : ''}`}>
@@ -166,7 +166,7 @@ export default function GalleryAlbumsSidebar({
                 <ChevronUp className="h-4 w-4" />
               </button>
 
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1.5 pb-1">
                 {visibleAlbums.map((album) => {
                   const isActive = album.id === selectedAlbumId;
                   const coverUrl = resolveAlbumCoverUrl(album);
@@ -217,7 +217,7 @@ export default function GalleryAlbumsSidebar({
               </button>
             </div>
           ) : (
-            <>
+            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {visibleAlbums.map((album) => {
                 const isActive = album.id === selectedAlbumId;
                 const countLabel =
@@ -310,11 +310,12 @@ export default function GalleryAlbumsSidebar({
                   </div>
                 );
               })}
-            </>
+            </div>
           )}
 
           {!collapsed && !loadingAlbums && totalPages > 1 ? (
-            <div className="flex items-center justify-between gap-2 pt-2">
+            <div className="shrink-0 bg-white pt-2 dark:bg-slate-900">
+              <div className="flex items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={() => setPageIndex((current) => Math.max(current - 1, 0))}
@@ -336,6 +337,7 @@ export default function GalleryAlbumsSidebar({
               >
                 Next
               </button>
+              </div>
             </div>
           ) : null}
         </div>
