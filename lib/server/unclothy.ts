@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS_PATH = '/v2/task/settings';
 const HTTP_STATUS_TEXT: Record<number, string> = {
   200: 'OK',
   201: 'Created',
+  202: 'Accepted',
   400: 'Bad Request',
   401: 'Unauthorized',
   403: 'Forbidden',

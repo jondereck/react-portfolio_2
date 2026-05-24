@@ -244,6 +244,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     (Array.isArray(unclothyActiveTasks) ? unclothyActiveTasks.length : unclothyActive ? 1 : 0) +
     (Array.isArray(unclothyFailedTasks) ? unclothyFailedTasks.length : 0) +
     (Array.isArray(unclothyQueue) ? unclothyQueue.length : 0);
+  const hasPendingTaskDetails = detailsBadge > 0;
   const mobileTabs = useMemo(
     () => [
       { id: 'media', label: 'Media', icon: Images },
@@ -333,10 +334,22 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const pagedPhotos = filteredPhotos.slice((mediaPage - 1) * mediaPageSize, mediaPage * mediaPageSize);
 
   useEffect(() => {
-    // Selecting an image should auto-open the details panel on desktop.
+    // Selecting an image auto-opens details. When nothing is selected and no generation task is pending, collapse it.
     if (!isDesktop) return;
-    setDetailsOpenDesktop(Boolean(selectedPhoto));
-  }, [isDesktop, selectedPhoto]);
+    if (selectedPhoto) {
+      setDetailsOpenDesktop(true);
+      return;
+    }
+    if (!hasPendingTaskDetails) {
+      setDetailsOpenDesktop(false);
+    }
+  }, [hasPendingTaskDetails, isDesktop, selectedPhoto]);
+
+  useEffect(() => {
+    // Surface running/queued generation details in desktop view as soon as they appear.
+    if (!isDesktop || !hasPendingTaskDetails) return;
+    setDetailsOpenDesktop(true);
+  }, [hasPendingTaskDetails, isDesktop]);
 
   const handleOpenUpload = () => {
     if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches) {
@@ -559,7 +572,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
             searchValue={searchValue}
             onSearchChange={setSearchValue}
             onOpenFilter={handleOpenFilter}
-            onToggleDetails={selectedPhoto ? () => setDetailsOpenDesktop((current) => !current) : undefined}
+            onToggleDetails={selectedPhoto || hasTasks ? () => setDetailsOpenDesktop((current) => !current) : undefined}
             detailsOpen={detailsOpenDesktop}
             detailsBadge={detailsBadge}
             onOpenImport={handleOpenImport}
@@ -834,11 +847,16 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         }
         inspector={
           isDesktop && detailsOpenDesktop ? (
-            selectedPhoto ? (
+            selectedPhoto || hasTasks ? (
               <GalleryInspectorPanel
                 photo={selectedPhoto}
                 album={selectedAlbum}
-                onClose={clearPhotoSelection}
+                onClose={() => {
+                  clearPhotoSelection();
+                  if (!selectedPhoto) {
+                    setDetailsOpenDesktop(false);
+                  }
+                }}
                 blurUnclothyGenerated={blurUnclothyGenerated}
                 onPhotoUpdated={updatePhotoInState}
               >

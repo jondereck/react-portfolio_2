@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getGoogleDriveAccessTokenForUserOrAny } from '@/lib/auth/google-drive';
 import { getAdminSettings, logAdminAuditEvent } from '@/lib/server/admin-settings';
 import { createUnclothyTask, getUnclothyTask } from '@/lib/server/unclothy';
+import { buildUnclothyWebhookUrl } from '@/lib/server/unclothy-webhook';
 import { RequestValidationError } from '@/lib/server/uploads';
 import { isSafeHttpUrl } from '@/lib/url-safety';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
@@ -479,6 +480,11 @@ export async function getUnclothyQueueTaskForUser(taskId: string, userId: string
   return serialized;
 }
 
+export async function getUnclothyQueueTaskById(taskId: string) {
+  if (!taskId || typeof taskId !== 'string') return null;
+  return prisma.unclothyGenerationTask.findUnique({ where: { id: taskId } });
+}
+
 export async function enqueueUnclothyGenerationTask(input: {
   userId: string;
   profileId: number;
@@ -636,8 +642,10 @@ async function createProviderTask(task: QueueTaskRecord) {
       ? await fetchGoogleDriveImageBytes(String(photo.sourceId), task.userId)
       : await fetchSourceImageBytes(photo.imageUrl);
 
+  const webhookUrl = buildUnclothyWebhookUrl(task.id);
   const created = await createUnclothyTask({
     base64: buffer.toString('base64'),
+    ...(webhookUrl ? { webhook_url: webhookUrl } : {}),
     settings: toJsonObject(task.settingsSnapshot),
   });
 
@@ -660,6 +668,7 @@ async function createProviderTask(task: QueueTaskRecord) {
       albumId: task.albumId,
       sourcePhotoId: task.sourcePhotoId,
       settingsSent: task.settingsSnapshot,
+      webhookConfigured: Boolean(webhookUrl),
     },
   });
 
@@ -677,116 +686,179 @@ async function createProviderTask(task: QueueTaskRecord) {
   });
 }
 
-async function ingestProviderOutput(task: QueueTaskRecord, taskPayload?: unknown) {
+export async function failUnclothyQueueTaskFromProvider(task: QueueTaskRecord, providerStatus: string | null) {
+  if (
+    task.status === UnclothyGenerationTaskStatus.completed ||
+    task.status === UnclothyGenerationTaskStatus.canceled
+  ) {
+    return task;
+  }
+
+  return failOrAutoRetryTask(task, new Error(`Unclothy failed (${providerStatus || 'failed'}).`));
+}
+
+export async function ingestUnclothyProviderOutput(task: QueueTaskRecord, taskPayload?: unknown) {
   if (!task.providerTaskId) {
     throw new RequestValidationError('Provider task id is missing.', 409, undefined, 'UNCLOTHY_TASK_ID_MISSING');
   }
 
-  const outputPayload = taskPayload ?? (await getUnclothyTask(task.providerTaskId));
-  const output = extractTaskOutput(outputPayload as any);
-  if (!output) {
-    throw new RequestValidationError('Unclothy task is not completed yet (or no output was found).', 409, undefined, 'UNCLOTHY_NOT_READY', {
-      providerPayload: outputPayload as Record<string, unknown>,
-    });
-  }
+  const lockRows = await prisma.$queryRaw<{ locked: boolean }[]>`
+    SELECT pg_try_advisory_lock(hashtext(${task.id})) AS locked
+  `;
+  const lockAcquired = lockRows?.[0]?.locked === true;
 
-  let outputBytes: Buffer;
-  let outputMimeType: string | null = null;
-
-  if (output.kind === 'url') {
-    const downloaded = await fetchOutputBytesFromUrl(output.value);
-    outputBytes = downloaded.buffer;
-    outputMimeType = downloaded.contentType;
-  } else {
-    const stripped = stripDataUriPrefix(output.value);
-    outputMimeType = stripped.mimeType;
-    if (!stripped.base64) {
-      throw new RequestValidationError('Unclothy output payload is empty.', 502, undefined, 'UNCLOTHY_OUTPUT_EMPTY');
+  if (!lockAcquired) {
+    const current = await prisma.unclothyGenerationTask.findUnique({ where: { id: task.id } });
+    if (current?.status === UnclothyGenerationTaskStatus.completed || current?.createdPhotoId) {
+      return current;
     }
-    outputBytes = Buffer.from(stripped.base64, 'base64');
+    throw new RequestValidationError('Unclothy task is already being saved.', 409, undefined, 'UNCLOTHY_TASK_INGEST_LOCKED');
   }
 
-  const mimeType = outputMimeType || 'image/png';
-  if (!mimeType.startsWith('image/')) {
-    throw new RequestValidationError('Unclothy output is not an image.', 502, undefined, 'UNCLOTHY_OUTPUT_UNSUPPORTED', { mimeType });
-  }
-
-  const downloadPayload = await galleryService.getAlbumPhotoDownloadPayload(task.albumId, task.profileId, task.sourcePhotoId, true);
-  if (!downloadPayload?.photo) {
-    throw new RequestValidationError('Source image not found.', 404, undefined, 'SOURCE_IMAGE_NOT_FOUND');
-  }
-
-  const extension = mimeToExtension(mimeType);
-  const sourceLabel = downloadPayload.photo.caption || `media ${downloadPayload.photo.id}`;
-  const filename = `unclothy-${task.providerTaskId}.${extension}`;
-  const caption = `Unclothy - ${sourceLabel} - ${formatCaptionTimestamp()}`;
-  const file = new File([new Uint8Array(outputBytes)], filename, { type: mimeType });
-
-  const created = await galleryService.addUploadedAlbumPhoto(
-    task.albumId,
-    {
-      file,
-      input: {
-        caption,
-        sourceType: 'upload',
-      },
-    },
-    { allowDuplicateContent: true },
-  );
-
-  let createdPhotoId = created.id;
   try {
-    const listing = await galleryService.listAlbumPhotos(task.albumId, task.profileId, 'custom', true);
-    const photos = Array.isArray(listing?.photos) ? listing.photos : null;
+    const current = await prisma.unclothyGenerationTask.findUnique({ where: { id: task.id } });
+    if (!current) {
+      throw new RequestValidationError('Unclothy task not found.', 404, undefined, 'UNCLOTHY_TASK_NOT_FOUND');
+    }
 
-    if (photos && photos.length > 0) {
-      let orderedIds = photos.map((photo) => photo.id).filter((id) => Number.isInteger(id) && id > 0);
-      if (!orderedIds.includes(created.id)) {
-        orderedIds = [...orderedIds, created.id];
+    if (current.status === UnclothyGenerationTaskStatus.completed || current.createdPhotoId) {
+      return current;
+    }
+
+    if (current.status === UnclothyGenerationTaskStatus.canceled) {
+      return current;
+    }
+
+    if (!current.providerTaskId) {
+      throw new RequestValidationError('Provider task id is missing.', 409, undefined, 'UNCLOTHY_TASK_ID_MISSING');
+    }
+
+    await prisma.unclothyGenerationTask.update({
+      where: { id: current.id },
+      data: {
+        phase: UnclothyGenerationTaskPhase.ingesting,
+        percent: Math.max(current.percent ?? 0, 92),
+        statusText: 'Saving to album...',
+        nextRunAt: new Date(),
+      },
+    });
+
+    const outputPayload = taskPayload ?? (await getUnclothyTask(current.providerTaskId));
+    const output = extractTaskOutput(outputPayload as any);
+    if (!output) {
+      throw new RequestValidationError('Unclothy task is not completed yet (or no output was found).', 409, undefined, 'UNCLOTHY_NOT_READY', {
+        providerPayload: outputPayload as Record<string, unknown>,
+      });
+    }
+
+    let outputBytes: Buffer;
+    let outputMimeType: string | null = null;
+
+    if (output.kind === 'url') {
+      const downloaded = await fetchOutputBytesFromUrl(output.value);
+      outputBytes = downloaded.buffer;
+      outputMimeType = downloaded.contentType;
+    } else {
+      const stripped = stripDataUriPrefix(output.value);
+      outputMimeType = stripped.mimeType;
+      if (!stripped.base64) {
+        throw new RequestValidationError('Unclothy output payload is empty.', 502, undefined, 'UNCLOTHY_OUTPUT_EMPTY');
       }
+      outputBytes = Buffer.from(stripped.base64, 'base64');
+    }
 
-      orderedIds = orderedIds.filter((id) => id !== created.id);
-      const sourceIndex = orderedIds.indexOf(task.sourcePhotoId);
-      if (sourceIndex >= 0) {
-        orderedIds.splice(sourceIndex + 1, 0, created.id);
+    const mimeType = outputMimeType || 'image/png';
+    if (!mimeType.startsWith('image/')) {
+      throw new RequestValidationError('Unclothy output is not an image.', 502, undefined, 'UNCLOTHY_OUTPUT_UNSUPPORTED', { mimeType });
+    }
 
-        if (new Set(orderedIds).size === orderedIds.length) {
-          const reordered = await galleryService.reorderAlbumPhotos(task.albumId, orderedIds);
-          const updated = Array.isArray(reordered) ? reordered.find((photo) => photo.id === created.id) : null;
-          createdPhotoId = updated?.id ?? created.id;
+    const downloadPayload = await galleryService.getAlbumPhotoDownloadPayload(current.albumId, current.profileId, current.sourcePhotoId, true);
+    if (!downloadPayload?.photo) {
+      throw new RequestValidationError('Source image not found.', 404, undefined, 'SOURCE_IMAGE_NOT_FOUND');
+    }
+
+    const extension = mimeToExtension(mimeType);
+    const sourceLabel = downloadPayload.photo.caption || `media ${downloadPayload.photo.id}`;
+    const filename = `unclothy-${current.providerTaskId}.${extension}`;
+    const caption = `Unclothy - ${sourceLabel} - ${formatCaptionTimestamp()}`;
+    const file = new File([new Uint8Array(outputBytes)], filename, { type: mimeType });
+
+    const created = await galleryService.addUploadedAlbumPhoto(
+      current.albumId,
+      {
+        file,
+        input: {
+          caption,
+          sourceType: 'upload',
+        },
+      },
+      { allowDuplicateContent: true },
+    );
+
+    let createdPhotoId = created.id;
+    try {
+      const listing = await galleryService.listAlbumPhotos(current.albumId, current.profileId, 'custom', true);
+      const photos = Array.isArray(listing?.photos) ? listing.photos : null;
+
+      if (photos && photos.length > 0) {
+        let orderedIds = photos.map((photo) => photo.id).filter((id) => Number.isInteger(id) && id > 0);
+        if (!orderedIds.includes(created.id)) {
+          orderedIds = [...orderedIds, created.id];
+        }
+
+        orderedIds = orderedIds.filter((id) => id !== created.id);
+        const sourceIndex = orderedIds.indexOf(current.sourcePhotoId);
+        if (sourceIndex >= 0) {
+          orderedIds.splice(sourceIndex + 1, 0, created.id);
+
+          if (new Set(orderedIds).size === orderedIds.length) {
+            const reordered = await galleryService.reorderAlbumPhotos(current.albumId, orderedIds);
+            const updated = Array.isArray(reordered) ? reordered.find((photo) => photo.id === created.id) : null;
+            createdPhotoId = updated?.id ?? created.id;
+          }
         }
       }
+    } catch {
+      // Ingest succeeded; ordering can be corrected manually if this fails.
     }
-  } catch {
-    // Ingest succeeded; ordering can be corrected manually if this fails.
+
+    await logAdminAuditEvent({
+      actorUserId: current.userId,
+      targetProfileId: current.profileId,
+      type: 'unclothy_task_ingested',
+      targetType: 'gallery_album',
+      targetId: String(current.albumId),
+      details: {
+        localTaskId: current.id,
+        taskId: current.providerTaskId,
+        albumId: current.albumId,
+        sourcePhotoId: current.sourcePhotoId,
+        createdPhotoId,
+      },
+    });
+
+    return prisma.unclothyGenerationTask.update({
+      where: { id: current.id },
+      data: {
+        status: UnclothyGenerationTaskStatus.completed,
+        phase: UnclothyGenerationTaskPhase.done,
+        percent: 100,
+        statusText: 'Saved.',
+        completedAt: new Date(),
+        createdPhotoId,
+      },
+    });
+  } finally {
+    await prisma.$executeRaw`SELECT pg_advisory_unlock(hashtext(${task.id}))`;
   }
+}
 
-  await logAdminAuditEvent({
-    actorUserId: task.userId,
-    targetProfileId: task.profileId,
-    type: 'unclothy_task_ingested',
-    targetType: 'gallery_album',
-    targetId: String(task.albumId),
-    details: {
-      localTaskId: task.id,
-      taskId: task.providerTaskId,
-      albumId: task.albumId,
-      sourcePhotoId: task.sourcePhotoId,
-      createdPhotoId,
-    },
-  });
-
-  return prisma.unclothyGenerationTask.update({
-    where: { id: task.id },
-    data: {
-      status: UnclothyGenerationTaskStatus.completed,
-      phase: UnclothyGenerationTaskPhase.done,
-      percent: 100,
-      statusText: 'Saved.',
-      completedAt: new Date(),
-      createdPhotoId,
-    },
-  });
+export async function ingestUnclothyQueueTaskById(taskId: string, taskPayload?: unknown) {
+  const task = await getUnclothyQueueTaskById(taskId);
+  if (!task) {
+    throw new RequestValidationError('Unclothy task not found.', 404, undefined, 'UNCLOTHY_TASK_NOT_FOUND');
+  }
+  return ingestUnclothyProviderOutput(task, taskPayload);
 }
 
 async function advanceRunningTask(task: QueueTaskRecord) {
@@ -795,7 +867,7 @@ async function advanceRunningTask(task: QueueTaskRecord) {
   }
 
   if (task.phase === UnclothyGenerationTaskPhase.ingesting) {
-    return ingestProviderOutput(task);
+    return ingestUnclothyProviderOutput(task);
   }
 
   const payload = await getUnclothyTask(task.providerTaskId);
@@ -806,17 +878,7 @@ async function advanceRunningTask(task: QueueTaskRecord) {
   }
 
   if (inferCompletionFromPayload(payload as any)) {
-    await prisma.unclothyGenerationTask.update({
-      where: { id: task.id },
-      data: {
-        phase: UnclothyGenerationTaskPhase.ingesting,
-        percent: 92,
-        providerStatus,
-        statusText: 'Saving to album...',
-        nextRunAt: new Date(),
-      },
-    });
-    return ingestProviderOutput({ ...task, phase: UnclothyGenerationTaskPhase.ingesting, providerStatus } as QueueTaskRecord, payload);
+    return ingestUnclothyProviderOutput({ ...task, providerStatus } as QueueTaskRecord, payload);
   }
 
   return prisma.unclothyGenerationTask.update({

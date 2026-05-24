@@ -70,6 +70,8 @@ export default function GalleryInspectorPanel({
           <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
             Select one media item to see details.
           </div>
+
+          {children ? <div className="mt-3 space-y-2">{children}</div> : null}
         </div>
       </aside>
     );

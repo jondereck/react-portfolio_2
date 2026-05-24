@@ -15,6 +15,8 @@ Your deployed Next.js app must have these env vars set (in production, not just 
 - `UNCLOTHY_API_BASE_URL`
 - `UNCLOTHY_API_KEY`
 - `UNCLOTHY_SETTINGS_PATH`
+- `UNCLOTHY_WEBHOOK_BASE_URL` (optional, public app origin for faster task completion callbacks)
+- `UNCLOTHY_WEBHOOK_SECRET` (optional, signs Unclothy webhook callback URLs)
 - `CRON_SECRET` (must match what the Cloudflare Worker uses)
 - `CLOUDFLARE_ACCOUNT_ID`
 - `CLOUDFLARE_API_TOKEN`
@@ -23,6 +25,8 @@ Your deployed Next.js app must have these env vars set (in production, not just 
 - `UNCLOTHY_WORKER_CRON_EXPRESSION` (optional, defaults to `* * * * *`)
 
 The Cloudflare variables above let Admin Settings update both the worker KV switch and the deployed cron schedule through Cloudflare API. Without them, the app will block changes to the background-worker toggle so the UI does not drift from the deployed scheduler.
+
+The Unclothy webhook variables are optional. When both are set, generated tasks include a signed `webhook_url` so Unclothy can call back as soon as a task completes. The Cloudflare worker should stay enabled as a fallback for missed callbacks and retries.
 
 ## 2) Deploy the Cloudflare scheduled Worker
 
