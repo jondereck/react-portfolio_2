@@ -171,10 +171,22 @@ export function useGalleryAdminController() {
   }, [selectedAlbumId]);
 
   useEffect(() => {
-    if (selectedAlbumId) {
-      loadPhotos(selectedAlbumId, sortMode);
+    if (loadingAlbums) {
+      return;
     }
-  }, [selectedAlbumId, sortMode]);
+
+    if (selectedAlbumId) {
+      if (!albums.some((album) => album.id === selectedAlbumId)) {
+        setPhotos([]);
+        return;
+      }
+
+      loadPhotos(selectedAlbumId, sortMode);
+      return;
+    }
+
+    setPhotos([]);
+  }, [albums, loadingAlbums, selectedAlbumId, sortMode]);
 
   useEffect(() => {
     setUploadProgress(null);

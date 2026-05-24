@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { useUnclothyTasksStore } from '@/store/unclothyTasks';
@@ -84,6 +83,7 @@ export default function GalleryUnclothySection({
     enabled: false,
     configured: false,
     credits: null,
+    canViewProviderCredits: false,
     quota: null,
     settingsEnums: {},
     warnings: [],
@@ -114,13 +114,14 @@ export default function GalleryUnclothySection({
         enabled: result.enabled === true,
         configured: result.configured === true,
         credits: typeof result.credits === 'number' ? result.credits : null,
+        canViewProviderCredits: result.canViewProviderCredits === true,
         quota: result.quota && typeof result.quota === 'object' ? result.quota : null,
         settingsEnums: result.settingsEnums && typeof result.settingsEnums === 'object' ? result.settingsEnums : {},
         warnings: Array.isArray(result.warnings) ? result.warnings.map(String).filter(Boolean) : [],
       });
     } catch (error) {
       toast.error(error?.message || 'Unable to load Unclothy status.');
-      setStatus({ loading: false, enabled: false, configured: false, credits: null, quota: null, settingsEnums: {}, warnings: [] });
+      setStatus({ loading: false, enabled: false, configured: false, credits: null, canViewProviderCredits: false, quota: null, settingsEnums: {}, warnings: [] });
     }
   }, []);
 
@@ -488,15 +489,17 @@ export default function GalleryUnclothySection({
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Status</p>
             <p className="mt-1 font-semibold text-slate-900 dark:text-slate-50">{quickInfoStatusLabel}</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30">
-            <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Provider</p>
-            <p className="mt-1 flex items-baseline gap-1 font-semibold text-slate-900 dark:text-slate-50 whitespace-nowrap">
-              <span className="tabular-nums">{status.credits ?? '\u2014'}</span>
-              {typeof status.credits === 'number' ? (
-                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">credits</span>
-              ) : null}
-            </p>
-          </div>
+          {status.canViewProviderCredits ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30">
+              <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Provider</p>
+              <p className="mt-1 flex items-baseline gap-1 font-semibold text-slate-900 dark:text-slate-50 whitespace-nowrap">
+                <span className="tabular-nums">{status.credits ?? '\u2014'}</span>
+                {typeof status.credits === 'number' ? (
+                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400">credits</span>
+                ) : null}
+              </p>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950/30">
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Monthly</p>
             <p className="mt-1 flex items-baseline gap-1 font-semibold text-slate-900 dark:text-slate-50 whitespace-nowrap">
@@ -516,9 +519,6 @@ export default function GalleryUnclothySection({
             <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Active slots</p>
             <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-slate-50">
               {status.quota?.activeReserved ?? 0}/{activeSlotLimit} reserved for this account
-              <span className="ml-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                Global cap {status.quota?.globalConcurrentGenerationLimit ?? 5}
-              </span>
             </p>
           </div>
         </div>
@@ -547,7 +547,7 @@ export default function GalleryUnclothySection({
               Retry
             </button>
             <p className="w-full text-xs leading-5 text-slate-500 dark:text-slate-400">
-              Failed and canceled jobs do not consume the monthly account quota. Provider credits are separate.
+              Failed and canceled jobs do not consume the monthly account quota.
             </p>
           </div>
         ) : null}
@@ -564,87 +564,6 @@ export default function GalleryUnclothySection({
           <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Album refreshed after background save.</p>
         ) : null}
       </div>
-
-      {false ? (
-      <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">Quick info</p>
-        <div className="mt-3 space-y-2 text-sm text-slate-700 dark:text-slate-200">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-slate-500 dark:text-slate-400">Status</span>
-            <span className="font-semibold text-slate-900 dark:text-slate-50">
-              {!status.enabled ? 'Disabled' : !status.configured ? 'Needs setup' : 'Ready'}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-slate-500 dark:text-slate-400">Credits</span>
-            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900 dark:text-slate-50">
-              <Coins className="size-4" />
-              {status.credits ?? '—'}
-            </span>
-          </div>
-        </div>
-
-        {selectionProblem ? (
-          <p className="mt-3 text-sm text-amber-700 dark:text-amber-200">{selectionProblem}</p>
-        ) : null}
-
-        {displayTask ? (
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300">
-              <span className="font-semibold">
-                {phaseLabel}
-                {isActiveForSelection ? '' : ' (background)'}
-              </span>
-              <span className="tabular-nums">{percent}%</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800">
-              <div
-                className="h-full rounded-full bg-sky-600 transition-[width] duration-500"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-            <p className="text-sm text-slate-700 dark:text-slate-200">
-              {displayTask.statusText || 'Working…'}
-              {displayTask.providerStatus ? (
-                <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">({displayTask.providerStatus})</span>
-              ) : null}
-            </p>
-          </div>
-        ) : queue.length > 0 ? (
-          <p className="mt-4 text-sm text-slate-700 dark:text-slate-200">{queue.length} task(s) queued.</p>
-        ) : null}
-
-        {displayTask?.phase === 'error' ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={ghostButtonStyles} onClick={() => cancelTask?.(displayTask.id || displayTask.queueTaskId)}>
-              Dismiss
-            </button>
-            <button
-              type="button"
-              className={ghostButtonStyles}
-              disabled={disableInputs}
-              onClick={() => {
-                retryTask?.(displayTask.id || displayTask.queueTaskId);
-              }}
-            >
-              Retry
-            </button>
-          </div>
-        ) : null}
-
-        {status.warnings.length > 0 ? (
-          <div className="mt-3 space-y-1 text-xs text-amber-700 dark:text-amber-200">
-            {status.warnings.map((warning) => (
-              <p key={warning}>{warning}</p>
-            ))}
-          </div>
-        ) : null}
-
-        {autoRefreshedAt ? (
-          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">Album refreshed after background save.</p>
-        ) : null}
-      </div>
-      ) : null}
 
       <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-start justify-between gap-3">

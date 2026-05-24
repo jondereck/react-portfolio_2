@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { requireAuthActor } from '@/lib/auth/session';
+import { isSuperAdmin } from '@/lib/auth/roles';
 import { getAdminSettings } from '@/lib/server/admin-settings';
 import {
   createUnclothySuccessResponse,
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
     const settings = await getAdminSettings();
     const enabled = settings.integrations.unclothyEnabled === true;
     const configured = isUnclothyConfigured();
+    const canViewProviderCredits = isSuperAdmin(actor.user.role);
     const quota = {
       ...(await getUnclothyUsageSummaryForUser(actor.user)),
       globalConcurrentGenerationLimit: normalizeUnclothyGlobalConcurrentLimit(settings.integrations.unclothyGlobalConcurrentGenerationLimit),
@@ -39,6 +41,7 @@ export async function GET(request: Request) {
         enabled,
         configured,
         credits: null,
+        canViewProviderCredits,
         quota,
         settingsEnums: {},
         warnings: [],
@@ -49,16 +52,21 @@ export async function GET(request: Request) {
     let credits: number | null = null;
     let settingsEnums: Record<string, unknown> = {};
 
-    const [creditsResult, settingsResult] = await Promise.allSettled([getUnclothyCredits(), getUnclothyTaskSettings()]);
+    const [creditsResult, settingsResult] = await Promise.allSettled([
+      canViewProviderCredits ? getUnclothyCredits() : Promise.resolve(null),
+      getUnclothyTaskSettings(),
+    ]);
 
-    if (creditsResult.status === 'fulfilled') {
-      credits = creditsResult.value;
-    } else {
-      warnings.push(
-        creditsResult.reason instanceof Error
-          ? `Unable to load Unclothy credits: ${creditsResult.reason.message}`
-          : 'Unable to load Unclothy credits.',
-      );
+    if (canViewProviderCredits) {
+      if (creditsResult.status === 'fulfilled') {
+        credits = creditsResult.value;
+      } else {
+        warnings.push(
+          creditsResult.reason instanceof Error
+            ? `Unable to load Unclothy credits: ${creditsResult.reason.message}`
+            : 'Unable to load Unclothy credits.',
+        );
+      }
     }
 
     if (settingsResult.status === 'fulfilled') {
@@ -75,6 +83,7 @@ export async function GET(request: Request) {
       enabled,
       configured,
       credits,
+      canViewProviderCredits,
       quota,
       settingsEnums,
       warnings,

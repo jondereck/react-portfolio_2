@@ -28,6 +28,39 @@ function getSourceLabel(task) {
   return task?.sourcePhotoLabel || (task?.sourcePhotoId ? `Image ${task.sourcePhotoId}` : 'Image');
 }
 
+function shortenLabel(value, maxLength = 18) {
+  const label = String(value || '').trim();
+  if (!label) return '';
+  if (label.length <= maxLength) return label;
+  return `${label.slice(0, maxLength).trim()}...`;
+}
+
+function humanizeModeLabel(value) {
+  const label = String(value || '').trim();
+  if (!label) return '';
+
+  const knownLabels = {
+    bikini: 'Swimsuit',
+    bondage: 'Bondage',
+    latex: 'Latex',
+    lingerie: 'Underwear',
+    naked: 'Naked',
+    swimsuit: 'Swimsuit',
+    underwear: 'Underwear',
+  };
+  const normalized = label.toLowerCase();
+  if (knownLabels[normalized]) return knownLabels[normalized];
+
+  return label
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function getShortSourceLabel(task) {
+  return shortenLabel(getSourceLabel(task));
+}
+
 function formatGeneratedAt(value) {
   const timestamp = typeof value === 'number' ? value : null;
   if (!timestamp) return 'Generated recently';
@@ -53,12 +86,20 @@ function formatDuration(durationMs) {
 }
 
 function getTaskModeLabel(task) {
-  return getUnclothyGenerationModeLabel(task?.settingsSent) || getUnclothyGenerationModeLabel(task?.settingsSnapshot);
+  return humanizeModeLabel(
+    getUnclothyGenerationModeLabel(task?.settingsSent) || getUnclothyGenerationModeLabel(task?.settingsSnapshot),
+  );
+}
+
+function getModeFirstLabel(task) {
+  const generationMode = getTaskModeLabel(task);
+  const sourceLabel = getShortSourceLabel(task);
+  if (generationMode && sourceLabel) return `${generationMode} - ${sourceLabel}`;
+  return generationMode || sourceLabel || 'Generation';
 }
 
 function RunningTaskCard({ task, onOpenTask, onCancelActive }) {
   const percent = clampPercent(task?.percent);
-  const generationMode = getTaskModeLabel(task);
   const status = task.statusText || phaseLabel(task.phase);
   const provider = task.providerStatus ? ` (${task.providerStatus})` : '';
 
@@ -68,8 +109,7 @@ function RunningTaskCard({ task, onOpenTask, onCancelActive }) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">{phaseLabel(task.phase)}</p>
           <p className="mt-1 truncate text-xs text-slate-500 dark:text-slate-400">
-            {getAlbumLabel(task)} - {getSourceLabel(task)}
-            {generationMode ? ` - ${generationMode}` : ''}
+            {getModeFirstLabel(task)}
           </p>
         </div>
         <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">{percent}%</span>
@@ -112,6 +152,7 @@ function RunningTaskCard({ task, onOpenTask, onCancelActive }) {
 
 function QueuedTaskRow({ task, index, onOpenTask, onCancelQueued }) {
   const generationMode = getTaskModeLabel(task);
+  const sourceLabel = getShortSourceLabel(task);
 
   return (
     <div className="flex items-center gap-2 rounded-[22px] border border-slate-200 bg-white p-3 text-slate-900 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50">
@@ -131,11 +172,11 @@ function QueuedTaskRow({ task, index, onOpenTask, onCancelQueued }) {
         </span>
         <span className="min-w-0">
           <span className="block truncate text-sm font-semibold">
-            Queued #{index + 1} - {getAlbumLabel(task)}
+            Queued #{index + 1} - {generationMode || 'Generation'}
           </span>
           <span className="mt-0.5 block truncate text-xs text-slate-500 dark:text-slate-300">
-            {getSourceLabel(task)}
-            {generationMode ? ` - ${generationMode}` : ''}
+            {getAlbumLabel(task)}
+            {sourceLabel ? ` - ${sourceLabel}` : ''}
           </span>
         </span>
       </button>
@@ -153,8 +194,7 @@ function QueuedTaskRow({ task, index, onOpenTask, onCancelQueued }) {
 }
 
 function HistoryRow({ task, onOpenTask }) {
-  const generationMode = getTaskModeLabel(task);
-  const sublabel = `${getSourceLabel(task)}${generationMode ? ` - ${generationMode}` : ''}`;
+  const sublabel = getModeFirstLabel(task);
   const openPayload = {
     albumId: task.albumId,
     sourcePhotoId: task.createdPhotoId || task.sourcePhotoId,
