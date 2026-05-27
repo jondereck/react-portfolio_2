@@ -25,7 +25,7 @@ export default function GalleryMediaGrid({
   const orderedIds = useMemo(() => (Array.isArray(photos) ? photos.map((photo) => photo.id) : []), [photos]);
   const selectedCount = Array.isArray(selectedPhotoIds) ? selectedPhotoIds.length : 0;
   const normalizedGridColumns = Math.max(2, Math.min(6, Number(gridColumns) || 4));
-  const mobileGridColumns = Math.max(1, Math.min(4, normalizedGridColumns));
+  const mobileGridColumns = 2;
   const smallGridColumns = Math.max(2, Math.min(3, normalizedGridColumns));
   const largeGridColumns = inspectorOpen
     ? Math.max(3, Math.min(4, normalizedGridColumns))

@@ -4,7 +4,7 @@
 
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Camera, Download, Loader2, Sparkles, X } from 'lucide-react';
+import { Camera, Download, Loader2, Pause, Play, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
 import { toast } from 'sonner';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import GalleryUnclothySection from './GalleryUnclothySection';
@@ -14,6 +14,13 @@ import { useUnclothyTasksStore } from '@/store/unclothyTasks';
 import { downloadFromApi } from '@/lib/download-client';
 
 const SAMSUNG_STATUS_STEPS = ['Queued', 'Processing', 'Generating', 'Finalizing'];
+const DEFAULT_VIDEO_STATE = {
+  currentTime: 0,
+  duration: 0,
+  paused: true,
+  muted: false,
+  volume: 1,
+};
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
@@ -40,6 +47,41 @@ function createMediaFallbackFilename(photo) {
 function normalizeAlbumId(value) {
   const id = typeof value === 'number' ? value : Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const rounded = Math.floor(seconds);
+  const minutes = Math.floor(rounded / 60);
+  const remainingSeconds = rounded % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+function getVideoDuration(video, fallback = 0) {
+  if (!video) return fallback;
+  if (Number.isFinite(video.duration) && video.duration > 0) return video.duration;
+  try {
+    if (video.seekable?.length) {
+      const seekableEnd = video.seekable.end(video.seekable.length - 1);
+      if (Number.isFinite(seekableEnd) && seekableEnd > 0) return seekableEnd;
+    }
+  } catch {
+    // Some browsers throw while media ranges are still initializing.
+  }
+  return Number.isFinite(fallback) ? fallback : 0;
+}
+
+function readVideoState(video, fallback = DEFAULT_VIDEO_STATE) {
+  if (!video) return fallback;
+  const duration = getVideoDuration(video, fallback.duration || 0);
+  const currentTime = video.ended ? 0 : Number.isFinite(video.currentTime) ? video.currentTime : fallback.currentTime || 0;
+  return {
+    currentTime,
+    duration,
+    paused: video.ended ? true : video.paused,
+    muted: video.muted,
+    volume: Number.isFinite(video.volume) ? video.volume : fallback.volume || 1,
+  };
 }
 
 export default function GalleryMediaViewer({
@@ -72,7 +114,11 @@ export default function GalleryMediaViewer({
   const generateSheetRef = useRef(null);
   const videoRef = useRef(null);
   const snapshotPlaybackRef = useRef(null);
+  const videoPlaybackRef = useRef(new Map());
+  const activeVideoPhotoIdRef = useRef(null);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [videoState, setVideoState] = useState(DEFAULT_VIDEO_STATE);
+  const [enhancingSnapshot, setEnhancingSnapshot] = useState(false);
   const shouldBlurPreview = Boolean(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated });
   const queue = useUnclothyTasksStore((state) => state.queue);
   const activeTasks = useUnclothyTasksStore((state) => state.activeTasks);
@@ -92,9 +138,132 @@ export default function GalleryMediaViewer({
   const isGeneratingPreview = Boolean(generatingState);
   const [statusIndex, setStatusIndex] = useState(0);
   const canOpenGenerate = canGenerate && unclothyAvailable;
+  const snapshotBusy = uploadingSnapshot || enhancingSnapshot;
+
+  const saveVideoPlaybackForId = (photoId, video, overrides = {}) => {
+    if (!photoId || !video) return;
+    const nextState = {
+      ...readVideoState(video),
+      ...overrides,
+    };
+    videoPlaybackRef.current.set(photoId, nextState);
+  };
+
+  const saveActiveVideoPlayback = () => {
+    saveVideoPlaybackForId(activeVideoPhotoIdRef.current, videoRef.current);
+  };
+
+  const syncVideoState = (overrides = {}) => {
+    const nextState = {
+      ...readVideoState(videoRef.current, videoState),
+      ...overrides,
+    };
+    setVideoState(nextState);
+    saveVideoPlaybackForId(activeVideoPhotoIdRef.current, videoRef.current, nextState);
+  };
+
+  const restoreSessionVideoPlayback = () => {
+    const video = videoRef.current;
+    const photoId = photo?.id;
+    if (!video || !photoId) return;
+
+    const saved = videoPlaybackRef.current.get(photoId);
+    if (!saved) {
+      syncVideoState();
+      return;
+    }
+
+    try {
+      video.muted = Boolean(saved.muted);
+      video.volume = Number.isFinite(saved.volume) ? Math.max(0, Math.min(1, saved.volume)) : 1;
+      const duration = Number.isFinite(video.duration) ? video.duration : saved.duration || saved.currentTime || 0;
+      if (Number.isFinite(saved.currentTime)) {
+        video.currentTime = Math.max(0, Math.min(saved.currentTime, duration || saved.currentTime));
+      }
+      setVideoState({
+        ...DEFAULT_VIDEO_STATE,
+        ...saved,
+        duration,
+        currentTime: Math.max(0, Math.min(saved.currentTime || 0, duration || saved.currentTime || 0)),
+      });
+      if (!saved.paused && saved.currentTime > 0) {
+        void video.play().catch(() => {
+          setVideoState((current) => ({ ...current, paused: true }));
+          saveVideoPlaybackForId(photoId, video, { paused: true });
+        });
+      }
+    } catch {
+      syncVideoState();
+    }
+  };
+
+  const handleToggleVideoPlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused || video.ended) {
+      void video.play().catch(() => {
+        toast.error('Unable to play this video.');
+      });
+      return;
+    }
+    video.pause();
+  };
+
+  const handleVideoSeek = (event) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextTime = Number(event.target.value);
+    if (!Number.isFinite(nextTime)) return;
+    const duration = getVideoDuration(video, videoState.duration);
+    const clampedTime = Math.max(0, Math.min(nextTime, duration || nextTime));
+    video.currentTime = clampedTime;
+    syncVideoState({ currentTime: clampedTime, duration });
+  };
+
+  const handleVideoSkip = (seconds) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const duration = getVideoDuration(video, videoState.duration);
+    const nextTime = Math.max(0, Math.min((video.currentTime || 0) + seconds, duration || (video.currentTime || 0) + seconds));
+    video.currentTime = nextTime;
+    syncVideoState({ currentTime: nextTime, duration });
+  };
+
+  const handleVideoVolumeChange = (event) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextVolume = Math.max(0, Math.min(1, Number(event.target.value)));
+    video.volume = Number.isFinite(nextVolume) ? nextVolume : 1;
+    video.muted = video.volume === 0;
+    syncVideoState({ volume: video.volume, muted: video.muted });
+  };
+
+  const handleToggleVideoMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = !video.muted;
+    if (!video.muted && video.volume === 0) {
+      video.volume = 0.75;
+    }
+    syncVideoState({ muted: video.muted, volume: video.volume });
+  };
+
+  useEffect(() => {
+    if (photo?.id && isVideoMedia) {
+      activeVideoPhotoIdRef.current = photo.id;
+      setVideoState({
+        ...DEFAULT_VIDEO_STATE,
+        ...(videoPlaybackRef.current.get(photo.id) || {}),
+      });
+      return;
+    }
+
+    setVideoState(DEFAULT_VIDEO_STATE);
+  }, [isVideoMedia, photo?.id]);
 
   useEffect(() => {
     if (!open) {
+      saveActiveVideoPlayback();
       setGenerateOpen(false);
       setUnclothyAvailable(false);
       setPreviewLoading(false);
@@ -227,6 +396,12 @@ export default function GalleryMediaViewer({
           // Browser autoplay policy can block resume; keeping the restored time is enough.
         });
       }
+      syncVideoState({
+        currentTime: saved.currentTime,
+        paused: saved.paused,
+        volume: Number.isFinite(video.volume) ? video.volume : 1,
+        muted: video.muted,
+      });
     } catch {
       // Keep snapshot actions non-blocking if the media element is no longer seekable.
     }
@@ -381,6 +556,36 @@ export default function GalleryMediaViewer({
     }
   };
 
+  const handleEnhanceSnapshot = async () => {
+    if (!snapshot?.blob || !snapshotAlbumId || !photo?.id) {
+      toast.error('Take a snapshot before enhancing it.');
+      return;
+    }
+
+    setEnhancingSnapshot(true);
+    try {
+      const file = new File([snapshot.blob], snapshot.filename || 'video-snapshot.png', { type: 'image/png' });
+      const formData = new FormData();
+      formData.append('imageFile', file);
+      formData.append('caption', `${title} enhanced snapshot`);
+
+      const created = await fetchJson(`/api/gallery/albums/${snapshotAlbumId}/photos/${photo.id}/snapshot-enhance`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (typeof controller?.addPhotoToState === 'function') {
+        controller.addPhotoToState(created);
+      }
+      toast.success('Enhanced snapshot uploaded to album.');
+      clearSnapshot();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to enhance snapshot.');
+    } finally {
+      setEnhancingSnapshot(false);
+    }
+  };
+
   return (
     <>
       <Transition show={open} as={Fragment}>
@@ -485,7 +690,38 @@ export default function GalleryMediaViewer({
                                     onLoadedData={() => setPreviewLoading(false)}
                                     onCanPlay={() => setPreviewLoading(false)}
                                     onError={() => setPreviewLoading(false)}
-                                    controls
+                                    controls={false}
+                                    videoProps={
+                                      canSnapshot
+                                        ? {
+                                            onLoadedMetadata: () => {
+                                              setPreviewLoading(false);
+                                              restoreSessionVideoPlayback();
+                                            },
+                                            onPlay: () => syncVideoState({ paused: false }),
+                                            onPause: () => syncVideoState({ paused: true }),
+                                            onTimeUpdate: () => syncVideoState(),
+                                            onDurationChange: () => syncVideoState(),
+                                            onProgress: () => syncVideoState(),
+                                            onSeeking: () => syncVideoState(),
+                                            onSeeked: () => syncVideoState(),
+                                            onVolumeChange: () => syncVideoState(),
+                                            onEnded: () => {
+                                              const endedState = {
+                                                currentTime: 0,
+                                                duration: getVideoDuration(videoRef.current, videoState.duration),
+                                                paused: true,
+                                                muted: Boolean(videoRef.current?.muted),
+                                                volume: Number.isFinite(videoRef.current?.volume) ? videoRef.current.volume : videoState.volume,
+                                              };
+                                              if (photo?.id) {
+                                                videoPlaybackRef.current.set(photo.id, endedState);
+                                              }
+                                              setVideoState(endedState);
+                                            },
+                                          }
+                                        : undefined
+                                    }
                                   />
                                 ) : (
                                   <div className="h-full min-h-[420px] w-full max-w-full rounded-[24px] bg-[radial-gradient(circle_at_top,#cbd5e1,#94a3b8_40%,#334155_100%)] dark:bg-[radial-gradient(circle_at_top,#0f172a,#1f2937_45%,#020617_100%)] sm:h-[560px] sm:w-[380px]" />
@@ -504,6 +740,80 @@ export default function GalleryMediaViewer({
                                   </div>
                                 ) : null}
 
+                                {canSnapshot && !snapshot?.url ? (
+                                  <div className="absolute inset-x-2 bottom-2 z-30 rounded-[20px] border border-white/20 bg-slate-950/78 p-2 text-white shadow-2xl backdrop-blur-xl sm:inset-x-4 sm:bottom-4 sm:rounded-[24px] sm:p-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-950 transition hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                                          onClick={handleToggleVideoPlay}
+                                          aria-label={videoState.paused ? 'Play video' : 'Pause video'}
+                                        >
+                                          {videoState.paused ? <Play className="ml-0.5 size-4" /> : <Pause className="size-4" />}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 px-2 text-xs font-bold text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                                          onClick={() => handleVideoSkip(-10)}
+                                          aria-label="Back 10 seconds"
+                                        >
+                                          -10
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 px-2 text-xs font-bold text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                                          onClick={() => handleVideoSkip(10)}
+                                          aria-label="Forward 10 seconds"
+                                        >
+                                          +10
+                                        </button>
+                                      </div>
+
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.05"
+                                        value={videoState.muted ? 0 : videoState.volume}
+                                        onChange={handleVideoVolumeChange}
+                                        onInput={handleVideoVolumeChange}
+                                        className="hidden h-1.5 w-20 accent-white sm:block"
+                                        aria-label="Video volume"
+                                      />
+                                      <button
+                                        type="button"
+                                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                                        onClick={handleToggleVideoMute}
+                                        aria-label={videoState.muted || videoState.volume === 0 ? 'Unmute video' : 'Mute video'}
+                                      >
+                                        {videoState.muted || videoState.volume === 0 ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+                                      </button>
+                                    </div>
+                                    <div className="mt-2 flex items-center gap-2">
+                                      <span className="w-12 text-center text-[11px] font-semibold tabular-nums text-white/85 sm:w-14 sm:text-xs">
+                                        {formatTime(videoState.currentTime)}
+                                      </span>
+                                      <input
+                                        style={{ touchAction: 'none' }}
+                                        type="range"
+                                        min="0"
+                                        max={Math.max(0, videoState.duration || 0)}
+                                        step="0.05"
+                                        value={Math.min(videoState.currentTime || 0, videoState.duration || videoState.currentTime || 0)}
+                                        onChange={handleVideoSeek}
+                                        onInput={handleVideoSeek}
+                                        className="h-1.5 min-w-0 flex-1 accent-white"
+                                        aria-label="Seek video"
+                                        disabled={!videoState.duration}
+                                      />
+                                      <span className="hidden w-14 text-center text-xs font-semibold tabular-nums text-white/70 sm:block">
+                                        {formatTime(videoState.duration)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ) : null}
+
                                 {snapshot?.url ? (
                                   <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-4">
                                     <div className="w-full max-w-sm overflow-hidden rounded-[20px] border border-white/15 bg-white shadow-2xl dark:bg-slate-950 sm:rounded-[22px]">
@@ -518,7 +828,7 @@ export default function GalleryMediaViewer({
                                           <button
                                             type="button"
                                             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950"
-                                            disabled={uploadingSnapshot}
+                                            disabled={snapshotBusy}
                                             onClick={() => clearSnapshot()}
                                             aria-label="Close snapshot dialog"
                                             title="Close"
@@ -532,11 +842,11 @@ export default function GalleryMediaViewer({
                                         <img src={snapshot.url} alt="Captured video snapshot" className="max-h-[58dvh] w-full object-contain sm:max-h-72" />
                                       </div>
 
-                                      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-2 dark:border-slate-800 sm:p-3">
+                                      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-2 dark:border-slate-800 sm:grid-cols-3 sm:p-3">
                                         <button
                                           type="button"
-                                          className="inline-flex h-11 min-w-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950 sm:px-3 sm:text-sm"
-                                          disabled={uploadingSnapshot}
+                                          className="hidden h-11 min-w-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950 sm:inline-flex sm:px-3 sm:text-sm"
+                                          disabled={snapshotBusy}
                                           onClick={handleDownloadSnapshot}
                                           aria-label="Download snapshot"
                                           title="Download"
@@ -547,14 +857,26 @@ export default function GalleryMediaViewer({
                                         </button>
                                         <button
                                           type="button"
+                                          className="inline-flex h-11 min-w-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 px-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-100 dark:focus-visible:ring-sky-300 dark:focus-visible:ring-offset-slate-950 sm:px-3 sm:text-sm"
+                                          disabled={snapshotBusy}
+                                          onClick={handleEnhanceSnapshot}
+                                          aria-label="Enhance snapshot with AI"
+                                          title="Enhance with AI"
+                                        >
+                                          {enhancingSnapshot ? <Loader2 className="mr-1.5 size-4 shrink-0 animate-spin sm:mr-2" /> : <Sparkles className="mr-1.5 size-4 shrink-0 sm:mr-2" />}
+                                          <span className="sr-only sm:hidden">Enhance with AI</span>
+                                          <span className="hidden sm:inline">Enhance AI</span>
+                                        </button>
+                                        <button
+                                          type="button"
                                           className="inline-flex h-11 min-w-0 items-center justify-center rounded-xl bg-slate-900 px-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-50 dark:text-slate-900 dark:hover:bg-slate-200 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950 sm:px-3 sm:text-sm"
-                                          disabled={uploadingSnapshot}
+                                          disabled={snapshotBusy}
                                           onClick={handleUploadSnapshot}
                                           aria-label="Upload snapshot to album"
                                           title="Upload to album"
                                         >
                                           {uploadingSnapshot ? <Loader2 className="mr-1.5 size-4 shrink-0 animate-spin sm:mr-2" /> : <Camera className="mr-1.5 size-4 shrink-0 sm:mr-2" />}
-                                          <span className="truncate sm:hidden">Upload</span>
+                                          <span className="sr-only sm:hidden">Upload to album</span>
                                           <span className="hidden sm:inline">Upload to album</span>
                                         </button>
                                       </div>

@@ -14,6 +14,8 @@ export default function MediaPreview({
   onLoadedData,
   onCanPlay,
   onError,
+  videoProps,
+  imageProps,
   mimeType,
   sourceType,
   sourceId,
@@ -38,9 +40,10 @@ export default function MediaPreview({
         onError={onError}
         playsInline
         preload="metadata"
+        {...videoProps}
       />
     );
   }
 
-  return <img src={resolvedUrl} alt={alt} className={className} onLoad={onLoadedData} onError={onError} />;
+  return <img src={resolvedUrl} alt={alt} className={className} onLoad={onLoadedData} onError={onError} {...imageProps} />;
 }
