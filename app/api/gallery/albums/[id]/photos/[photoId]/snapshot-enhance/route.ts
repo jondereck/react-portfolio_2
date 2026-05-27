@@ -1,5 +1,6 @@
 import OpenAI, { toFile } from 'openai';
 import { NextResponse } from 'next/server';
+import sharp from 'sharp';
 import { z } from 'zod';
 import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
@@ -92,6 +93,33 @@ function isOpenAiModerationBlocked(error: unknown) {
   );
 }
 
+function isOpenAiUnavailable(error: unknown) {
+  return error instanceof RequestValidationError && error.errorCode === 'OPENAI_NOT_CONFIGURED';
+}
+
+async function enhanceSnapshotLocally(buffer: Buffer) {
+  const image = sharp(buffer, { failOn: 'none' }).rotate();
+  const metadata = await image.metadata();
+  const width = metadata.width || 0;
+  const height = metadata.height || 0;
+  const longestSide = Math.max(width, height);
+  const targetLongestSide = longestSide > 0 ? Math.min(Math.max(longestSide * 2, 1600), 3072) : 2048;
+
+  return image
+    .resize({
+      width: width >= height ? Math.round(targetLongestSide) : undefined,
+      height: height > width ? Math.round(targetLongestSide) : undefined,
+      fit: 'inside',
+      kernel: sharp.kernel.lanczos3,
+      withoutEnlargement: false,
+    })
+    .modulate({ brightness: 1.03, saturation: 1.08 })
+    .linear(1.08, -5)
+    .sharpen({ sigma: 1.1, m1: 1.2, m2: 0.8 })
+    .png({ compressionLevel: 9, quality: 100 })
+    .toBuffer();
+}
+
 export async function POST(request: Request, context: RouteContext) {
   if (await isRateLimited(request, 'gallery-snapshot-enhance', 10, 60_000)) {
     return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429 });
@@ -154,13 +182,13 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const openai = requireOpenAiClient();
-    const image = await toFile(preparedSnapshot.buffer, preparedSnapshot.originalFilename || 'video-snapshot.png', {
-      type: preparedSnapshot.mimeType || 'image/png',
-    });
-
-    let enhancedBase64 = '';
+    let enhancedBuffer: Buffer | null = null;
+    let enhancementProvider: 'openai' | 'local' = 'openai';
     try {
+      const openai = requireOpenAiClient();
+      const image = await toFile(preparedSnapshot.buffer, preparedSnapshot.originalFilename || 'video-snapshot.png', {
+        type: preparedSnapshot.mimeType || 'image/png',
+      });
       const response = await openai.images.edit({
         model: process.env.OPENAI_SNAPSHOT_ENHANCEMENT_MODEL || 'gpt-image-1.5',
         image,
@@ -171,37 +199,43 @@ export async function POST(request: Request, context: RouteContext) {
         output_format: 'png',
         n: 1,
       });
-      enhancedBase64 = response.data?.[0]?.b64_json || '';
-    } catch (error) {
-      console.error('[gallery snapshot enhance] OpenAI image edit failed', error);
-      if (isOpenAiModerationBlocked(error)) {
+      const enhancedBase64 = response.data?.[0]?.b64_json || '';
+      if (!enhancedBase64) {
         throw new RequestValidationError(
-          'OpenAI blocked this snapshot for safety. Use raw upload or choose a different video frame.',
-          400,
+          'Snapshot enhancement did not return an image.',
+          502,
           undefined,
-          'OPENAI_MODERATION_BLOCKED',
+          'SNAPSHOT_ENHANCEMENT_EMPTY',
         );
       }
-      throw new RequestValidationError(
-        'Snapshot enhancement failed. Try again later.',
-        502,
-        undefined,
-        'SNAPSHOT_ENHANCEMENT_FAILED',
-      );
+      enhancedBuffer = Buffer.from(enhancedBase64, 'base64');
+    } catch (error) {
+      console.error('[gallery snapshot enhance] OpenAI image edit failed', error);
+      if (!isOpenAiModerationBlocked(error) && !isOpenAiUnavailable(error)) {
+        console.warn('[gallery snapshot enhance] Falling back to local enhancement after OpenAI failure.');
+      }
+      enhancementProvider = 'local';
+      try {
+        enhancedBuffer = await enhanceSnapshotLocally(preparedSnapshot.buffer);
+      } catch (localError) {
+        console.error('[gallery snapshot enhance] Local enhancement failed', localError);
+        throw new RequestValidationError(
+          isOpenAiModerationBlocked(error)
+            ? 'OpenAI blocked this snapshot and local enhancement failed. Use raw upload or choose a different video frame.'
+            : 'Snapshot enhancement failed. Try again later.',
+          502,
+          undefined,
+          'SNAPSHOT_ENHANCEMENT_FAILED',
+        );
+      }
     }
 
-    if (!enhancedBase64) {
-      throw new RequestValidationError(
-        'Snapshot enhancement did not return an image.',
-        502,
-        undefined,
-        'SNAPSHOT_ENHANCEMENT_EMPTY',
-      );
-    }
-
-    const enhancedBuffer = Buffer.from(enhancedBase64, 'base64');
     const enhancedFilename = `enhanced-${preparedSnapshot.originalFilename.replace(/\.[a-z0-9]+$/i, '') || 'video-snapshot'}.png`;
-    const enhancedFile = new File([enhancedBuffer], enhancedFilename, { type: 'image/png' });
+    const enhancedArrayBuffer = enhancedBuffer.buffer.slice(
+      enhancedBuffer.byteOffset,
+      enhancedBuffer.byteOffset + enhancedBuffer.byteLength,
+    ) as ArrayBuffer;
+    const enhancedFile = new File([enhancedArrayBuffer], enhancedFilename, { type: 'image/png' });
     const caption = parsedData.caption || `${payload.photo.caption || payload.photo.originalFilename || `Media ${photoId}`} enhanced snapshot`;
 
     const created = await galleryService.addUploadedAlbumPhoto(albumId, {
@@ -212,7 +246,7 @@ export async function POST(request: Request, context: RouteContext) {
       },
     });
 
-    return NextResponse.json(created, { status: 201 });
+    return NextResponse.json({ ...created, enhancementProvider }, { status: 201 });
   } catch (error) {
     const authError = toAuthErrorResponse(error);
     if (authError) {

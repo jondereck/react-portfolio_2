@@ -112,6 +112,10 @@ export default function PwaRoutePersistence() {
         return;
       }
 
+      if (isProtectedRoute(lastRoute)) {
+        return;
+      }
+
       const navType = getNavigationType();
       if (navType !== 'navigate' && navType !== 'reload') {
         return;
@@ -121,20 +125,6 @@ export default function PwaRoutePersistence() {
       const timeOrigin = String(perf?.timeOrigin ?? perf?.timing?.navigationStart ?? 0);
       if (window.sessionStorage.getItem(RESTORE_GUARD_KEY) === timeOrigin) {
         return;
-      }
-
-      if (isProtectedRoute(lastRoute)) {
-        try {
-          const response = await fetch('/api/session/status', { cache: 'no-store' });
-          const payload = await response.json().catch(() => ({}));
-          if (!response.ok || !payload?.authenticated) {
-            window.localStorage.removeItem(LAST_ROUTE_KEY);
-            return;
-          }
-        } catch {
-          window.localStorage.removeItem(LAST_ROUTE_KEY);
-          return;
-        }
       }
 
       window.sessionStorage.setItem(RESTORE_GUARD_KEY, timeOrigin);

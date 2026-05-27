@@ -116,6 +116,8 @@ export default function GalleryMediaViewer({
   const snapshotPlaybackRef = useRef(null);
   const videoPlaybackRef = useRef(new Map());
   const activeVideoPhotoIdRef = useRef(null);
+  const pendingSeekTimeRef = useRef(null);
+  const pendingMetadataSeekHandlerRef = useRef(null);
   const [isDesktop, setIsDesktop] = useState(false);
   const [videoState, setVideoState] = useState(DEFAULT_VIDEO_STATE);
   const [enhancingSnapshot, setEnhancingSnapshot] = useState(false);
@@ -142,10 +144,18 @@ export default function GalleryMediaViewer({
 
   const saveVideoPlaybackForId = (photoId, video, overrides = {}) => {
     if (!photoId || !video) return;
+    const pendingSeekTime = pendingSeekTimeRef.current;
     const nextState = {
       ...readVideoState(video),
       ...overrides,
     };
+    if (
+      Number.isFinite(pendingSeekTime) &&
+      photoId === activeVideoPhotoIdRef.current &&
+      !Object.prototype.hasOwnProperty.call(overrides, 'currentTime')
+    ) {
+      nextState.currentTime = pendingSeekTime;
+    }
     videoPlaybackRef.current.set(photoId, nextState);
   };
 
@@ -153,13 +163,60 @@ export default function GalleryMediaViewer({
     saveVideoPlaybackForId(activeVideoPhotoIdRef.current, videoRef.current);
   };
 
+  const clearPendingMetadataSeekHandler = () => {
+    const video = videoRef.current;
+    const handler = pendingMetadataSeekHandlerRef.current;
+    if (video && handler) {
+      video.removeEventListener('loadedmetadata', handler);
+    }
+    pendingMetadataSeekHandlerRef.current = null;
+  };
+
+  const clampVideoTime = (video, nextTime, fallbackDuration = videoState.duration) => {
+    const duration = getVideoDuration(video, fallbackDuration);
+    return {
+      duration,
+      currentTime: Math.max(0, Math.min(nextTime, duration || nextTime)),
+    };
+  };
+
   const syncVideoState = (overrides = {}) => {
+    const pendingSeekTime = pendingSeekTimeRef.current;
     const nextState = {
       ...readVideoState(videoRef.current, videoState),
       ...overrides,
     };
+    if (Number.isFinite(pendingSeekTime) && !Object.prototype.hasOwnProperty.call(overrides, 'currentTime')) {
+      nextState.currentTime = pendingSeekTime;
+    }
     setVideoState(nextState);
     saveVideoPlaybackForId(activeVideoPhotoIdRef.current, videoRef.current, nextState);
+  };
+
+  const applyVideoSeek = (nextTime) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(nextTime)) return;
+
+    const { currentTime, duration } = clampVideoTime(video, nextTime);
+    pendingSeekTimeRef.current = currentTime;
+    syncVideoState({ currentTime, duration });
+
+    if (video.readyState < 1) {
+      clearPendingMetadataSeekHandler();
+      const handleLoadedMetadata = () => {
+        pendingMetadataSeekHandlerRef.current = null;
+        applyVideoSeek(currentTime);
+      };
+      pendingMetadataSeekHandlerRef.current = handleLoadedMetadata;
+      video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+      return;
+    }
+
+    try {
+      video.currentTime = currentTime;
+    } catch {
+      syncVideoState({ currentTime, duration });
+    }
   };
 
   const restoreSessionVideoPlayback = () => {
@@ -176,9 +233,9 @@ export default function GalleryMediaViewer({
     try {
       video.muted = Boolean(saved.muted);
       video.volume = Number.isFinite(saved.volume) ? Math.max(0, Math.min(1, saved.volume)) : 1;
-      const duration = Number.isFinite(video.duration) ? video.duration : saved.duration || saved.currentTime || 0;
+      const duration = getVideoDuration(video, saved.duration || saved.currentTime || 0);
       if (Number.isFinite(saved.currentTime)) {
-        video.currentTime = Math.max(0, Math.min(saved.currentTime, duration || saved.currentTime));
+        applyVideoSeek(Math.max(0, Math.min(saved.currentTime, duration || saved.currentTime)));
       }
       setVideoState({
         ...DEFAULT_VIDEO_STATE,
@@ -214,19 +271,14 @@ export default function GalleryMediaViewer({
     if (!video) return;
     const nextTime = Number(event.target.value);
     if (!Number.isFinite(nextTime)) return;
-    const duration = getVideoDuration(video, videoState.duration);
-    const clampedTime = Math.max(0, Math.min(nextTime, duration || nextTime));
-    video.currentTime = clampedTime;
-    syncVideoState({ currentTime: clampedTime, duration });
+    applyVideoSeek(nextTime);
   };
 
   const handleVideoSkip = (seconds) => {
     const video = videoRef.current;
     if (!video) return;
-    const duration = getVideoDuration(video, videoState.duration);
-    const nextTime = Math.max(0, Math.min((video.currentTime || 0) + seconds, duration || (video.currentTime || 0) + seconds));
-    video.currentTime = nextTime;
-    syncVideoState({ currentTime: nextTime, duration });
+    const baseTime = Number.isFinite(pendingSeekTimeRef.current) ? pendingSeekTimeRef.current : video.currentTime || 0;
+    applyVideoSeek(baseTime + seconds);
   };
 
   const handleVideoVolumeChange = (event) => {
@@ -250,6 +302,8 @@ export default function GalleryMediaViewer({
 
   useEffect(() => {
     if (photo?.id && isVideoMedia) {
+      clearPendingMetadataSeekHandler();
+      pendingSeekTimeRef.current = null;
       activeVideoPhotoIdRef.current = photo.id;
       setVideoState({
         ...DEFAULT_VIDEO_STATE,
@@ -273,6 +327,8 @@ export default function GalleryMediaViewer({
         }
         return null;
       });
+      clearPendingMetadataSeekHandler();
+      pendingSeekTimeRef.current = null;
       snapshotPlaybackRef.current = null;
     }
   }, [open]);
@@ -388,7 +444,7 @@ export default function GalleryMediaViewer({
       video.playbackRate = saved.playbackRate || 1;
       if (Number.isFinite(saved.currentTime)) {
         const duration = Number.isFinite(video.duration) ? video.duration : saved.currentTime;
-        video.currentTime = Math.max(0, Math.min(saved.currentTime, duration));
+        applyVideoSeek(Math.max(0, Math.min(saved.currentTime, duration)));
       }
 
       if (!saved.paused) {
@@ -577,7 +633,11 @@ export default function GalleryMediaViewer({
       if (typeof controller?.addPhotoToState === 'function') {
         controller.addPhotoToState(created);
       }
-      toast.success('Enhanced snapshot uploaded to album.');
+      toast.success(
+        created?.enhancementProvider === 'local'
+          ? 'Enhanced locally and uploaded to album.'
+          : 'Enhanced snapshot uploaded to album.',
+      );
       clearSnapshot();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to enhance snapshot.');
@@ -704,7 +764,22 @@ export default function GalleryMediaViewer({
                                             onDurationChange: () => syncVideoState(),
                                             onProgress: () => syncVideoState(),
                                             onSeeking: () => syncVideoState(),
-                                            onSeeked: () => syncVideoState(),
+                                            onSeeked: () => {
+                                              const pendingSeekTime = pendingSeekTimeRef.current;
+                                              if (
+                                                !Number.isFinite(pendingSeekTime) ||
+                                                Math.abs((videoRef.current?.currentTime || 0) - pendingSeekTime) < 0.35
+                                              ) {
+                                                pendingSeekTimeRef.current = null;
+                                              }
+                                              syncVideoState();
+                                            },
+                                            onCanPlay: () => {
+                                              setPreviewLoading(false);
+                                              if (Number.isFinite(pendingSeekTimeRef.current)) {
+                                                applyVideoSeek(pendingSeekTimeRef.current);
+                                              }
+                                            },
                                             onVolumeChange: () => syncVideoState(),
                                             onEnded: () => {
                                               const endedState = {
@@ -851,9 +926,8 @@ export default function GalleryMediaViewer({
                                           aria-label="Download snapshot"
                                           title="Download"
                                         >
-                                          <Download className="mr-1.5 size-4 shrink-0 sm:mr-2" />
-                                          <span className="truncate sm:hidden">Download</span>
-                                          <span className="hidden sm:inline">Download only</span>
+                                          <Download className="size-5 shrink-0" />
+                                          <span className="sr-only">Download snapshot</span>
                                         </button>
                                         <button
                                           type="button"
@@ -863,9 +937,8 @@ export default function GalleryMediaViewer({
                                           aria-label="Enhance snapshot with AI"
                                           title="Enhance with AI"
                                         >
-                                          {enhancingSnapshot ? <Loader2 className="mr-1.5 size-4 shrink-0 animate-spin sm:mr-2" /> : <Sparkles className="mr-1.5 size-4 shrink-0 sm:mr-2" />}
-                                          <span className="sr-only sm:hidden">Enhance with AI</span>
-                                          <span className="hidden sm:inline">Enhance AI</span>
+                                          {enhancingSnapshot ? <Loader2 className="size-5 shrink-0 animate-spin" /> : <Sparkles className="size-5 shrink-0" />}
+                                          <span className="sr-only">Enhance with AI</span>
                                         </button>
                                         <button
                                           type="button"
@@ -875,9 +948,8 @@ export default function GalleryMediaViewer({
                                           aria-label="Upload snapshot to album"
                                           title="Upload to album"
                                         >
-                                          {uploadingSnapshot ? <Loader2 className="mr-1.5 size-4 shrink-0 animate-spin sm:mr-2" /> : <Camera className="mr-1.5 size-4 shrink-0 sm:mr-2" />}
-                                          <span className="sr-only sm:hidden">Upload to album</span>
-                                          <span className="hidden sm:inline">Upload to album</span>
+                                          {uploadingSnapshot ? <Loader2 className="size-5 shrink-0 animate-spin" /> : <Camera className="size-5 shrink-0" />}
+                                          <span className="sr-only">Upload to album</span>
                                         </button>
                                       </div>
                                     </div>
