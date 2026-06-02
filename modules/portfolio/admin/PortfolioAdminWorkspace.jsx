@@ -3,7 +3,7 @@
 import { portfolioResources } from '@/modules/portfolio/admin/resources';
 import SiteContentSection from '@/modules/portfolio/admin/SiteContentSection';
 import PortfolioResourceSection from '@/modules/portfolio/admin/PortfolioResourceSection';
-import SiteConfigSection from '@/modules/system/admin/SiteConfigSection';
+import SiteConfigSection, { SiteBrandingSection } from '@/modules/system/admin/SiteConfigSection';
 
 const sectionMap = {
   homepage: 'homepage',
@@ -11,6 +11,7 @@ const sectionMap = {
   skills: 'skills',
   certificates: 'certificates',
   experience: 'experience',
+  theme: 'theme',
 };
 
 export default function PortfolioAdminWorkspace({ focusSection = null }) {
@@ -19,7 +20,8 @@ export default function PortfolioAdminWorkspace({ focusSection = null }) {
   return (
     <div className="space-y-6">
       {(normalized === null || normalized === 'homepage') ? <SiteContentSection /> : null}
-      {normalized === 'homepage' ? <SiteConfigSection /> : null}
+      {(normalized === null || normalized === 'homepage') ? <SiteBrandingSection /> : null}
+      {(normalized === null || normalized === 'theme') ? <SiteConfigSection /> : null}
       {portfolioResources
         .filter((resource) => normalized === null || normalized === resource.key)
         .map((resource) => (

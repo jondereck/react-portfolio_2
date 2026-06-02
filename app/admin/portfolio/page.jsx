@@ -4,6 +4,7 @@ import {
   Briefcase,
   House,
   Layers3,
+  SwatchBook,
   Sparkles,
 } from 'lucide-react';
 import AdminOverviewCard from '@/components/admin/shared/AdminOverviewCard';
@@ -48,6 +49,14 @@ const portfolioOverviewCards = [
     icon: Briefcase,
     badge: 'Experience',
     accent: 'slate',
+  },
+  {
+    title: 'Manage Theme',
+    description: 'Control portfolio theme rotation, primary theme selection, and branding settings in one dedicated surface.',
+    href: '/admin/portfolio/theme',
+    icon: SwatchBook,
+    badge: 'Theme',
+    accent: 'sky',
   },
   {
     title: 'Full Portfolio Workspace',
