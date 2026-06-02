@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { splitAboutHighlightPoints } from '@/lib/aboutHighlights';
 import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl, toCloudinaryPdfPreviewUrl } from '@/lib/certificates';
 import { normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
@@ -234,18 +235,15 @@ function SectionHead({ eyebrow, title, desc, right }) {
   );
 }
 
-function HeroVisual({ heroImage, projects }) {
+function HeroVisual({ heroImage }) {
   const image = getSafeImage(heroImage);
-  const latestProject = projects[0];
   return (
     <div className="panel hero-stage tilt">
       <div className="stage-bg" />
       <div className="orbit" />
       <div className="orbit-sm" />
-      <div className="float-node node-a">UI</div>
       <div className="float-node node-b">3D</div>
       <div className="float-node node-c">UX</div>
-      <div className="float-node node-d">Web</div>
 
       <div className="avatar-stack">
         <div className="shadow-disc" />
@@ -282,11 +280,6 @@ function HeroSection({ hero, about, profileSlug }) {
   const primaryCtaHref = typeof hero?.primaryCtaHref === 'string' && hero.primaryCtaHref.trim() ? hero.primaryCtaHref.trim() : '#portfolio';
   const secondaryCtaLabel = typeof hero?.secondaryCtaLabel === 'string' && hero.secondaryCtaLabel.trim() ? hero.secondaryCtaLabel.trim() : 'Request Full React Version';
   const secondaryCtaHref = typeof hero?.secondaryCtaHref === 'string' && hero.secondaryCtaHref.trim() ? hero.secondaryCtaHref.trim() : '#contact';
-  const pills = [
-    mainStack || '3D / Glassmorphism',
-    '',
-    projects.length > 0 ? `${projects.length} Projects` : 'Responsive All Devices',
-  ];
   const metrics = [
     { value: projects.length > 0 ? `${projects.length}+` : '3D', label: projects.length > 0 ? 'Projects designed' : 'Theme quality' },
     { value: experienceYears || `${experienceItems.length}`, label: experienceYears ? 'Years experience' : 'Experience entries' },
@@ -306,12 +299,6 @@ function HeroSection({ hero, about, profileSlug }) {
           </p>
         )}
 
-        <div className="pill-row">
-          {pills.filter(Boolean).map((pill) => (
-            <div key={pill} className="pill">{pill}</div>
-          ))}
-        </div>
-
         <div className="action-row">
           <CtaLink href={primaryCtaHref} className="button-primary">{primaryCtaLabel}</CtaLink>
           <CtaLink href={secondaryCtaHref} className="button-secondary">{secondaryCtaLabel}</CtaLink>
@@ -327,7 +314,7 @@ function HeroSection({ hero, about, profileSlug }) {
         </div>
       </div>
 
-      <HeroVisual heroImage={hero?.image} projects={projects} />
+      <HeroVisual heroImage={hero?.image} />
     </section>
   );
 }
@@ -348,12 +335,20 @@ function AboutSection({ about }) {
       </div>
       {cards.length > 0 ? (
         <div className="about-highlights">
-          {cards.map((card, index) => (
-            <article key={`${card.label}-${index}`} className="panel card tilt about-highlight">
-              <div className="meta">{card.label}</div>
-              <p>{card.value}</p>
-            </article>
-          ))}
+          {cards.map((card, index) => {
+            const points = splitAboutHighlightPoints(card.value);
+
+            return (
+              <article key={`${card.label}-${index}`} className="panel card tilt about-highlight">
+                <div className="meta">{card.label}</div>
+                <ul className="about-highlight-list">
+                  {points.map((point, pointIndex) => (
+                    <li key={`${card.label}-${pointIndex}-${point}`}>{point}</li>
+                  ))}
+                </ul>
+              </article>
+            );
+          })}
         </div>
       ) : null}
     </section>
@@ -905,6 +900,15 @@ function ImmersiveStyles() {
         font-size: 13px;
         box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
       }
+      .i3d .project-card .pill-row.compact { gap: 6px; margin-top: 10px; }
+      .i3d .project-card .pill {
+        max-width: 150px;
+        padding: 6px 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+      }
       .i3d .action-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 28px; }
       .i3d .action-row.compact { margin-top: 16px; gap: 10px; }
       .i3d .button-primary, .i3d .button-secondary {
@@ -989,10 +993,8 @@ function ImmersiveStyles() {
         font-size: 12px;
         animation: i3dBob 5.6s ease-in-out infinite;
       }
-      .i3d .node-a { top: 90px; left: 80px; }
       .i3d .node-b { top: 150px; right: 68px; animation-delay: -.8s; }
       .i3d .node-c { bottom: 110px; left: 90px; animation-delay: -1.7s; }
-      .i3d .node-d { bottom: 84px; right: 86px; animation-delay: -2.4s; }
       @keyframes i3dBob {
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-12px); }
@@ -1037,11 +1039,15 @@ function ImmersiveStyles() {
       .i3d .about-highlights { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-top: 18px; }
       .i3d .cards-2 { grid-template-columns: repeat(2, 1fr); }
       .i3d .cards-3 { grid-template-columns: repeat(3, 1fr); }
-      .i3d .about-highlight p {
+      .i3d .about-highlight-list {
         margin: 10px 0 0;
+        padding-left: 18px;
         color: var(--text);
         font-size: 15px;
         line-height: 1.7;
+        display: grid;
+        gap: 8px;
+        list-style: disc;
         overflow-wrap: anywhere;
         word-break: normal;
       }
@@ -1067,6 +1073,15 @@ function ImmersiveStyles() {
       .i3d .project-top.gallery .screen::after { inset: 18px 18px 18px 50%; }
       .i3d .project-card h3 { font-size: 24px; }
       .i3d .project-tag { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); font-size: 12px; color: var(--muted); margin-top: 16px; text-decoration: none; }
+      .i3d .project-card .project-tag {
+        width: fit-content;
+        max-width: 170px;
+        padding: 6px 10px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+      }
       .i3d .skill-box { padding: 22px; }
       .i3d .skill-row { margin-top: 16px; }
       .i3d .skill-row:first-child { margin-top: 0; }
@@ -1166,10 +1181,8 @@ function ImmersiveStyles() {
         .i3d .hero-stage { min-height: 420px; padding: 12px; }
         .i3d .orbit { width: 300px; height: 300px; }
         .i3d .orbit-sm { width: 220px; height: 220px; }
-        .i3d .node-a { top: 58px; left: 26px; }
         .i3d .node-b { top: 82px; right: 20px; }
         .i3d .node-c { bottom: 78px; left: 22px; }
-        .i3d .node-d { bottom: 54px; right: 22px; }
         .i3d .footer { flex-direction: column; align-items: flex-start; }
         .i3d h1 { font-size: clamp(42px, 15vw, 70px); }
       }

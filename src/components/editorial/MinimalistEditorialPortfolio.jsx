@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { splitAboutHighlightPoints } from '@/lib/aboutHighlights';
 import { compareCertificatesByIssuedAtDesc, isPdfAssetUrl, toCloudinaryPdfPreviewUrl } from '@/lib/certificates';
 import { normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
@@ -330,15 +331,23 @@ function About({ about }) {
           {about?.body ? <p className="max-w-2xl text-sm leading-7 text-neutral-500">{about.body}</p> : null}
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
-          {highlights.map((item) => (
-            <article key={item.label} className="rounded-3xl border border-neutral-200 bg-white p-7 shadow-[0_18px_55px_rgba(0,0,0,.05)]">
-              <div className="grid h-11 w-11 place-items-center rounded-full bg-[#ebe3d8] text-neutral-950">
-                <Icon name="sparkle" />
-              </div>
-              <h3 className="mt-6 text-3xl font-light text-neutral-950">{item.label}</h3>
-              <p className="mt-4 whitespace-pre-line text-sm leading-7 text-neutral-500">{item.value}</p>
-            </article>
-          ))}
+          {highlights.map((item) => {
+            const points = splitAboutHighlightPoints(item.value);
+
+            return (
+              <article key={item.label} className="rounded-3xl border border-neutral-200 bg-white p-7 shadow-[0_18px_55px_rgba(0,0,0,.05)]">
+                <div className="grid h-11 w-11 place-items-center rounded-full bg-[#ebe3d8] text-neutral-950">
+                  <Icon name="sparkle" />
+                </div>
+                <h3 className="mt-6 text-3xl font-light text-neutral-950">{item.label}</h3>
+                <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-7 text-neutral-500">
+                  {points.map((point, pointIndex) => (
+                    <li key={`${item.label}-${pointIndex}-${point}`}>{point}</li>
+                  ))}
+                </ul>
+              </article>
+            );
+          })}
         </div>
         <div className="mt-10">
           <a href="#contact" className="inline-flex w-fit items-center gap-2 border-b border-neutral-950 pb-1 text-sm font-medium text-neutral-950">

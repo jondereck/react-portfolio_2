@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { splitAboutHighlightPoints } from '@/lib/aboutHighlights';
 import { normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
 import { useLoadingStore } from '@/store/loading';
@@ -155,24 +156,6 @@ const normalizeDescriptions = (value) => {
   if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
   if (typeof value === 'string') return value.split('\n').map((item) => item.trim()).filter(Boolean);
   return [];
-};
-
-const getProjectTimestamp = (project) => {
-  const createdAt = project?.createdAt ? new Date(project.createdAt).getTime() : Number.NaN;
-  if (Number.isFinite(createdAt)) return createdAt;
-
-  const updatedAt = project?.updatedAt ? new Date(project.updatedAt).getTime() : Number.NaN;
-  if (Number.isFinite(updatedAt)) return updatedAt;
-
-  return Number.NEGATIVE_INFINITY;
-};
-
-const getRecentProjects = (projects, limit = 2) => {
-  if (!Array.isArray(projects) || projects.length === 0) return [];
-
-  return [...projects]
-    .sort((left, right) => getProjectTimestamp(right) - getProjectTimestamp(left))
-    .slice(0, Math.max(0, limit));
 };
 
 const toIsoDate = (value) => {
@@ -455,19 +438,16 @@ function Hero({ hero, about, profileSlug }) {
   ].filter((item) => item?.label && item?.value).slice(0, 3);
   const portraitHighlight = normalizedHighlights[0]?.value?.split(/[.,\n]/)[0]?.slice(0, 12) || '';
   const portraitLabel = normalizedHighlights[0]?.label || '';
-  const recentProjects = getRecentProjects(projects, 2);
-  const sideCards =
-    recentProjects.length > 0
-      ? recentProjects.map((project, index) => ({
-          label:
-            typeof project?.badge === 'string' && project.badge.trim()
-              ? project.badge.trim()
-              : index === 0
-                ? 'Recent project'
-                : 'Also recent',
-          value: typeof project?.title === 'string' && project.title.trim() ? project.title.trim() : 'Project',
-        }))
-      : aboutHighlights.slice(0, 2);
+  const sideCards = [
+    {
+      label: 'Systems Built',
+      value: 'Custom Admin & Client Platforms',
+    },
+    {
+      label: 'Specialty',
+      value: 'Automation, Dashboards, Data Accuracy',
+    },
+  ];
   const eyebrow = typeof hero?.eyebrow === 'string' ? hero.eyebrow.trim() : '';
   const title = typeof hero?.title === 'string' ? hero.title.trim() : '';
   const primaryCtaLabel = typeof hero?.primaryCtaLabel === 'string' ? hero.primaryCtaLabel.trim() : '';
@@ -563,13 +543,21 @@ function About({ about }) {
         desc={about?.body}
       />
       {cards.length > 0 ? <div className="grid gap-5 md:grid-cols-3">
-        {cards.map((card, index) => (
-          <article key={`${card.label}-${index}`} className="rounded-[2rem] border-[3px] border-slate-950 bg-white p-6 shadow-[8px_8px_0_#0f172a] transition hover:-translate-y-1">
-            <p className="text-sm font-black text-blue-700">{String(index + 1).padStart(2, '0')}</p>
-            <h3 className="mt-4 text-2xl font-black tracking-tight text-slate-950">{card.label}</h3>
-            <p className="mt-4 text-sm leading-7 text-slate-600">{card.value}</p>
-          </article>
-        ))}
+        {cards.map((card, index) => {
+          const points = splitAboutHighlightPoints(card.value);
+
+          return (
+            <article key={`${card.label}-${index}`} className="rounded-[2rem] border-[3px] border-slate-950 bg-white p-6 shadow-[8px_8px_0_#0f172a] transition hover:-translate-y-1">
+              <p className="text-sm font-black text-blue-700">{String(index + 1).padStart(2, '0')}</p>
+              <h3 className="mt-4 text-2xl font-black tracking-tight text-slate-950">{card.label}</h3>
+              <ul className="mt-4 list-disc space-y-2 pl-5 text-sm leading-7 text-slate-600">
+                {points.map((point, pointIndex) => (
+                  <li key={`${card.label}-${pointIndex}-${point}`}>{point}</li>
+                ))}
+              </ul>
+            </article>
+          );
+        })}
       </div> : null}
     </section>
   );

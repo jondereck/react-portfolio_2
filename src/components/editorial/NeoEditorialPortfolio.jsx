@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr';
 import { toast } from 'sonner';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
+import { splitAboutHighlightPoints } from '@/lib/aboutHighlights';
 import { normalizeFormError, parseErrorResponse } from '@/lib/form-client';
 import { defaultNavigation } from '@/lib/siteContentDefaults';
 import { useLoadingStore } from '@/store/loading';
@@ -295,11 +296,6 @@ function Sidebar({ config, links, darkMode, onToggleDark, profileSlug }) {
   const recentProject = getRecentProject(projects);
   const projectTitle = typeof recentProject?.title === 'string' ? recentProject.title.trim() : '';
   const projectSummary = getProjectSummary(recentProject);
-  const projectTech = normalizeTech(recentProject?.tech ?? recentProject?.techStack).slice(0, 2);
-  const projectHighlights = [
-    recentProject?.badge ? String(recentProject.badge).trim() : '',
-    ...projectTech,
-  ].filter(Boolean);
 
   return (
     <aside className="sticky top-0 hidden h-screen flex-col gap-5 overflow-y-auto overscroll-contain border-r-[3px] border-[#101010] bg-[#fffdf8]/85 p-7 backdrop-blur-xl xl:flex">
@@ -307,24 +303,11 @@ function Sidebar({ config, links, darkMode, onToggleDark, profileSlug }) {
         <Logo config={config} />
         {projectTitle ? (
           <div className="mt-5 rounded-[26px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]">
-            <span className="inline-flex rounded-full border-2 border-[#101010] bg-[#ff6a2a] px-4 py-2 text-xs font-black text-white">Recent Project</span>
-            <h3 className="mt-4 line-clamp-2 text-xl font-black leading-tight text-[#101010]">{projectTitle}</h3>
-
-            {projectHighlights.length > 0 ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                {projectHighlights.map((item) => (
-                  <span key={item} className="rounded-full border-2 border-[#101010] bg-[#e8dfd2] px-3 py-1 text-[11px] font-black text-[#101010]">
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {!projectSummary && projectHighlights.length === 0 ? (
-              <div className="relative mt-4 max-h-[240px] overflow-hidden">
-                <p className="text-sm leading-8 text-[#5f5f5f]">Latest work from the project portfolio.</p>
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#fffdf8] to-transparent" />
-              </div>
-            ) : null}
+            <p className="text-xs font-black uppercase tracking-[0.2em] text-[#ff6a2a]">Recent Work</p>
+            <h3 className="mt-3 line-clamp-2 text-xl font-black leading-tight text-[#101010]">{projectTitle}</h3>
+            <p className="mt-3 line-clamp-4 text-sm leading-7 text-[#5f5f5f]">
+              {projectSummary || 'Latest work from the project portfolio.'}
+            </p>
           </div>
         ) : null}
         <div className="mt-5">
@@ -427,6 +410,14 @@ function DeviceMock({ heroImage = '', projects = [], skills = [], experience = [
   return (
     <div className="relative min-h-[420px] overflow-hidden rounded-[26px] border-[3px] border-[#101010] bg-[linear-gradient(135deg,#f8d5c5,#f6ecd7_45%,#fff_100%)] p-5">
       <div className="absolute inset-0 bg-[linear-gradient(rgba(16,16,16,.08)_1px,transparent_1px),linear-gradient(90deg,rgba(16,16,16,.08)_1px,transparent_1px)] bg-[size:24px_24px] opacity-45" />
+      <div className="pointer-events-none absolute left-5 top-5 z-10 flex items-center gap-2 rounded-full border-2 border-[#101010] bg-[#fffdf8]/90 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#101010] shadow-[4px_4px_0_#101010]">
+        <span className="h-2 w-2 rounded-full bg-[#ff6a2a]" />
+        Full-Stack Systems
+      </div>
+      <div className="pointer-events-none absolute right-5 top-5 z-10 hidden text-right sm:block">
+        <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#101010]">Profile / 01</p>
+        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#5f5f5f]">Built for real workflows</p>
+      </div>
       <div className="absolute left-1/2 top-[54%] w-[min(94%,420px)] -translate-x-1/2 -translate-y-1/2 -rotate-[7deg] overflow-hidden rounded-[30px] border-[3px] border-[#101010] bg-[#fffdf8] shadow-[12px_12px_0_rgba(16,16,16,.18)]">
         <div className="flex h-11 items-center gap-2 border-b-[3px] border-[#101010] bg-[#e8dfd2] px-4">
           <span className="h-3 w-3 rounded-full bg-[#ff6a2a]" />
@@ -466,6 +457,18 @@ function DeviceMock({ heroImage = '', projects = [], skills = [], experience = [
             </div>
           </div>
         )}
+      </div>
+      <div className="pointer-events-none absolute bottom-5 left-5 z-10">
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-12 rounded-full bg-[#101010]" />
+          <span className="h-2.5 w-6 rounded-full bg-[#ff6a2a]" />
+          <span className="h-2.5 w-2.5 rounded-full border-2 border-[#101010] bg-[#fffdf8]" />
+        </div>
+        <p className="mt-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#101010]">Build / Automate / Improve</p>
+      </div>
+      <div className="pointer-events-none absolute bottom-5 right-5 z-10 hidden items-center gap-2 rounded-full border-2 border-[#101010] bg-[#e8dfd2]/90 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#101010] sm:flex">
+        Selected Work
+        <span className="h-2 w-2 rounded-full bg-[#8fd19e]" />
       </div>
     </div>
   );
@@ -563,20 +566,28 @@ function AboutSection({ about }) {
         </div>
         {cards.length > 0 ? (
           <div className="grid gap-4">
-            {cards.map((card, index) => (
-              <article
-                key={`${card.label}-${index}`}
-                className="grid grid-cols-[auto_1fr] gap-4 rounded-[24px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]"
-              >
-                <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[#ff6a2a] font-black text-white shadow-[4px_4px_0_#101010]">
-                  {String(index + 1).padStart(2, '0')}
-                </div>
-                <div>
-                  <h3 className="text-xl font-black">{card.label}</h3>
-                  <p className="mt-2 text-sm leading-7 text-[#5f5f5f]">{card.value}</p>
-                </div>
-              </article>
-            ))}
+            {cards.map((card, index) => {
+              const points = splitAboutHighlightPoints(card.value);
+
+              return (
+                <article
+                  key={`${card.label}-${index}`}
+                  className="grid grid-cols-[auto_1fr] gap-4 rounded-[24px] border-[3px] border-[#101010] bg-[#fffdf8] p-5 shadow-[8px_8px_0_#101010]"
+                >
+                  <div className="grid h-11 w-11 place-items-center rounded-[14px] bg-[#ff6a2a] font-black text-white shadow-[4px_4px_0_#101010]">
+                    {String(index + 1).padStart(2, '0')}
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black">{card.label}</h3>
+                    <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-7 text-[#5f5f5f]">
+                      {points.map((point, pointIndex) => (
+                        <li key={`${card.label}-${pointIndex}-${point}`}>{point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         ) : null}
       </div>
@@ -630,8 +641,10 @@ function ProjectVisual({ project, index }) {
       </div>
       <div className="relative min-h-[310px]">
         <img src={image} alt={project?.title || 'Project image'} className="absolute inset-0 h-full w-full object-cover" />
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#101010]/85 to-transparent p-5 pt-24">
-          <p className="line-clamp-2 text-2xl font-black text-white">{project?.title}</p>
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#101010] via-[#101010]/85 to-transparent p-5 pt-28">
+          <p className="line-clamp-2 w-fit max-w-full rounded-xl bg-[#101010]/90 px-3 py-2 text-2xl font-black leading-tight text-white shadow-[4px_4px_0_rgba(255,255,255,.2)]">
+            {project?.title}
+          </p>
         </div>
       </div>
     </div>

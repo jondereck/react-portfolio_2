@@ -7,6 +7,7 @@ import { aboutSchema, heroSchema, contactSchema, seoSchema } from '@/lib/validat
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { resolveManagedProfileFromRequest, resolvePublicProfileFromRequest } from '@/lib/profile/resolve-profile';
 import { ensureSiteContentForProfile } from '@/lib/profile/site-data';
+import { getAdminSettings } from '@/lib/server/admin-settings';
 import { createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
 
 type UpdateRequestPayload = {
@@ -24,7 +25,23 @@ export async function GET(request: Request) {
 
   await ensureSiteContentForProfile(access.profile.id);
   const siteContent = await prisma.siteContent.findUnique({ where: { profileId: access.profile.id } });
-  return NextResponse.json(siteContent);
+  if (!siteContent || !access.profile.isPrimary) {
+    return NextResponse.json(siteContent);
+  }
+
+  const settings = await getAdminSettings();
+  const contact =
+    siteContent.contact && typeof siteContent.contact === 'object' && !Array.isArray(siteContent.contact)
+      ? siteContent.contact
+      : {};
+
+  return NextResponse.json({
+    ...siteContent,
+    contact: {
+      ...contact,
+      email: settings.integrations.contactRecipientEmail,
+    },
+  });
 }
 
 export async function PUT(request: Request) {

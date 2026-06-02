@@ -10,6 +10,7 @@ import FieldErrorText from '@/components/forms/FieldErrorText';
 import FormErrorSummary from '@/components/forms/FormErrorSummary';
 import { clearFieldErrors, getFieldError, normalizeFormError } from '@/lib/form-client';
 import { handleRequest } from '@/lib/handleRequest';
+import { notifyRealtimeUpdate, revalidatePublicData } from '@/lib/realtime';
 import { cardStyles, fetcher, withFieldError } from '@/modules/system/admin/settingsShared';
 
 const emptyState = {
@@ -178,6 +179,8 @@ export default function IntegrationsSettingsSection() {
 
       await updatePromise;
       await mutate();
+      await revalidatePublicData();
+      notifyRealtimeUpdate();
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new Event('gallery:settings-updated'));
       }

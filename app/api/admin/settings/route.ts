@@ -7,6 +7,7 @@ import {
   syncUnclothyWorkerEnabledToCloudflare,
 } from '@/lib/server/cloudflare-unclothy-worker';
 import { isRateLimited } from '@/lib/server/rate-limit';
+import { syncPrimaryProfileContactEmail } from '@/lib/profile/site-data';
 import { integrationsSettingsSchema, securitySettingsSchema } from '@/lib/validators';
 import { createFormErrorResponse, createZodFormErrorResponse, mergeFieldErrors } from '@/lib/server/form-responses';
 import { formatZodFieldErrors } from '@/lib/server/request-parsing';
@@ -118,6 +119,14 @@ export async function PUT(request: Request) {
         integrations: nextIntegrations?.data,
         security: nextSecurity?.data,
       });
+
+      if (
+        nextIntegrations?.data &&
+        Object.prototype.hasOwnProperty.call(nextIntegrations.data, 'contactRecipientEmail') &&
+        nextIntegrations.data.contactRecipientEmail
+      ) {
+        await syncPrimaryProfileContactEmail(nextIntegrations.data.contactRecipientEmail);
+      }
 
       await logAdminAuditEvent({
         actorUserId: actor.user.id,
