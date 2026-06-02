@@ -1,17 +1,87 @@
 'use client';
 
+/* eslint-disable @next/next/no-img-element */
+
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { Sparkles, X } from 'lucide-react';
+import { Camera, Download, Loader2, Pause, Play, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
+import { toast } from 'sonner';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import GalleryUnclothySection from './GalleryUnclothySection';
-import { shouldBlurPhoto } from '@/lib/gallery-media';
+import { isPhotoVideo, shouldBlurPhoto } from '@/lib/gallery-media';
+import { fetchJson } from './galleryAdminShared';
 import { useUnclothyTasksStore } from '@/store/unclothyTasks';
+import { downloadFromApi } from '@/lib/download-client';
 
 const SAMSUNG_STATUS_STEPS = ['Queued', 'Processing', 'Generating', 'Finalizing'];
+const DEFAULT_VIDEO_STATE = {
+  currentTime: 0,
+  duration: 0,
+  paused: true,
+  muted: false,
+  volume: 1,
+};
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
+}
+
+function createSnapshotFilename(photo) {
+  const base = photo?.caption || photo?.originalFilename || `media-${photo?.id || 'video'}`;
+  const safeBase = String(base)
+    .trim()
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'video-snapshot';
+  return `${safeBase}-snapshot-${Date.now()}.png`;
+}
+
+function createMediaFallbackFilename(photo) {
+  const base = photo?.caption || photo?.originalFilename || `media-${photo?.id || 'download'}`;
+  const safeBase = String(base).trim() || `media-${photo?.id || 'download'}`;
+  return /\.[a-z0-9]{2,8}$/i.test(safeBase) ? safeBase : `${safeBase}.bin`;
+}
+
+function normalizeAlbumId(value) {
+  const id = typeof value === 'number' ? value : Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function formatTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const rounded = Math.floor(seconds);
+  const minutes = Math.floor(rounded / 60);
+  const remainingSeconds = rounded % 60;
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`;
+}
+
+function getVideoDuration(video, fallback = 0) {
+  if (!video) return fallback;
+  if (Number.isFinite(video.duration) && video.duration > 0) return video.duration;
+  try {
+    if (video.seekable?.length) {
+      const seekableEnd = video.seekable.end(video.seekable.length - 1);
+      if (Number.isFinite(seekableEnd) && seekableEnd > 0) return seekableEnd;
+    }
+  } catch {
+    // Some browsers throw while media ranges are still initializing.
+  }
+  return Number.isFinite(fallback) ? fallback : 0;
+}
+
+function readVideoState(video, fallback = DEFAULT_VIDEO_STATE) {
+  if (!video) return fallback;
+  const duration = getVideoDuration(video, fallback.duration || 0);
+  const currentTime = video.ended ? 0 : Number.isFinite(video.currentTime) ? video.currentTime : fallback.currentTime || 0;
+  return {
+    currentTime,
+    duration,
+    paused: video.ended ? true : video.paused,
+    muted: video.muted,
+    volume: Number.isFinite(video.volume) ? video.volume : fallback.volume || 1,
+  };
 }
 
 export default function GalleryMediaViewer({
@@ -25,10 +95,32 @@ export default function GalleryMediaViewer({
   blurUnclothyGenerated = true,
 }) {
   const title = photo?.caption || 'Untitled media';
-  const canGenerate = Boolean(photo) && !isVideoMime(photo?.mimeType) && Boolean(controller) && Boolean(album);
+  const isVideoMedia = Boolean(photo) && (isVideoMime(photo?.mimeType) || isPhotoVideo(photo));
+  const canGenerate = Boolean(photo) && !isVideoMedia && Boolean(controller) && Boolean(album);
+  const canSnapshot = Boolean(photo) && isVideoMedia;
+  const mediaAlbumId =
+    normalizeAlbumId(photo?.albumId) ??
+    normalizeAlbumId(album?.id) ??
+    normalizeAlbumId(controller?.selectedAlbumId);
+  const snapshotAlbumId = mediaAlbumId;
+  const canDownload = Boolean(photo?.id) && Boolean(mediaAlbumId);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [snapshot, setSnapshot] = useState(null);
+  const [capturingSnapshot, setCapturingSnapshot] = useState(false);
+  const [uploadingSnapshot, setUploadingSnapshot] = useState(false);
+  const [downloadingMedia, setDownloadingMedia] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [unclothyAvailable, setUnclothyAvailable] = useState(false);
   const generateSheetRef = useRef(null);
+  const videoRef = useRef(null);
+  const snapshotPlaybackRef = useRef(null);
+  const videoPlaybackRef = useRef(new Map());
+  const activeVideoPhotoIdRef = useRef(null);
+  const pendingSeekTimeRef = useRef(null);
+  const pendingMetadataSeekHandlerRef = useRef(null);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [videoState, setVideoState] = useState(DEFAULT_VIDEO_STATE);
+  const [enhancingSnapshot, setEnhancingSnapshot] = useState(false);
   const shouldBlurPreview = Boolean(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated });
   const queue = useUnclothyTasksStore((state) => state.queue);
   const activeTasks = useUnclothyTasksStore((state) => state.activeTasks);
@@ -47,12 +139,249 @@ export default function GalleryMediaViewer({
   const generatingState = isRunningForThisPhoto ? 'running' : isQueuedForThisPhoto ? 'queued' : null;
   const isGeneratingPreview = Boolean(generatingState);
   const [statusIndex, setStatusIndex] = useState(0);
+  const canOpenGenerate = canGenerate && unclothyAvailable;
+  const snapshotBusy = uploadingSnapshot || enhancingSnapshot;
+
+  const saveVideoPlaybackForId = (photoId, video, overrides = {}) => {
+    if (!photoId || !video) return;
+    const pendingSeekTime = pendingSeekTimeRef.current;
+    const nextState = {
+      ...readVideoState(video),
+      ...overrides,
+    };
+    if (
+      Number.isFinite(pendingSeekTime) &&
+      photoId === activeVideoPhotoIdRef.current &&
+      !Object.prototype.hasOwnProperty.call(overrides, 'currentTime')
+    ) {
+      nextState.currentTime = pendingSeekTime;
+    }
+    videoPlaybackRef.current.set(photoId, nextState);
+  };
+
+  const saveActiveVideoPlayback = () => {
+    saveVideoPlaybackForId(activeVideoPhotoIdRef.current, videoRef.current);
+  };
+
+  const clearPendingMetadataSeekHandler = () => {
+    const video = videoRef.current;
+    const handler = pendingMetadataSeekHandlerRef.current;
+    if (video && handler) {
+      video.removeEventListener('loadedmetadata', handler);
+    }
+    pendingMetadataSeekHandlerRef.current = null;
+  };
+
+  const clampVideoTime = (video, nextTime, fallbackDuration = videoState.duration) => {
+    const duration = getVideoDuration(video, fallbackDuration);
+    return {
+      duration,
+      currentTime: Math.max(0, Math.min(nextTime, duration || nextTime)),
+    };
+  };
+
+  const syncVideoState = (overrides = {}) => {
+    const pendingSeekTime = pendingSeekTimeRef.current;
+    const nextState = {
+      ...readVideoState(videoRef.current, videoState),
+      ...overrides,
+    };
+    if (Number.isFinite(pendingSeekTime) && !Object.prototype.hasOwnProperty.call(overrides, 'currentTime')) {
+      nextState.currentTime = pendingSeekTime;
+    }
+    setVideoState(nextState);
+    saveVideoPlaybackForId(activeVideoPhotoIdRef.current, videoRef.current, nextState);
+  };
+
+  const applyVideoSeek = (nextTime) => {
+    const video = videoRef.current;
+    if (!video || !Number.isFinite(nextTime)) return;
+
+    const { currentTime, duration } = clampVideoTime(video, nextTime);
+    pendingSeekTimeRef.current = currentTime;
+    syncVideoState({ currentTime, duration });
+
+    if (video.readyState < 1) {
+      clearPendingMetadataSeekHandler();
+      const handleLoadedMetadata = () => {
+        pendingMetadataSeekHandlerRef.current = null;
+        applyVideoSeek(currentTime);
+      };
+      pendingMetadataSeekHandlerRef.current = handleLoadedMetadata;
+      video.addEventListener('loadedmetadata', handleLoadedMetadata, { once: true });
+      return;
+    }
+
+    try {
+      video.currentTime = currentTime;
+    } catch {
+      syncVideoState({ currentTime, duration });
+    }
+  };
+
+  const restoreSessionVideoPlayback = () => {
+    const video = videoRef.current;
+    const photoId = photo?.id;
+    if (!video || !photoId) return;
+
+    const saved = videoPlaybackRef.current.get(photoId);
+    if (!saved) {
+      syncVideoState();
+      return;
+    }
+
+    try {
+      video.muted = Boolean(saved.muted);
+      video.volume = Number.isFinite(saved.volume) ? Math.max(0, Math.min(1, saved.volume)) : 1;
+      const duration = getVideoDuration(video, saved.duration || saved.currentTime || 0);
+      if (Number.isFinite(saved.currentTime)) {
+        applyVideoSeek(Math.max(0, Math.min(saved.currentTime, duration || saved.currentTime)));
+      }
+      setVideoState({
+        ...DEFAULT_VIDEO_STATE,
+        ...saved,
+        duration,
+        currentTime: Math.max(0, Math.min(saved.currentTime || 0, duration || saved.currentTime || 0)),
+      });
+      if (!saved.paused && saved.currentTime > 0) {
+        void video.play().catch(() => {
+          setVideoState((current) => ({ ...current, paused: true }));
+          saveVideoPlaybackForId(photoId, video, { paused: true });
+        });
+      }
+    } catch {
+      syncVideoState();
+    }
+  };
+
+  const handleToggleVideoPlay = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused || video.ended) {
+      void video.play().catch(() => {
+        toast.error('Unable to play this video.');
+      });
+      return;
+    }
+    video.pause();
+  };
+
+  const handleVideoSeek = (event) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextTime = Number(event.target.value);
+    if (!Number.isFinite(nextTime)) return;
+    applyVideoSeek(nextTime);
+  };
+
+  const handleVideoSkip = (seconds) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const baseTime = Number.isFinite(pendingSeekTimeRef.current) ? pendingSeekTimeRef.current : video.currentTime || 0;
+    applyVideoSeek(baseTime + seconds);
+  };
+
+  const handleVideoVolumeChange = (event) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextVolume = Math.max(0, Math.min(1, Number(event.target.value)));
+    video.volume = Number.isFinite(nextVolume) ? nextVolume : 1;
+    video.muted = video.volume === 0;
+    syncVideoState({ volume: video.volume, muted: video.muted });
+  };
+
+  const handleToggleVideoMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.muted = !video.muted;
+    if (!video.muted && video.volume === 0) {
+      video.volume = 0.75;
+    }
+    syncVideoState({ muted: video.muted, volume: video.volume });
+  };
+
+  useEffect(() => {
+    if (photo?.id && isVideoMedia) {
+      clearPendingMetadataSeekHandler();
+      pendingSeekTimeRef.current = null;
+      activeVideoPhotoIdRef.current = photo.id;
+      setVideoState({
+        ...DEFAULT_VIDEO_STATE,
+        ...(videoPlaybackRef.current.get(photo.id) || {}),
+      });
+      return;
+    }
+
+    setVideoState(DEFAULT_VIDEO_STATE);
+  }, [isVideoMedia, photo?.id]);
 
   useEffect(() => {
     if (!open) {
+      saveActiveVideoPlayback();
       setGenerateOpen(false);
+      setUnclothyAvailable(false);
+      setPreviewLoading(false);
+      setSnapshot((current) => {
+        if (current?.url) {
+          URL.revokeObjectURL(current.url);
+        }
+        return null;
+      });
+      clearPendingMetadataSeekHandler();
+      pendingSeekTimeRef.current = null;
+      snapshotPlaybackRef.current = null;
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !canGenerate) {
+      setUnclothyAvailable(false);
+      setGenerateOpen(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    fetchJson('/api/admin/integrations/unclothy', {
+      method: 'GET',
+      signal: controller.signal,
+    })
+      .then((data) => {
+        const result = data?.result && typeof data.result === 'object' ? data.result : data;
+        const available = result?.enabled === true && result?.configured === true;
+        setUnclothyAvailable(available);
+        if (!available) {
+          setGenerateOpen(false);
+        }
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') return;
+        setUnclothyAvailable(false);
+        setGenerateOpen(false);
+      });
+
+    return () => controller.abort();
+  }, [canGenerate, open]);
+
+  useEffect(() => {
+    setPreviewLoading(Boolean(photo));
+    setSnapshot((current) => {
+      if (current?.url) {
+        URL.revokeObjectURL(current.url);
+      }
+      return null;
+    });
+    snapshotPlaybackRef.current = null;
+  }, [photo?.id]);
+
+  useEffect(
+    () => () => {
+      if (snapshot?.url) {
+        URL.revokeObjectURL(snapshot.url);
+      }
+    },
+    [snapshot?.url],
+  );
 
   useEffect(() => {
     if (!isGeneratingPreview) {
@@ -99,14 +428,228 @@ export default function GalleryMediaViewer({
   useEffect(() => {
     if (!open) return;
     if (!openGenerate) return;
-    if (!canGenerate) return;
+    if (!canOpenGenerate) return;
     setGenerateOpen(true);
     onGenerateOpened?.();
-  }, [canGenerate, onGenerateOpened, open, openGenerate]);
+  }, [canOpenGenerate, onGenerateOpened, open, openGenerate]);
+
+  const restoreVideoPlayback = () => {
+    const video = videoRef.current;
+    const saved = snapshotPlaybackRef.current;
+    if (!video || !saved || saved.photoId !== photo?.id) {
+      return;
+    }
+
+    try {
+      video.playbackRate = saved.playbackRate || 1;
+      if (Number.isFinite(saved.currentTime)) {
+        const duration = Number.isFinite(video.duration) ? video.duration : saved.currentTime;
+        applyVideoSeek(Math.max(0, Math.min(saved.currentTime, duration)));
+      }
+
+      if (!saved.paused) {
+        void video.play().catch(() => {
+          // Browser autoplay policy can block resume; keeping the restored time is enough.
+        });
+      }
+      syncVideoState({
+        currentTime: saved.currentTime,
+        paused: saved.paused,
+        volume: Number.isFinite(video.volume) ? video.volume : 1,
+        muted: video.muted,
+      });
+    } catch {
+      // Keep snapshot actions non-blocking if the media element is no longer seekable.
+    }
+  };
+
+  const clearSnapshot = ({ restorePlayback = true } = {}) => {
+    if (restorePlayback) {
+      restoreVideoPlayback();
+    }
+
+    setSnapshot((current) => {
+      if (current?.url) {
+        URL.revokeObjectURL(current.url);
+      }
+      return null;
+    });
+    snapshotPlaybackRef.current = null;
+  };
+
+  const handleCaptureSnapshot = async () => {
+    const video = videoRef.current;
+    if (!video) {
+      toast.error('Video is not ready yet.');
+      return;
+    }
+
+    if (!video.videoWidth || !video.videoHeight || video.readyState < 2) {
+      toast.error('Play or scrub the video first, then take a snapshot.');
+      return;
+    }
+
+    setCapturingSnapshot(true);
+    try {
+      snapshotPlaybackRef.current = {
+        photoId: photo?.id,
+        currentTime: video.currentTime,
+        paused: video.paused,
+        playbackRate: video.playbackRate,
+      };
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Snapshot is not supported in this browser.');
+      }
+
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve, reject) => {
+        try {
+          canvas.toBlob((nextBlob) => {
+            if (nextBlob) {
+              resolve(nextBlob);
+              return;
+            }
+            reject(new Error('Unable to capture this video frame.'));
+          }, 'image/png');
+        } catch (error) {
+          reject(error);
+        }
+      });
+
+      setSnapshot((current) => {
+        if (current?.url) {
+          URL.revokeObjectURL(current.url);
+        }
+        return {
+          blob,
+          url: URL.createObjectURL(blob),
+          filename: createSnapshotFilename(photo),
+        };
+      });
+
+      video.pause();
+    } catch (error) {
+      snapshotPlaybackRef.current = null;
+      const message =
+        error instanceof Error && error.name === 'SecurityError'
+          ? 'This video source blocks browser snapshots. Try an uploaded video from this site.'
+          : error instanceof Error
+            ? error.message
+            : 'Unable to capture this video frame.';
+      toast.error(message);
+    } finally {
+      setCapturingSnapshot(false);
+    }
+  };
+
+  const handleDownloadSnapshot = () => {
+    if (!snapshot?.url) return;
+    const link = document.createElement('a');
+    link.href = snapshot.url;
+    link.download = snapshot.filename || 'video-snapshot.png';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    toast.success('Snapshot downloaded locally.');
+    clearSnapshot();
+  };
+
+  const handleDownloadMedia = async () => {
+    if (!photo?.id || !mediaAlbumId) {
+      toast.error('Media download is unavailable.');
+      return;
+    }
+
+    setDownloadingMedia(true);
+    const label = photo.caption || `Media ${photo.id}`;
+    const toastId = toast.loading(`Preparing ${label}...`);
+    try {
+      const result = await downloadFromApi(
+        `/api/gallery/albums/${mediaAlbumId}/photos/${photo.id}/download`,
+        createMediaFallbackFilename(photo),
+      );
+      toast.success(`Downloaded ${result.filename}.`, { id: toastId });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Media download failed.', { id: toastId });
+    } finally {
+      setDownloadingMedia(false);
+    }
+  };
+
+  const handleUploadSnapshot = async () => {
+    if (!snapshot?.blob || !snapshotAlbumId) {
+      toast.error('Select an album before uploading the snapshot.');
+      return;
+    }
+
+    setUploadingSnapshot(true);
+    try {
+      const file = new File([snapshot.blob], snapshot.filename || 'video-snapshot.png', { type: 'image/png' });
+      const formData = new FormData();
+      formData.append('imageFile', file);
+      formData.append('caption', `${title} snapshot`);
+      formData.append('sourceType', 'upload');
+
+      const created = await fetchJson(`/api/gallery/albums/${snapshotAlbumId}/photos`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (typeof controller?.addPhotoToState === 'function') {
+        controller.addPhotoToState(created);
+      }
+      toast.success('Snapshot uploaded to album.');
+      clearSnapshot();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to upload snapshot.');
+    } finally {
+      setUploadingSnapshot(false);
+    }
+  };
+
+  const handleEnhanceSnapshot = async () => {
+    if (!snapshot?.blob || !snapshotAlbumId || !photo?.id) {
+      toast.error('Take a snapshot before enhancing it.');
+      return;
+    }
+
+    setEnhancingSnapshot(true);
+    try {
+      const file = new File([snapshot.blob], snapshot.filename || 'video-snapshot.png', { type: 'image/png' });
+      const formData = new FormData();
+      formData.append('imageFile', file);
+      formData.append('caption', `${title} enhanced snapshot`);
+
+      const created = await fetchJson(`/api/gallery/albums/${snapshotAlbumId}/photos/${photo.id}/snapshot-enhance`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (typeof controller?.addPhotoToState === 'function') {
+        controller.addPhotoToState(created);
+      }
+      toast.success(
+        created?.enhancementProvider === 'local'
+          ? 'Enhanced locally and uploaded to album.'
+          : 'Enhanced snapshot uploaded to album.',
+      );
+      clearSnapshot();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to enhance snapshot.');
+    } finally {
+      setEnhancingSnapshot(false);
+    }
+  };
 
   return (
-    <Transition show={open} as={Fragment}>
-      <Dialog as="div" className="relative z-50" onClose={onClose}>
+    <>
+      <Transition show={open} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={onClose}>
         <Transition.Child
           as={Fragment}
           enter="ease-out duration-200"
@@ -119,7 +662,7 @@ export default function GalleryMediaViewer({
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" />
         </Transition.Child>
 
-        <div className="fixed inset-0 overflow-y-auto p-3 sm:p-6">
+        <div className="fixed inset-0 overflow-y-auto p-2 pb-[calc(0.5rem_+_env(safe-area-inset-bottom))] sm:p-6">
           <div className="flex min-h-full items-start justify-center">
             <Transition.Child
               as={Fragment}
@@ -130,15 +673,26 @@ export default function GalleryMediaViewer({
               leaveFrom="opacity-100 scale-100 translate-y-0"
               leaveTo="opacity-0 scale-95 translate-y-2"
             >
-              <Dialog.Panel className="flex max-h-[92dvh] w-full max-w-[min(96vw,1180px)] flex-col overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950">
-                <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:gap-4 sm:px-6">
+              <Dialog.Panel className="flex h-[calc(100dvh_-_1rem_-_env(safe-area-inset-bottom))] max-h-[calc(100dvh_-_1rem_-_env(safe-area-inset-bottom))] w-full max-w-[min(96vw,1180px)] flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-slate-950 sm:h-auto sm:max-h-[92dvh] sm:rounded-[26px]">
+                <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800 sm:flex-row sm:items-center sm:gap-4 sm:px-6 sm:py-4">
                   <div className="min-w-0 sm:flex-1 sm:min-w-0">
                     <Dialog.Title className="truncate text-base font-semibold text-slate-950 dark:text-slate-50 sm:text-lg">
                       {title}
                     </Dialog.Title>
                   </div>
                   <div className="hidden flex-none shrink-0 flex-wrap items-center gap-2 sm:flex">
-                    {canGenerate ? (
+                    {canSnapshot ? (
+                      <button
+                        type="button"
+                        className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
+                        onClick={handleCaptureSnapshot}
+                        disabled={capturingSnapshot}
+                      >
+                        {capturingSnapshot ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                        <span className="ml-2">Snapshot</span>
+                      </button>
+                    ) : null}
+                    {canOpenGenerate ? (
                       <button
                         type="button"
                         className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900"
@@ -160,8 +714,8 @@ export default function GalleryMediaViewer({
                 </div>
 
                 <div className="grid flex-1 min-h-0 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_420px]">
-                  <section className="relative min-h-0 bg-slate-100 p-3 dark:bg-slate-950 sm:p-4">
-                    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden rounded-[24px] border border-slate-200 bg-[radial-gradient(circle_at_top,#f8fbff,#eef4fb_48%,#e2e8f0_100%)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top,#0b1220,#0b1220_30%,#020617_100%)]">
+                  <section className="relative min-h-0 bg-slate-100 p-2 dark:bg-slate-950 sm:p-4">
+                    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden rounded-[22px] border border-slate-200 bg-[radial-gradient(circle_at_top,#f8fbff,#eef4fb_48%,#e2e8f0_100%)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top,#0b1220,#0b1220_30%,#020617_100%)] sm:rounded-[24px]">
                       <div className="absolute left-4 top-4 z-20 rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700 backdrop-blur dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200">
                         Preview
                       </div>
@@ -172,15 +726,15 @@ export default function GalleryMediaViewer({
                         <div className="absolute bottom-0 left-1/2 h-36 w-44 -translate-x-1/2 rounded-full bg-blue-200/20 blur-3xl dark:bg-blue-500/10" />
                       </div>
 
-                      <div className="relative z-10 flex h-full min-h-0 w-full items-center justify-center px-4 pt-4 pb-16 sm:px-6 sm:pt-6 sm:pb-20">
+                      <div className="relative z-10 flex h-full min-h-0 w-full items-center justify-center px-2 py-2 sm:px-6 sm:pt-6 sm:pb-20">
                         {(() => {
                           const previewCard = (
                             <div
-                              className={`relative inline-flex max-w-full overflow-hidden rounded-[28px] border border-white/70 bg-white/90 p-3 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-500 dark:border-slate-700/70 dark:bg-slate-950/75 ${
+                              className={`relative flex h-full max-h-full w-full max-w-full overflow-hidden rounded-[24px] border border-white/70 bg-white/90 p-2 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-500 dark:border-slate-700/70 dark:bg-slate-950/75 sm:inline-flex sm:h-auto sm:w-auto sm:rounded-[28px] sm:p-3 ${
                                 isGeneratingPreview ? 'animate-samsung-breathe animate-samsung-glow' : ''
                               }`}
                             >
-                              <div className="relative overflow-hidden rounded-[24px] border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-950">
+                              <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[24px] border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-950 sm:block sm:h-auto sm:w-auto">
                                 {photo ? (
                                   <MediaPreview
                                     url={photo.imageUrl}
@@ -188,18 +742,219 @@ export default function GalleryMediaViewer({
                                     sourceType={photo.sourceType}
                                     sourceId={photo.sourceId}
                                     alt={title}
-                                    className={`mx-auto block max-h-[56dvh] max-w-full object-contain sm:max-h-[62dvh] lg:max-h-[66dvh] ${
+                                    mediaRef={canSnapshot ? videoRef : undefined}
+                                    className={`mx-auto block h-full w-full max-h-[calc(100dvh_-_8.75rem_-_env(safe-area-inset-bottom))] object-contain sm:h-auto sm:max-h-[62dvh] sm:max-w-full lg:max-h-[66dvh] ${
                                       shouldBlurPreview ? 'blur-md' : ''
                                     }`}
-                                    controls
+                                    onLoadStart={() => setPreviewLoading(true)}
+                                    onLoadedData={() => setPreviewLoading(false)}
+                                    onCanPlay={() => setPreviewLoading(false)}
+                                    onError={() => setPreviewLoading(false)}
+                                    controls={false}
+                                    videoProps={
+                                      canSnapshot
+                                        ? {
+                                            onLoadedMetadata: () => {
+                                              setPreviewLoading(false);
+                                              restoreSessionVideoPlayback();
+                                            },
+                                            onPlay: () => syncVideoState({ paused: false }),
+                                            onPause: () => syncVideoState({ paused: true }),
+                                            onTimeUpdate: () => syncVideoState(),
+                                            onDurationChange: () => syncVideoState(),
+                                            onProgress: () => syncVideoState(),
+                                            onSeeking: () => syncVideoState(),
+                                            onSeeked: () => {
+                                              const pendingSeekTime = pendingSeekTimeRef.current;
+                                              if (
+                                                !Number.isFinite(pendingSeekTime) ||
+                                                Math.abs((videoRef.current?.currentTime || 0) - pendingSeekTime) < 0.35
+                                              ) {
+                                                pendingSeekTimeRef.current = null;
+                                              }
+                                              syncVideoState();
+                                            },
+                                            onCanPlay: () => {
+                                              setPreviewLoading(false);
+                                              if (Number.isFinite(pendingSeekTimeRef.current)) {
+                                                applyVideoSeek(pendingSeekTimeRef.current);
+                                              }
+                                            },
+                                            onVolumeChange: () => syncVideoState(),
+                                            onEnded: () => {
+                                              const endedState = {
+                                                currentTime: 0,
+                                                duration: getVideoDuration(videoRef.current, videoState.duration),
+                                                paused: true,
+                                                muted: Boolean(videoRef.current?.muted),
+                                                volume: Number.isFinite(videoRef.current?.volume) ? videoRef.current.volume : videoState.volume,
+                                              };
+                                              if (photo?.id) {
+                                                videoPlaybackRef.current.set(photo.id, endedState);
+                                              }
+                                              setVideoState(endedState);
+                                            },
+                                          }
+                                        : undefined
+                                    }
                                   />
                                 ) : (
-                                  <div className="h-[560px] w-[380px] max-w-full rounded-[24px] bg-[radial-gradient(circle_at_top,#cbd5e1,#94a3b8_40%,#334155_100%)] dark:bg-[radial-gradient(circle_at_top,#0f172a,#1f2937_45%,#020617_100%)]" />
+                                  <div className="h-full min-h-[420px] w-full max-w-full rounded-[24px] bg-[radial-gradient(circle_at_top,#cbd5e1,#94a3b8_40%,#334155_100%)] dark:bg-[radial-gradient(circle_at_top,#0f172a,#1f2937_45%,#020617_100%)] sm:h-[560px] sm:w-[380px]" />
                                 )}
 
                                 <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.42),transparent_65%)] dark:bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.20),transparent_65%)]" />
                                 <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-32 bg-[linear-gradient(to_top,rgba(17,24,39,0.16),transparent)] dark:bg-[linear-gradient(to_top,rgba(2,6,23,0.55),transparent)]" />
                                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.02)_35%,rgba(15,23,42,0.08))] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.01)_35%,rgba(2,6,23,0.35))]" />
+
+                                {canSnapshot && previewLoading && !snapshot?.url ? (
+                                  <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-slate-950/35 backdrop-blur-[2px]">
+                                    <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/80 px-3 py-2 text-xs font-semibold text-white shadow-xl">
+                                      <Loader2 className="size-3.5 animate-spin" />
+                                      Loading video
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                {canSnapshot && !snapshot?.url ? (
+                                  <div className="absolute inset-x-2 bottom-2 z-30 rounded-[20px] border border-white/20 bg-slate-950/78 p-2 text-white shadow-2xl backdrop-blur-xl sm:inset-x-4 sm:bottom-4 sm:rounded-[24px] sm:p-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-slate-950 transition hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                                          onClick={handleToggleVideoPlay}
+                                          aria-label={videoState.paused ? 'Play video' : 'Pause video'}
+                                        >
+                                          {videoState.paused ? <Play className="ml-0.5 size-4" /> : <Pause className="size-4" />}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 px-2 text-xs font-bold text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                                          onClick={() => handleVideoSkip(-10)}
+                                          aria-label="Back 10 seconds"
+                                        >
+                                          -10
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 px-2 text-xs font-bold text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                                          onClick={() => handleVideoSkip(10)}
+                                          aria-label="Forward 10 seconds"
+                                        >
+                                          +10
+                                        </button>
+                                      </div>
+
+                                      <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.05"
+                                        value={videoState.muted ? 0 : videoState.volume}
+                                        onChange={handleVideoVolumeChange}
+                                        onInput={handleVideoVolumeChange}
+                                        className="hidden h-1.5 w-20 accent-white sm:block"
+                                        aria-label="Video volume"
+                                      />
+                                      <button
+                                        type="button"
+                                        className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                                        onClick={handleToggleVideoMute}
+                                        aria-label={videoState.muted || videoState.volume === 0 ? 'Unmute video' : 'Mute video'}
+                                      >
+                                        {videoState.muted || videoState.volume === 0 ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
+                                      </button>
+                                    </div>
+                                    <div className="mt-2 flex items-center gap-2">
+                                      <span className="w-12 text-center text-[11px] font-semibold tabular-nums text-white/85 sm:w-14 sm:text-xs">
+                                        {formatTime(videoState.currentTime)}
+                                      </span>
+                                      <input
+                                        style={{ touchAction: 'none' }}
+                                        type="range"
+                                        min="0"
+                                        max={Math.max(0, videoState.duration || 0)}
+                                        step="0.05"
+                                        value={Math.min(videoState.currentTime || 0, videoState.duration || videoState.currentTime || 0)}
+                                        onChange={handleVideoSeek}
+                                        onInput={handleVideoSeek}
+                                        className="h-1.5 min-w-0 flex-1 accent-white"
+                                        aria-label="Seek video"
+                                        disabled={!videoState.duration}
+                                      />
+                                      <span className="hidden w-14 text-center text-xs font-semibold tabular-nums text-white/70 sm:block">
+                                        {formatTime(videoState.duration)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                {snapshot?.url ? (
+                                  <div className="absolute inset-0 z-40 flex items-center justify-center bg-slate-950/70 p-2 backdrop-blur-sm sm:p-4">
+                                    <div className="w-full max-w-sm overflow-hidden rounded-[20px] border border-white/15 bg-white shadow-2xl dark:bg-slate-950 sm:rounded-[22px]">
+                                      <div className="border-b border-slate-100 px-3 py-2.5 dark:border-slate-800 sm:px-4 sm:py-3">
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <p className="text-sm font-semibold text-slate-950 dark:text-slate-50">Use this snapshot?</p>
+                                            <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                                              Upload it to this album or download it locally.
+                                            </p>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950"
+                                            disabled={snapshotBusy}
+                                            onClick={() => clearSnapshot()}
+                                            aria-label="Close snapshot dialog"
+                                            title="Close"
+                                          >
+                                            <X className="size-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="bg-slate-100 dark:bg-slate-900">
+                                        <img src={snapshot.url} alt="Captured video snapshot" className="max-h-[58dvh] w-full object-contain sm:max-h-72" />
+                                      </div>
+
+                                      <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-2 dark:border-slate-800 sm:grid-cols-3 sm:p-3">
+                                        <button
+                                          type="button"
+                                          className="hidden h-11 min-w-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950 sm:inline-flex sm:px-3 sm:text-sm"
+                                          disabled={snapshotBusy}
+                                          onClick={handleDownloadSnapshot}
+                                          aria-label="Download snapshot"
+                                          title="Download"
+                                        >
+                                          <Download className="size-5 shrink-0" />
+                                          <span className="sr-only">Download snapshot</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-11 min-w-0 items-center justify-center rounded-xl border border-sky-200 bg-sky-50 px-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-sky-900/70 dark:bg-sky-950/40 dark:text-sky-100 dark:focus-visible:ring-sky-300 dark:focus-visible:ring-offset-slate-950 sm:px-3 sm:text-sm"
+                                          disabled={snapshotBusy}
+                                          onClick={handleEnhanceSnapshot}
+                                          aria-label="Enhance snapshot with AI"
+                                          title="Enhance with AI"
+                                        >
+                                          {enhancingSnapshot ? <Loader2 className="size-5 shrink-0 animate-spin" /> : <Sparkles className="size-5 shrink-0" />}
+                                          <span className="sr-only">Enhance with AI</span>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-11 min-w-0 items-center justify-center rounded-xl bg-slate-900 px-2 text-xs font-semibold text-white transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-slate-50 dark:text-slate-900 dark:hover:bg-slate-200 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950 sm:px-3 sm:text-sm"
+                                          disabled={snapshotBusy}
+                                          onClick={handleUploadSnapshot}
+                                          aria-label="Upload snapshot to album"
+                                          title="Upload to album"
+                                        >
+                                          {uploadingSnapshot ? <Loader2 className="size-5 shrink-0 animate-spin" /> : <Camera className="size-5 shrink-0" />}
+                                          <span className="sr-only">Upload to album</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ) : null}
 
                                 {isGeneratingPreview ? (
                                   <>
@@ -246,9 +1001,10 @@ export default function GalleryMediaViewer({
                         </div>
                       ) : null}
 
-                      <div className="absolute bottom-5 left-5 right-5 z-20 flex flex-wrap items-center justify-between gap-3">
-    
-                        <p className="text-xs text-slate-600 dark:text-slate-300/80">Click Generate to open the settings panel.</p>
+                      <div className="absolute bottom-5 left-5 right-5 z-20 hidden flex-wrap items-center justify-between gap-3 sm:flex">
+                        <p className="text-xs text-slate-600 dark:text-slate-300/80">
+                          {canSnapshot ? 'Take a snapshot while the video is playing or paused.' : 'Click Generate to open the settings panel.'}
+                        </p>
                       </div>
 
                       {generateOpen && isDesktop ? (
@@ -308,34 +1064,68 @@ export default function GalleryMediaViewer({
                   </aside>
                 </div>
 
-                <div className="border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:hidden">
-                  {canGenerate ? (
-                    <div className="grid grid-cols-2 gap-3">
+                <div className="border-t border-slate-200 bg-white px-2 py-1.5 pb-[calc(0.375rem_+_env(safe-area-inset-bottom))] dark:border-slate-800 dark:bg-slate-950 sm:hidden">
+                  {canOpenGenerate || canSnapshot || canDownload ? (
+                    <div className="flex items-center gap-2">
+                      {canSnapshot ? (
+                        <button
+                          type="button"
+                          className="inline-flex h-11 min-w-[44px] flex-1 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950"
+                          onClick={handleCaptureSnapshot}
+                          disabled={capturingSnapshot}
+                          aria-label="Take snapshot"
+                          title="Snapshot"
+                        >
+                          {capturingSnapshot ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                          <span className="sr-only">Snapshot</span>
+                        </button>
+                      ) : null}
+                      {canDownload ? (
+                        <button
+                          type="button"
+                          className="inline-flex h-11 min-w-[44px] flex-1 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950"
+                          onClick={handleDownloadMedia}
+                          disabled={downloadingMedia}
+                          aria-label="Download media"
+                          title="Download"
+                        >
+                          {downloadingMedia ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}
+                          <span className="sr-only">Download</span>
+                        </button>
+                      ) : null}
+                      {canOpenGenerate ? (
+                        <button
+                          type="button"
+                          className="inline-flex h-11 min-w-[44px] flex-1 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950"
+                          onClick={() => setGenerateOpen(true)}
+                          aria-label="Open generation settings"
+                          title="Generate"
+                        >
+                          <Sparkles className="size-4" />
+                          <span className="sr-only">Generate</span>
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-                        onClick={() => setGenerateOpen(true)}
-                      >
-                        <Sparkles className="mr-2 size-4" />
-                        Generate
-                      </button>
-                      <button
-                        type="button"
-                        className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                        className="inline-flex h-11 min-w-[44px] flex-1 items-center justify-center rounded-xl border border-slate-300 text-slate-700 transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950"
                         onClick={onClose}
+                        aria-label="Close preview"
+                        title="Close"
                       >
-                        <X className="mr-2 size-4" />
-                        Close
+                        <X className="size-4" />
+                        <span className="sr-only">Close</span>
                       </button>
                     </div>
                   ) : (
                     <button
                       type="button"
-                      className="inline-flex h-11 w-full items-center justify-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                      className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-slate-100 dark:focus-visible:ring-offset-slate-950"
                       onClick={onClose}
+                      aria-label="Close preview"
+                      title="Close"
                     >
-                      <X className="mr-2 size-4" />
-                      Close Preview
+                      <X className="size-4" />
+                      <span className="sr-only">Close Preview</span>
                     </button>
                   )}
                 </div>
@@ -392,7 +1182,8 @@ export default function GalleryMediaViewer({
             </Transition.Child>
           </div>
         </div>
-      </Dialog>
-    </Transition>
+        </Dialog>
+      </Transition>
+    </>
   );
 }

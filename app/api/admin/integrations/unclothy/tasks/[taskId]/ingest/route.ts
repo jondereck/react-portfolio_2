@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { getAdminSettings, logAdminAuditEvent } from '@/lib/server/admin-settings';
 import { RequestValidationError } from '@/lib/server/uploads';
@@ -103,7 +103,7 @@ export async function POST(request: Request, context: RouteContext) {
     const body = await request.json();
     const parsed = unclothyIngestTaskSchema.parse(body);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json(
         createUnclothyEnvelope({
           success: false,

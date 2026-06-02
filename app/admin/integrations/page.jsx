@@ -1,9 +1,8 @@
 import IntegrationsSettingsSection from '@/modules/system/admin/IntegrationsSettingsSection';
-import { requirePageRole } from '@/lib/auth/session';
-import { ADMIN_ROLES } from '@/lib/auth/roles';
+import { requirePageModuleAccess } from '@/lib/auth/session';
 
 export default async function AdminIntegrationsPage() {
-  await requirePageRole(ADMIN_ROLES);
+  await requirePageModuleAccess('integrations');
 
   return (
     <div className="space-y-6">

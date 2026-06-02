@@ -30,7 +30,13 @@ export default function GalleryMediaCard({
       }`}
     >
       <div className="relative">
-        <button type="button" className="block w-full" onClick={onOpenPreview} aria-label={`View ${title}`}>
+        <button
+          type="button"
+          className="block w-full touch-pan-y"
+          style={{ touchAction: 'pan-y' }}
+          onClick={onOpenPreview}
+          aria-label={`View ${title}`}
+        >
           <div className="relative aspect-square bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200 dark:from-slate-800 dark:via-slate-900 dark:to-slate-800">
             {photo?.imageUrl ? (
               <MediaPreview
@@ -39,9 +45,16 @@ export default function GalleryMediaCard({
                 sourceType={photo.sourceType}
                 sourceId={photo.sourceId}
                 alt={title}
-                className={`h-full w-full object-cover ${shouldBlur ? 'blur-md' : ''}`}
+                className={`h-full w-full object-cover ${isVideo ? 'pointer-events-none' : ''} ${shouldBlur ? 'blur-md' : ''}`}
                 controls={false}
               />
+            ) : null}
+            {isVideo ? (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                <span className="rounded-full border border-white/30 bg-slate-950/70 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-white shadow-lg backdrop-blur">
+                  Video
+                </span>
+              </div>
             ) : null}
             {shouldBlur ? (
               <div className="pointer-events-none absolute left-2 top-2 rounded-full border border-white/25 bg-black/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-white">

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { portfolioSchema } from '@/lib/validators';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { uploadImageFile } from '@/lib/server/uploads';
@@ -109,7 +109,7 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'createUpdate'))) {
       return createFormErrorResponse({ error: 'You are not allowed to update portfolio entries.', errorCode: 'FORBIDDEN' }, 403);
     }
     const existing = await prisma.portfolio.findFirst({ where: { id, profileId: profile.id } });

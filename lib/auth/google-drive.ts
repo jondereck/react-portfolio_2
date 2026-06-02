@@ -13,6 +13,16 @@ type GoogleTokenRefreshResponse = {
   token_type?: string;
 };
 
+type GoogleUserInfoResponse = {
+  email?: string;
+  picture?: string;
+};
+
+export type GoogleProfileInfo = {
+  email: string;
+  picture: string;
+};
+
 export function isGoogleDriveOAuthConfigured() {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
@@ -106,6 +116,41 @@ export async function getGoogleDriveAccessTokenForUser(userId: string) {
   }
 
   return resolveAccessTokenFromAccount(account);
+}
+
+export async function getGoogleProfileForUser(userId: string): Promise<GoogleProfileInfo | null> {
+  const accessToken = await getGoogleDriveAccessTokenForUser(userId);
+  const response = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = (await response.json().catch(() => null)) as GoogleUserInfoResponse | null;
+  const email = typeof payload?.email === 'string' ? payload.email.trim().toLowerCase() : '';
+  const picture = typeof payload?.picture === 'string' ? payload.picture.trim() : '';
+  if (!picture || !/^https:\/\//i.test(picture)) {
+    return null;
+  }
+
+  return {
+    email,
+    picture,
+  };
+}
+
+export async function getGoogleProfileImageForUser(userId: string) {
+  const profile = await getGoogleProfileForUser(userId);
+  if (!profile?.picture) {
+    return null;
+  }
+
+  return profile.picture;
 }
 
 async function getFallbackGoogleDriveAccount() {

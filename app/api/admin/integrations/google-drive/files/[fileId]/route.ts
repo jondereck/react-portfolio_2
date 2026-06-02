@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getGoogleDriveAccessTokenForUser } from '@/lib/auth/google-drive';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { resolveRequestActor } from '@/lib/auth/session';
 
@@ -16,7 +16,7 @@ export async function GET(request: Request, context: RouteContext) {
     if (!actor) {
       throw new Error('UNAUTHENTICATED');
     }
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       throw new Error('FORBIDDEN');
     }
 
@@ -26,12 +26,18 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const accessToken = await getGoogleDriveAccessTokenForUser(actor.user.id);
+    const rangeHeader = request.headers.get('range');
+    const upstreamHeaders = new Headers({
+      Authorization: `Bearer ${accessToken}`,
+    });
+    if (rangeHeader) {
+      upstreamHeaders.set('Range', rangeHeader);
+    }
+
     const response = await fetch(
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`,
       {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: upstreamHeaders,
         cache: 'no-store',
       },
     );
@@ -52,10 +58,22 @@ export async function GET(request: Request, context: RouteContext) {
     const contentType = response.headers.get('content-type') || 'application/octet-stream';
     headers.set('Content-Type', contentType);
     headers.set('Cache-Control', 'private, no-store, max-age=0');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
 
     const contentLength = response.headers.get('content-length');
     if (contentLength) {
       headers.set('Content-Length', contentLength);
+    }
+
+    const acceptRanges = response.headers.get('accept-ranges') || (contentType.startsWith('video/') ? 'bytes' : '');
+    if (acceptRanges) {
+      headers.set('Accept-Ranges', acceptRanges);
+    }
+
+    const contentRange = response.headers.get('content-range');
+    if (contentRange) {
+      headers.set('Content-Range', contentRange);
     }
 
     const disposition = response.headers.get('content-disposition');
@@ -64,7 +82,7 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     return new Response(response.body, {
-      status: 200,
+      status: response.status === 206 ? 206 : 200,
       headers,
     });
   } catch (error) {

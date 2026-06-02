@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { canManageGlobalSettings } from '@/lib/auth/roles';
+import { isSuperAdmin } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { resolveRequestActor } from '@/lib/auth/session';
 import { bumpSessionVersion, getAdminSettings, getAdminSettingsDashboardData, logAdminAuditEvent, updateAdminSettings } from '@/lib/server/admin-settings';
 import {
@@ -23,11 +24,17 @@ export async function GET(request: Request) {
   if (!actor) {
     return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
-  if (!canManageGlobalSettings(actor.user.role)) {
+  if (
+    !(await canAccessAdminModuleAction(actor.user.role, 'integrations', 'configure')) &&
+    !(await canAccessAdminModuleAction(actor.user.role, 'security', 'configure'))
+  ) {
     return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 
   const data = await getAdminSettingsDashboardData();
+  if (!isSuperAdmin(actor.user.role)) {
+    data.settings.security.roleModuleAccess = undefined as never;
+  }
   return NextResponse.json(data);
 }
 
@@ -39,9 +46,6 @@ export async function PUT(request: Request) {
   const actor = await resolveRequestActor(request);
   if (!actor) {
     return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
-  }
-  if (!canManageGlobalSettings(actor.user.role)) {
-    return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 
   try {
@@ -76,6 +80,32 @@ export async function PUT(request: Request) {
         },
         400,
       );
+    }
+
+    if (nextIntegrations?.data && !(await canAccessAdminModuleAction(actor.user.role, 'integrations', 'configure'))) {
+      return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
+    }
+
+    if (
+      nextIntegrations?.data &&
+      Object.prototype.hasOwnProperty.call(nextIntegrations.data, 'unclothyGlobalConcurrentGenerationLimit') &&
+      !isSuperAdmin(actor.user.role)
+    ) {
+      return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
+    }
+
+    if (forceSignOut && !(await canAccessAdminModuleAction(actor.user.role, 'security', 'configure'))) {
+      return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
+    }
+
+    if (nextSecurity?.data) {
+      const updatesRoleAccess = Object.prototype.hasOwnProperty.call(nextSecurity.data, 'roleModuleAccess');
+      if (updatesRoleAccess && !isSuperAdmin(actor.user.role)) {
+        return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
+      }
+      if (!updatesRoleAccess && !(await canAccessAdminModuleAction(actor.user.role, 'security', 'configure'))) {
+        return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
+      }
     }
 
     if (nextIntegrations?.data && Object.prototype.hasOwnProperty.call(nextIntegrations.data, 'unclothyWorkerEnabled')) {

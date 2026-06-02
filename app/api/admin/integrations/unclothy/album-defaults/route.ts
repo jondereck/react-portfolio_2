@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { RequestValidationError } from '@/lib/server/uploads';
 import { resolveManagedProfileFromRequest } from '@/lib/profile/resolve-profile';
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }
 
     const { actor, profile } = await resolveManagedProfileFromRequest(request);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json(
         createUnclothyEnvelope({
           success: false,
@@ -93,7 +93,7 @@ export async function PUT(request: Request) {
     }
 
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json(
         createUnclothyEnvelope({
           success: false,

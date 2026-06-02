@@ -8,6 +8,7 @@ export type UnclothyEnvelope<T> = {
   status_code?: number;
   status_text?: string;
   message?: string;
+  errorCode?: string;
   result?: T;
 };
 
@@ -16,6 +17,7 @@ const DEFAULT_SETTINGS_PATH = '/v2/task/settings';
 const HTTP_STATUS_TEXT: Record<number, string> = {
   200: 'OK',
   201: 'Created',
+  202: 'Accepted',
   400: 'Bad Request',
   401: 'Unauthorized',
   403: 'Forbidden',
@@ -93,12 +95,14 @@ export function createUnclothyEnvelope<T>({
   message,
   result,
   statusText,
+  errorCode,
 }: {
   success: boolean;
   status: number;
   message: string;
   result?: T;
   statusText?: string;
+  errorCode?: string;
 }) {
   const normalizedStatus = normalizeHttpStatus(status);
   return {
@@ -106,6 +110,7 @@ export function createUnclothyEnvelope<T>({
     status_code: normalizedStatus,
     status_text: statusTextForStatus(normalizedStatus, statusText),
     message,
+    ...(errorCode ? { errorCode } : {}),
     ...(result === undefined ? {} : { result }),
   };
 }
@@ -136,6 +141,7 @@ export function toUnclothyErrorResponse(error: unknown, fallbackMessage: string)
         success: false,
         status: 401,
         message: 'Unauthorized',
+        errorCode: 'UNAUTHENTICATED',
       }),
       { status: 401 },
     );
@@ -147,6 +153,7 @@ export function toUnclothyErrorResponse(error: unknown, fallbackMessage: string)
         success: false,
         status: 403,
         message: 'Forbidden',
+        errorCode: 'FORBIDDEN',
       }),
       { status: 403 },
     );
@@ -167,6 +174,7 @@ export function toUnclothyErrorResponse(error: unknown, fallbackMessage: string)
         status,
         statusText: typeof providerPayload?.status_text === 'string' ? providerPayload.status_text : undefined,
         message,
+        errorCode: error.errorCode,
       }),
       { status },
     );
@@ -180,6 +188,7 @@ export function toUnclothyErrorResponse(error: unknown, fallbackMessage: string)
         success: false,
         status: 400,
         message,
+        errorCode: 'INVALID_PAYLOAD',
       }),
       { status: 400 },
     );
@@ -191,6 +200,7 @@ export function toUnclothyErrorResponse(error: unknown, fallbackMessage: string)
         success: false,
         status: 413,
         message: 'Request body is too large.',
+        errorCode: 'REQUEST_BODY_TOO_LARGE',
       }),
       { status: 413 },
     );

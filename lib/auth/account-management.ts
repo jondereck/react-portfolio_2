@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { writeAuditEvent } from '@/lib/audit/audit';
 import { hashPassword, verifyPassword } from '@/lib/password/password';
+import { getGoogleProfileForUser } from '@/lib/auth/google-drive';
 
 export async function getSelfAccount(userId: string) {
   const user = await prisma.user.findUnique({
@@ -20,10 +21,40 @@ export async function getSelfAccount(userId: string) {
     throw new Error('USER_NOT_FOUND');
   }
 
+  const normalizedUserEmail = String(user.email || '').trim().toLowerCase();
+  let image = user.image ?? '';
+  try {
+    const googleProfile = await getGoogleProfileForUser(user.id);
+    const normalizedGoogleEmail = String(googleProfile?.email || '').trim().toLowerCase();
+    const googleEmailMatchesUser = Boolean(normalizedGoogleEmail) && normalizedGoogleEmail === normalizedUserEmail;
+
+    if (googleEmailMatchesUser && googleProfile?.picture) {
+      if (image !== googleProfile.picture) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { image: googleProfile.picture },
+        });
+      }
+      image = googleProfile.picture;
+    } else if (user.role === 'super_admin' && normalizedGoogleEmail && !googleEmailMatchesUser) {
+      // Super admin avatar must never come from a mismatched Google account.
+      if (image) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { image: null },
+        });
+      }
+      image = '';
+    }
+  } catch {
+    if (!image) image = '';
+  }
+
   return {
     id: user.id,
     name: user.name ?? '',
     email: user.email,
+    image,
     role: user.role,
     isActive: user.isActive,
     profile: user.profile,
@@ -124,6 +155,7 @@ export async function updateSelfAccount(input: {
     id: updated.id,
     name: updated.name ?? '',
     email: updated.email,
+    image: updated.image ?? '',
     role: updated.role,
     isActive: updated.isActive,
     profile: updated.profile,
@@ -207,6 +239,7 @@ export async function updateSelfAccountNeon(input: {
     id: updated.id,
     name: updated.name ?? '',
     email: updated.email,
+    image: updated.image ?? '',
     role: updated.role,
     isActive: updated.isActive,
     profile: updated.profile,

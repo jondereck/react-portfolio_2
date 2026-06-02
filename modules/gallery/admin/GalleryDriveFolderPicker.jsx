@@ -1,7 +1,7 @@
 'use client';
 
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown,
   Check,
@@ -48,6 +48,8 @@ export default function GalleryDriveFolderPicker({
   onClose,
   onSelectFolder,
   selectedFolderId,
+  selectedFileIds = [],
+  selectedMediaTypeFilter = 'all',
 }) {
   const [browseState, setBrowseState] = useState(emptyBrowseState);
   const [folderSort, setFolderSort] = useState('recent');
@@ -55,6 +57,8 @@ export default function GalleryDriveFolderPicker({
   const [mobileTab, setMobileTab] = useState('folders');
   const [selectedMediaIds, setSelectedMediaIds] = useState([]);
   const [mediaPreviewFilter, setMediaPreviewFilter] = useState('all');
+  const [previewRetryToken, setPreviewRetryToken] = useState(0);
+  const [failedPreviewIds, setFailedPreviewIds] = useState([]);
   const [loadingAllPreviews, setLoadingAllPreviews] = useState(false);
   const previewScrollRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
@@ -98,6 +102,7 @@ export default function GalleryDriveFolderPicker({
       previewPageSize = 8,
       folderSortOverride = null,
       keepSelectedMedia = true,
+      retryToken = previewRetryToken,
     } = options;
     const effectiveFolderSort = folderSortOverride || folderSort;
 
@@ -118,12 +123,14 @@ export default function GalleryDriveFolderPicker({
       }
       params.set('previewPageSize', String(previewPageSize));
       params.set('folderSort', effectiveFolderSort);
+      params.set('_preview', String(retryToken));
 
       const payload = await fetchJson(
         `/api/admin/integrations/google-drive/folders${params.toString() ? `?${params.toString()}` : ''}`,
       );
 
       const nextFiles = Array.isArray(payload?.files) ? payload.files : [];
+      setFailedPreviewIds([]);
 
       setBrowseState((current) => ({
         loading: false,
@@ -161,11 +168,15 @@ export default function GalleryDriveFolderPicker({
     }
 
     setQuery('');
-    setMobileTab('folders');
-    setSelectedMediaIds([]);
-    setMediaPreviewFilter('all');
-    loadFolders();
-  }, [open]);
+    setMobileTab(selectedFolderId ? 'preview' : 'folders');
+    setSelectedMediaIds(Array.isArray(selectedFileIds) ? selectedFileIds : []);
+    setMediaPreviewFilter(['all', 'images', 'videos'].includes(selectedMediaTypeFilter) ? selectedMediaTypeFilter : 'all');
+    setFailedPreviewIds([]);
+    loadFolders(selectedFolderId || null, {
+      keepSelectedMedia: true,
+      retryToken: Date.now(),
+    });
+  }, [open, selectedFolderId]);
 
   const activeFolderId = browseState.breadcrumbs[browseState.breadcrumbs.length - 1]?.id;
   const currentParentId = activeFolderId && activeFolderId !== 'root' ? activeFolderId : null;
@@ -220,6 +231,26 @@ export default function GalleryDriveFolderPicker({
   });
 
   const selectedMediaSet = new Set(selectedMediaIds);
+  const failedPreviewSet = useMemo(() => new Set(failedPreviewIds), [failedPreviewIds]);
+
+  const markPreviewFailed = (fileId) => {
+    setFailedPreviewIds((current) => (current.includes(fileId) ? current : [...current, fileId]));
+  };
+
+  const getPreviewUrl = (file) => {
+    const separator = file.previewUrl.includes('?') ? '&' : '?';
+    return `${file.previewUrl}${separator}v=${previewRetryToken}`;
+  };
+
+  const refreshCurrentFolder = () => {
+    const nextRetryToken = Date.now();
+    setPreviewRetryToken(nextRetryToken);
+    setFailedPreviewIds([]);
+    return loadFolders(currentParentId, {
+      keepSelectedMedia: true,
+      retryToken: nextRetryToken,
+    });
+  };
 
   const handleViewAllMedia = async () => {
     if (browseState.previewLoadingMore || browseState.loading || loadingAllPreviews) {
@@ -234,6 +265,7 @@ export default function GalleryDriveFolderPicker({
       }
       params.set('includeAllPreviews', '1');
       params.set('folderSort', folderSort);
+      params.set('_preview', String(previewRetryToken));
       const payload = await fetchJson(`/api/admin/integrations/google-drive/folders?${params.toString()}`);
       const allFiles = Array.isArray(payload?.files) ? payload.files : [];
 
@@ -248,6 +280,7 @@ export default function GalleryDriveFolderPicker({
         currentFolder: payload?.currentFolder ?? current.currentFolder,
         nextPreviewPageToken: null,
       }));
+      setFailedPreviewIds([]);
     } finally {
       setLoadingAllPreviews(false);
     }
@@ -513,7 +546,7 @@ export default function GalleryDriveFolderPicker({
                             <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">Current selection</p>
                             <h2 className="mt-1 truncate text-xl font-black text-slate-950">{selectedFolderName}</h2>
                             <p className="mt-1 text-sm leading-6 text-slate-600">
-                              Only this folder will be imported. Subfolders are ignored for now.
+                              This folder is the import source. If no media is checked, the whole selected folder will be imported.
                             </p>
                           </div>
                         </div>
@@ -536,9 +569,18 @@ export default function GalleryDriveFolderPicker({
                             </span>
                           </div>
                           <p className="mt-1 text-sm text-slate-500">
-                            Preview only. Import still uses the selected folder as one source.
+                            Preview only. Use checks for manual import; leave all unchecked to import the whole folder.
                           </p>
                         </div>
+                        <button
+                          type="button"
+                          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+                          onClick={refreshCurrentFolder}
+                          disabled={browseState.previewLoadingMore || browseState.loading || loadingAllPreviews}
+                        >
+                          {browseState.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                          Retry previews
+                        </button>
                         <button
                           type="button"
                           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-slate-800"
@@ -594,13 +636,23 @@ export default function GalleryDriveFolderPicker({
                       >
                         {filteredPreviewFiles.length === 0 ? (
                           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-14 text-center text-sm text-slate-500">
-                            No media previews found in this location.
+                            <p>No media previews found in this location.</p>
+                            <button
+                              type="button"
+                              className="mt-3 inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+                              onClick={refreshCurrentFolder}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                              Retry previews
+                            </button>
                           </div>
                         ) : (
                           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                             {filteredPreviewFiles.map((file) => {
                               const isVideo = file.kind === 'video';
                               const isChecked = selectedMediaSet.has(file.id);
+                              const previewFailed = failedPreviewSet.has(file.id);
+                              const previewUrl = getPreviewUrl(file);
 
                               return (
                                 <article
@@ -628,16 +680,38 @@ export default function GalleryDriveFolderPicker({
                                     <Check className="h-3.5 w-3.5" />
                                   </button>
                                   <div className={`relative ${isVideo ? 'aspect-[4/3]' : 'aspect-[4/3]'} bg-slate-100`}>
-                                    {isVideo ? (
+                                    {previewFailed ? (
+                                      <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-3 text-center text-xs text-slate-500">
+                                        <p className="font-semibold text-slate-700">Preview unavailable</p>
+                                        <button
+                                          type="button"
+                                          className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+                                          onClick={() => {
+                                            setFailedPreviewIds((current) => current.filter((id) => id !== file.id));
+                                            setPreviewRetryToken(Date.now());
+                                          }}
+                                        >
+                                          <RefreshCw className="h-3 w-3" />
+                                          Retry
+                                        </button>
+                                      </div>
+                                    ) : isVideo ? (
                                       <video
                                         className="h-full w-full object-cover"
-                                        src={file.previewUrl}
+                                        src={previewUrl}
                                         muted
                                         playsInline
                                         preload="metadata"
+                                        onError={() => markPreviewFailed(file.id)}
                                       />
                                     ) : (
-                                      <img className="h-full w-full object-cover" src={file.previewUrl} alt={file.name} loading="lazy" />
+                                      <img
+                                        className="h-full w-full object-cover"
+                                        src={previewUrl}
+                                        alt={file.name}
+                                        loading="lazy"
+                                        onError={() => markPreviewFailed(file.id)}
+                                      />
                                     )}
                                     <div className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-800 shadow-sm backdrop-blur">
                                       {isVideo ? <Play className="h-3.5 w-3.5" /> : <Image className="h-3.5 w-3.5" />}

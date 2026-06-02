@@ -39,6 +39,7 @@ export function useGalleryAdminController() {
   const [selectedAlbumId, setSelectedAlbumId] = useState(() => readStoredAlbumId());
   const [photos, setPhotos] = useState([]);
   const previousPhotoIdsRef = useRef([]);
+  const preserveSelectionOnNextPhotoSyncRef = useRef(false);
 
   const [loadingAlbums, setLoadingAlbums] = useState(true);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
@@ -130,7 +131,13 @@ export function useGalleryAdminController() {
           return storedAlbumId;
         }
 
-        return nextAlbums[0]?.id ?? null;
+        const latestActivityAlbum = [...nextAlbums].sort((left, right) => {
+          const leftTime = new Date(left?.activityAt ?? left?.updatedAt ?? left?.createdAt ?? 0).getTime();
+          const rightTime = new Date(right?.activityAt ?? right?.updatedAt ?? right?.createdAt ?? 0).getTime();
+          return rightTime - leftTime;
+        })[0];
+
+        return latestActivityAlbum?.id ?? null;
       });
     } catch (error) {
       toast.error(error.message);
@@ -165,10 +172,22 @@ export function useGalleryAdminController() {
   }, [selectedAlbumId]);
 
   useEffect(() => {
-    if (selectedAlbumId) {
-      loadPhotos(selectedAlbumId, sortMode);
+    if (loadingAlbums) {
+      return;
     }
-  }, [selectedAlbumId, sortMode]);
+
+    if (selectedAlbumId) {
+      if (!albums.some((album) => album.id === selectedAlbumId)) {
+        setPhotos([]);
+        return;
+      }
+
+      loadPhotos(selectedAlbumId, sortMode);
+      return;
+    }
+
+    setPhotos([]);
+  }, [albums, loadingAlbums, selectedAlbumId, sortMode]);
 
   useEffect(() => {
     setUploadProgress(null);
@@ -222,6 +241,15 @@ export function useGalleryAdminController() {
     setArrangePhotos(photos);
 
     if (!idsUnchanged) {
+      if (preserveSelectionOnNextPhotoSyncRef.current) {
+        preserveSelectionOnNextPhotoSyncRef.current = false;
+        setOrderDirty(false);
+        setOrderHistory([]);
+        setDragSnapshotTaken(false);
+        setArrangeDragState({ isDragging: false, draggingCount: 0 });
+        return;
+      }
+
       setSelectedPhotoIds([]);
       setSelectionAnchorId(null);
       setOrderDirty(false);
@@ -237,6 +265,56 @@ export function useGalleryAdminController() {
     setPhotos((current) =>
       current.map((photo) => (photo.id === updatedPhoto.id ? { ...photo, ...updatedPhoto } : photo)),
     );
+  };
+
+  const updateSelectedAlbumPhotoCount = (delta) => {
+    if (!selectedAlbumId || !Number.isFinite(delta) || delta === 0) return;
+
+    setAlbums((current) =>
+      current.map((album) => {
+        if (album.id !== selectedAlbumId) {
+          return album;
+        }
+
+        const currentCount = typeof album?._count?.photos === 'number' ? album._count.photos : null;
+        if (currentCount === null) {
+          return album;
+        }
+
+        return {
+          ...album,
+          _count: {
+            ...album._count,
+            photos: Math.max(0, currentCount + delta),
+          },
+          activityAt: new Date().toISOString(),
+        };
+      }),
+    );
+  };
+
+  const addPhotoToState = (photo) => {
+    if (!photo || !photo.id) return;
+
+    setPhotos((current) => {
+      if (current.some((item) => item.id === photo.id)) {
+        return current.map((item) => (item.id === photo.id ? { ...item, ...photo } : item));
+      }
+
+      return [photo, ...current];
+    });
+    updateSelectedAlbumPhotoCount(1);
+  };
+
+  const removePhotosFromState = (photoIds) => {
+    const ids = new Set((Array.isArray(photoIds) ? photoIds : [photoIds]).filter(Boolean));
+    if (ids.size === 0) return;
+
+    preserveSelectionOnNextPhotoSyncRef.current = true;
+    setPhotos((current) => current.filter((photo) => !ids.has(photo.id)));
+    setSelectedPhotoIds((current) => current.filter((photoId) => !ids.has(photoId)));
+    setSelectionAnchorId((current) => (ids.has(current) ? null : current));
+    updateSelectedAlbumPhotoCount(-ids.size);
   };
 
   const selectedAlbumMediaCount = selectedAlbum?._count?.photos ?? photos.length;
@@ -418,9 +496,8 @@ export function useGalleryAdminController() {
 
     try {
       await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos/${photoId}`, { method: 'DELETE' });
+      removePhotosFromState([photoId]);
       toast.success('Media removed');
-      await loadPhotos(selectedAlbumId, sortMode);
-      await loadAlbums();
     } catch (error) {
       toast.error(error.message);
     }
@@ -443,10 +520,8 @@ export function useGalleryAdminController() {
         await fetchJson(`/api/gallery/albums/${selectedAlbumId}/photos/${photoId}`, { method: 'DELETE' });
       }
 
-      clearPhotoSelection();
+      removePhotosFromState(photoIds);
       toast.success(`${photoIds.length} media item${photoIds.length === 1 ? '' : 's'} deleted`);
-      await loadPhotos(selectedAlbumId, sortMode);
-      await loadAlbums();
     } catch (error) {
       toast.error(error.message);
     }
@@ -922,6 +997,8 @@ export function useGalleryAdminController() {
     loadAlbums,
     loadPhotos,
     updatePhotoInState,
+    addPhotoToState,
+    removePhotosFromState,
     createAlbumRecord,
     createAlbum,
     deleteAlbum,

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { canAccessProfile, resolveRequestActor } from '@/lib/auth/session';
 import { isRateLimited } from '@/lib/server/rate-limit';
@@ -82,7 +82,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -132,7 +132,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json().catch(() => ({}));
     const parsedBody = bulkPhotoBlurOverrideSchema.parse(body);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

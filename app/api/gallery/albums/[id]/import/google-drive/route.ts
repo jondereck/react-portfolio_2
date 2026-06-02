@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { getGoogleDriveAccessTokenForUser } from '@/lib/auth/google-drive';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { getAdminSettings } from '@/lib/server/admin-settings';
@@ -24,7 +24,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const body = await request.json();
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const settings = await getAdminSettings();

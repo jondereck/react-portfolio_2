@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { requireAuthActor } from '@/lib/auth/session';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { getAdminSettings } from '@/lib/server/admin-settings';
@@ -11,7 +11,7 @@ import {
   getUnclothyTaskSettings,
   toUnclothyErrorResponse,
 } from '@/lib/server/unclothy';
-import { enqueueUnclothyGenerationTask, listUnclothyQueueTasksForUser } from '@/lib/server/unclothy-queue';
+import { enqueueUnclothyGenerationTask, listUnclothyQueueTasksForUser, processUnclothyQueueOnce } from '@/lib/server/unclothy-queue';
 import { unclothyCreateTaskSchema } from '@/src/modules/gallery/contracts';
 import { galleryService } from '@/src/modules/gallery/services/galleryService';
 import { sanitizeUnclothyProviderSettings } from '@/lib/unclothy-settings';
@@ -36,7 +36,7 @@ async function loadProviderEnumAllowlist() {
 export async function GET(request: Request) {
   try {
     const actor = await requireAuthActor(request);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json(
         createUnclothyEnvelope({
           success: false,
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = unclothyCreateTaskSchema.parse(body);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json(
         createUnclothyEnvelope({
           success: false,
@@ -146,7 +146,26 @@ export async function POST(request: Request) {
       settingsSnapshot: nextSettings,
     });
 
-    return createUnclothySuccessResponse({ task, task_id: task.id, status: 'queued' }, 201, 'Task queued successfully.');
+    let workerResult = null;
+    try {
+      workerResult = await processUnclothyQueueOnce();
+    } catch (workerError) {
+      console.warn(
+        JSON.stringify({
+          tag: 'unclothy-task-enqueue',
+          at: new Date().toISOString(),
+          event: 'immediate-worker-kick-failed',
+          taskId: task.id,
+          error: workerError instanceof Error ? workerError.message : String(workerError),
+        }),
+      );
+    }
+
+    return createUnclothySuccessResponse(
+      { task, task_id: task.id, status: 'queued', worker: workerResult },
+      201,
+      workerResult?.started ? 'Task queued and started.' : 'Task queued successfully.',
+    );
   } catch (error) {
     return toUnclothyErrorResponse(error, 'Unable to queue Unclothy task.');
   }

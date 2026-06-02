@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { USER_MANAGEMENT_ROLES } from '@/lib/auth/roles';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
-import { requireRole } from '@/lib/auth/session';
+import { requireModuleAccess, requireRole } from '@/lib/auth/session';
 import {
   approveManagedUser,
   changeManagedUserRole,
@@ -11,6 +11,7 @@ import {
   resetManagedUserPassword,
   setManagedUserActive,
   transferSuperAdmin,
+  updateManagedUserUnclothyLimits,
 } from '@/lib/auth/user-management';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 import { createFieldErrorResponse, createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
@@ -40,6 +41,11 @@ const actionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('transfer_super_admin'),
   }),
+  z.object({
+    action: z.literal('update_unclothy_limits'),
+    monthlyGenerationLimit: z.number().int().min(0).max(10000),
+    concurrentGenerationLimit: z.number().int().min(1).max(5),
+  }),
 ]);
 
 type RouteContext = {
@@ -48,7 +54,6 @@ type RouteContext = {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const actor = await requireRole(USER_MANAGEMENT_ROLES, request);
     const { id } = await context.params;
     const parsed = actionSchema.safeParse(await request.json());
     if (!parsed.success) {
@@ -57,6 +62,7 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     switch (parsed.data.action) {
       case 'approve': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await approveManagedUser({
           actorUserId: actor.user.id,
           userId: id,
@@ -65,6 +71,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'reject': {
+        const actor = await requireModuleAccess('users', 'delete', request);
         await rejectManagedUser({
           actorUserId: actor.user.id,
           userId: id,
@@ -72,6 +79,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ ok: true });
       }
       case 'activate': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await setManagedUserActive({
           actorUserId: actor.user.id,
           userId: id,
@@ -80,6 +88,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'suspend': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await setManagedUserActive({
           actorUserId: actor.user.id,
           userId: id,
@@ -88,6 +97,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'change_role': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await changeManagedUserRole({
           actorUserId: actor.user.id,
           userId: id,
@@ -96,6 +106,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'reset_password': {
+        const actor = await requireModuleAccess('users', 'createUpdate', request);
         const user = await resetManagedUserPassword({
           actorUserId: actor.user.id,
           userId: id,
@@ -104,11 +115,22 @@ export async function PATCH(request: Request, context: RouteContext) {
         return NextResponse.json({ user });
       }
       case 'transfer_super_admin': {
+        const actor = await requireRole(USER_MANAGEMENT_ROLES, request);
         const user = await transferSuperAdmin({
           actorUserId: actor.user.id,
           targetUserId: id,
         });
         return NextResponse.json({ user, transferred: true });
+      }
+      case 'update_unclothy_limits': {
+        const actor = await requireRole(USER_MANAGEMENT_ROLES, request);
+        const user = await updateManagedUserUnclothyLimits({
+          actorUserId: actor.user.id,
+          userId: id,
+          monthlyGenerationLimit: parsed.data.monthlyGenerationLimit,
+          concurrentGenerationLimit: parsed.data.concurrentGenerationLimit,
+        });
+        return NextResponse.json({ user });
       }
       default:
         return createFormErrorResponse({ error: 'Unsupported action.', errorCode: 'UNSUPPORTED_ACTION' }, 400);
@@ -127,6 +149,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           'TARGET_NOT_ACTIVE',
           'ALREADY_SUPER_ADMIN',
           'SUPER_ADMIN_LOCKED',
+          'UNCLOTHY_INVALID_LIMITS',
         ].includes(error.message)
       ) {
         const messageMap: Record<string, string> = {
@@ -137,6 +160,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           TARGET_NOT_ACTIVE: 'Target account must be active before transfer.',
           ALREADY_SUPER_ADMIN: 'That account already holds super admin.',
           SUPER_ADMIN_LOCKED: 'Use the transfer action to change the super admin account.',
+          UNCLOTHY_INVALID_LIMITS: 'Unclothy limits must be within the allowed range.',
         };
         if (error.message === 'INVALID_ROLE') {
           return createFieldErrorResponse({ field: 'role', message: messageMap[error.message], errorCode: 'INVALID_ROLE' });

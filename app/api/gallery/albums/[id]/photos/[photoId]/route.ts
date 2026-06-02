@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { canDeleteContent, canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { toErrorResponse } from '@/lib/server/api-responses';
@@ -27,7 +27,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const body = await request.json().catch(() => ({}));
     const parsedBody = blurOverrideSchema.parse(body);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, body);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -65,7 +65,7 @@ export async function DELETE(request: Request, context: RouteContext) {
 
   try {
     const { actor, profile } = await resolveManagedProfileFromRequest(request);
-    if (!canDeleteContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'delete'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const { id: idParam, photoId: photoIdParam } = await context.params;

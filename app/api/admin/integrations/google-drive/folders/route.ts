@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { getGoogleDriveAccessTokenForUser, isGoogleDriveOAuthConfigured } from '@/lib/auth/google-drive';
 import { requireAuthActor } from '@/lib/auth/session';
 import { getAdminSettings } from '@/lib/server/admin-settings';
@@ -14,7 +14,7 @@ function createForbiddenResponse() {
 export async function GET(request: Request) {
   try {
     const actor = await requireAuthActor(request);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'createUpdate'))) {
       return createForbiddenResponse();
     }
 

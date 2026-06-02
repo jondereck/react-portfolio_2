@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { resolveRequestActor } from '@/lib/auth/session';
-import { canManageGlobalSettings } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { isRateLimited } from '@/lib/server/rate-limit';
 import { createFormErrorResponse } from '@/lib/server/form-responses';
 import { logAdminAuditEvent } from '@/lib/server/admin-settings';
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   if (!actor) {
     return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
-  if (!canManageGlobalSettings(actor.user.role)) {
+  if (!(await canAccessAdminModuleAction(actor.user.role, 'gallery', 'configure'))) {
     return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
   }
 

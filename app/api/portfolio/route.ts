@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { canDeleteContent, canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { portfolioSchema } from '@/lib/validators';
 import { parseMultipartOrJson } from '@/lib/server/request-parsing';
 import { uploadImageFile } from '@/lib/server/uploads';
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'createUpdate'))) {
       return createFormErrorResponse({ error: 'You are not allowed to create portfolio entries.', errorCode: 'FORBIDDEN' }, 403);
     }
     const parsed = await buildPortfolioInput(data, imageFile);
@@ -154,7 +154,7 @@ export async function PUT(request: Request) {
   try {
     const { data, imageFile } = await parseMultipartOrJson(request);
     const { actor, profile } = await resolveManagedProfileFromRequest(request, data);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'createUpdate'))) {
       return createFormErrorResponse({ error: 'You are not allowed to update portfolio entries.', errorCode: 'FORBIDDEN' }, 403);
     }
     const id = Number(data?.id);
@@ -205,7 +205,7 @@ export async function DELETE(request: Request) {
   try {
     const payload = await request.json();
     const { actor, profile } = await resolveManagedProfileFromRequest(request, payload);
-    if (!canDeleteContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'delete'))) {
       return createFormErrorResponse({ error: 'You are not allowed to delete portfolio entries.', errorCode: 'FORBIDDEN' }, 403);
     }
     const id = Number(payload?.id);

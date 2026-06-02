@@ -5,6 +5,8 @@ import { LEGACY_PRIMARY_USER_ID } from '@/lib/auth/constants';
 import { isNeonAuthConfigured } from '@/lib/auth/neon-server';
 import { syncNeonSessionToLocalUser } from '@/lib/auth/neon-sync';
 import { hasRequiredRole, isSuperAdmin } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
+import type { AdminModuleId, ModuleAccessAction } from '@/lib/auth/module-access-config';
 import type { Profile, User, UserRole } from '@prisma/client';
 import { redirect } from 'next/navigation';
 
@@ -177,12 +179,41 @@ export async function requireRole(allowedRoles: UserRole[], request?: Request) {
   return actor;
 }
 
+export async function requireModuleAccess(
+  moduleId: AdminModuleId,
+  action: ModuleAccessAction = 'view',
+  request?: Request,
+) {
+  const actor = await requireAuthActor(request);
+  if (!(await canAccessAdminModuleAction(actor.user.role, moduleId, action))) {
+    throw new Error('FORBIDDEN');
+  }
+
+  return actor;
+}
+
 export async function requirePageRole(allowedRoles: UserRole[], loginPath = '/admin/login') {
   const actor = await resolveRequestActor();
   if (!actor) {
     redirect(loginPath);
   }
   if (!hasRequiredRole(actor.user.role, allowedRoles)) {
+    redirect('/admin');
+  }
+
+  return actor;
+}
+
+export async function requirePageModuleAccess(
+  moduleId: AdminModuleId,
+  action: ModuleAccessAction = 'view',
+  loginPath = '/admin/login',
+) {
+  const actor = await resolveRequestActor();
+  if (!actor) {
+    redirect(loginPath);
+  }
+  if (!(await canAccessAdminModuleAction(actor.user.role, moduleId, action))) {
     redirect('/admin');
   }
 

@@ -202,7 +202,7 @@ function App({ profileSlug = null }) {
   }, [activePortfolioTheme, loadError, loading, siteConfig]);
 
   if (loading || !requestsSettled) {
-    return <GlobalLoader forceVisible message="Opening portfolio" hint="Loading your site content and theme..." />;
+    return <GlobalLoader forceVisible message="Opening portfolio" hint="Loading ..." />;
   }
 
   if (loadError || !siteContentData || !siteConfig || !hasValidTheme) {

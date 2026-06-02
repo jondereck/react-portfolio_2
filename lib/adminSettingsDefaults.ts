@@ -1,3 +1,5 @@
+import { defaultRoleModuleAccess } from '@/lib/auth/module-access-config';
+
 export const defaultAdminIntegrations = {
   contactRecipientEmail: 'jonderecknifas@gmail.com',
   contactSenderName: 'Portfolio',
@@ -7,6 +9,7 @@ export const defaultAdminIntegrations = {
   mediaScrapeEnabled: false,
   unclothyEnabled: false,
   unclothyWorkerEnabled: false,
+  unclothyGlobalConcurrentGenerationLimit: 5,
   blurUnclothyGenerated: true,
   unclothyAlbumDefaults: {},
   defaultGalleryView: 'cinematic',
@@ -24,6 +27,7 @@ export const defaultAdminSecurity = {
   mediaScrapeMaxZipFiles: 50,
   mediaScrapeTimeoutMs: 20_000,
   sessionVersion: 1,
+  roleModuleAccess: defaultRoleModuleAccess,
 };
 
 export const defaultAdminSettings = {

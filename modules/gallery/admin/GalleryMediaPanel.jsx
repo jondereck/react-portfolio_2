@@ -19,7 +19,6 @@ import {
   GalleryCmsModal,
   GalleryCmsShell,
   GalleryInspectorPanel,
-  GalleryTasksInspectorPanel,
   GalleryMediaGrid,
   GalleryMediaFilterModal,
   GalleryMediaToolbar,
@@ -50,8 +49,19 @@ function normalizePhotoId(value) {
   return value;
 }
 
+function createPendingPreviewTask(albumId, photoId, options = {}) {
+  return {
+    albumId,
+    photoId,
+    suppressNotFoundError: Boolean(options.suppressNotFoundError),
+    waitForFreshLoad: Boolean(options.waitForFreshLoad),
+    sawLoading: Boolean(options.sawLoading),
+  };
+}
+
 export default function GalleryMediaPanel({ controller, embedded = false }) {
-  const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v1';
+  const sidebarCollapsedStorageKey = 'gallery:sidebarCollapsed:v2';
+  const mediaGridColumnsStorageKey = 'gallery:mediaGridColumns:v1';
   const {
     albums,
     selectedAlbum,
@@ -103,9 +113,15 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
   const [mediaPage, setMediaPage] = useState(1);
   const [mediaPageSize, setMediaPageSize] = useState(48);
+  const [mediaGridColumns, setMediaGridColumns] = useState(() => {
+    if (typeof window === 'undefined') return 4;
+    const storedValue = Number(window.localStorage.getItem(mediaGridColumnsStorageKey));
+    return Number.isFinite(storedValue) ? Math.max(2, Math.min(6, storedValue)) : 4;
+  });
   const [manualSidebarCollapsed, setManualSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(sidebarCollapsedStorageKey) === 'true';
+    if (typeof window === 'undefined') return true;
+    const storedValue = window.localStorage.getItem(sidebarCollapsedStorageKey);
+    return storedValue === null ? true : storedValue === 'true';
   });
 
   const unclothyQueue = useUnclothyTasksStore((state) => state.queue);
@@ -126,6 +142,13 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     (Array.isArray(unclothyQueue) && unclothyQueue.length > 0) ||
     (Array.isArray(unclothyCompletedTasks) && unclothyCompletedTasks.length > 0);
 
+  const resetMediaViewToDefault = useCallback(() => {
+    setActiveChip('manual');
+    if (typeof setSortMode === 'function' && sortMode !== 'custom') {
+      setSortMode('custom');
+    }
+  }, [setSortMode, sortMode]);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return undefined;
     const mediaQuery = window.matchMedia('(min-width: 1024px)');
@@ -144,9 +167,20 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   }, [startUnclothyRunner]);
 
   useEffect(() => {
+    // Media page default: manual order, with newly added media placed first.
+    resetMediaViewToDefault();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(sidebarCollapsedStorageKey, manualSidebarCollapsed ? 'true' : 'false');
   }, [manualSidebarCollapsed, sidebarCollapsedStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(mediaGridColumnsStorageKey, String(mediaGridColumns));
+  }, [mediaGridColumns, mediaGridColumnsStorageKey]);
 
   const loadGallerySettings = useCallback(async () => {
     try {
@@ -210,6 +244,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     (Array.isArray(unclothyActiveTasks) ? unclothyActiveTasks.length : unclothyActive ? 1 : 0) +
     (Array.isArray(unclothyFailedTasks) ? unclothyFailedTasks.length : 0) +
     (Array.isArray(unclothyQueue) ? unclothyQueue.length : 0);
+  const hasPendingTaskDetails = detailsBadge > 0;
   const mobileTabs = useMemo(
     () => [
       { id: 'media', label: 'Media', icon: Images },
@@ -299,11 +334,22 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const pagedPhotos = filteredPhotos.slice((mediaPage - 1) * mediaPageSize, mediaPage * mediaPageSize);
 
   useEffect(() => {
-    // Selecting an image should auto-open the details panel on desktop.
+    // Selecting an image auto-opens details. When nothing is selected and no generation task is pending, collapse it.
     if (!isDesktop) return;
-    if (selectedPhotoIds.length === 0) return;
+    if (selectedPhoto) {
+      setDetailsOpenDesktop(true);
+      return;
+    }
+    if (!hasPendingTaskDetails) {
+      setDetailsOpenDesktop(false);
+    }
+  }, [hasPendingTaskDetails, isDesktop, selectedPhoto]);
+
+  useEffect(() => {
+    // Surface running/queued generation details in desktop view as soon as they appear.
+    if (!isDesktop || !hasPendingTaskDetails) return;
     setDetailsOpenDesktop(true);
-  }, [isDesktop, selectedPhotoIds.length]);
+  }, [hasPendingTaskDetails, isDesktop]);
 
   const handleOpenUpload = () => {
     if (typeof window !== 'undefined' && window.matchMedia?.('(min-width: 1024px)')?.matches) {
@@ -356,9 +402,16 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       return;
     }
 
-    setPendingPreviewTask({ albumId, photoId, suppressNotFoundError });
+    const isDifferentAlbum = albumId !== selectedAlbumId;
+    setPendingPreviewTask(
+      createPendingPreviewTask(albumId, photoId, {
+        suppressNotFoundError,
+        waitForFreshLoad: isDifferentAlbum,
+      }),
+    );
 
-    if (albumId !== selectedAlbumId) {
+    if (isDifferentAlbum) {
+      resetMediaViewToDefault();
       setSelectedAlbumId(albumId);
       return;
     }
@@ -381,7 +434,23 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     if (!pendingPreviewTask) return;
     if (!pendingPreviewTask.albumId || !pendingPreviewTask.photoId) return;
     if (pendingPreviewTask.albumId !== selectedAlbumId) return;
-    if (loadingPhotos) return;
+    if (pendingPreviewTask.waitForFreshLoad) {
+      if (loadingPhotos) {
+        if (!pendingPreviewTask.sawLoading) {
+          setPendingPreviewTask((current) => {
+            if (!current || !current.waitForFreshLoad || current.sawLoading) return current;
+            return { ...current, sawLoading: true };
+          });
+        }
+        return;
+      }
+
+      if (!pendingPreviewTask.sawLoading) {
+        return;
+      }
+    } else if (loadingPhotos) {
+      return;
+    }
 
     const found = photos.find((photo) => normalizePhotoId(photo.id) === normalizePhotoId(pendingPreviewTask.photoId)) ?? null;
     if (found) {
@@ -460,6 +529,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           }
 
           await loadAlbums();
+          resetMediaViewToDefault();
           setSelectedAlbumId(created.id);
           return created;
         }}
@@ -502,7 +572,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
             searchValue={searchValue}
             onSearchChange={setSearchValue}
             onOpenFilter={handleOpenFilter}
-            onToggleDetails={() => setDetailsOpenDesktop((current) => !current)}
+            onToggleDetails={selectedPhoto || hasTasks ? () => setDetailsOpenDesktop((current) => !current) : undefined}
             detailsOpen={detailsOpenDesktop}
             detailsBadge={detailsBadge}
             onOpenImport={handleOpenImport}
@@ -515,6 +585,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
             selectedAlbumId={selectedAlbumId}
             loadingAlbums={loadingAlbums}
             onSelectAlbum={(albumId) => {
+              resetMediaViewToDefault();
               setSelectedAlbumId(albumId);
               setAlbumSwitchOpen(false);
               setActiveTab('media');
@@ -552,6 +623,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   chips={chips}
                   onChipChange={handleChipChange}
                   onOpenFilter={handleOpenFilter}
+                  gridColumns={mediaGridColumns}
+                  onGridColumnsChange={setMediaGridColumns}
                 />
 
               {loadingPhotos ? (
@@ -578,6 +651,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                     onOpenPreview={handleOpenPreview}
                     inspectorOpen={Boolean(selectedPhoto)}
                     blurUnclothyGenerated={blurUnclothyGenerated}
+                    gridColumns={mediaGridColumns}
                     emptyState={
                       photos.length === 0 ? (
                         <GalleryEmptyState
@@ -590,7 +664,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                     }
                   />
 
-                  <div className="mt-4 flex flex-col gap-3 px-4 pb-2 sm:flex-row sm:items-center sm:justify-between sm:px-5 lg:px-6">
+                  <div className="mt-4 flex flex-col items-center gap-3 px-4 pb-2 text-center sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:text-left lg:px-6">
                     <div className="text-sm text-slate-600 dark:text-slate-300">
                       <span className="font-medium text-slate-900 dark:text-slate-50">Showing</span>{' '}
                       <span className="tabular-nums">
@@ -599,7 +673,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                       <span>of</span> <span className="tabular-nums font-medium">{mediaTotal}</span>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
                       <label className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                         <span className="hidden sm:inline">Per page</span>
                         <select
@@ -773,11 +847,16 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         }
         inspector={
           isDesktop && detailsOpenDesktop ? (
-            selectedPhoto ? (
+            selectedPhoto || hasTasks ? (
               <GalleryInspectorPanel
                 photo={selectedPhoto}
                 album={selectedAlbum}
-                onClose={clearPhotoSelection}
+                onClose={() => {
+                  clearPhotoSelection();
+                  if (!selectedPhoto) {
+                    setDetailsOpenDesktop(false);
+                  }
+                }}
                 blurUnclothyGenerated={blurUnclothyGenerated}
                 onPhotoUpdated={updatePhotoInState}
               >
@@ -798,21 +877,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                   />
                 ) : null}
               </GalleryInspectorPanel>
-            ) : (
-              <GalleryTasksInspectorPanel
-                active={unclothyActive}
-                activeTasks={unclothyActiveTasks}
-                failedTasks={unclothyFailedTasks}
-                completedTasks={unclothyCompletedTasks}
-                queue={unclothyQueue}
-                onOpenTask={openTask}
-                onCancelActive={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
-                onRetryActive={(task) => retryUnclothyTask?.(task?.id || task?.queueTaskId)}
-                onDismissActive={(task) => dismissUnclothyTask?.(task?.id || task?.queueTaskId)}
-                onCancelQueued={(task) => cancelUnclothyTask?.(task?.id || task?.queueTaskId)}
-                onClearQueue={clearUnclothyQueue}
-              />
-            )
+            ) : null
           ) : null
         }
         mobileFooterActions={
@@ -915,6 +980,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                     : 'border-slate-200 bg-white text-slate-900 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-50'
                 }`}
                 onClick={() => {
+                  resetMediaViewToDefault();
                   setSelectedAlbumId(album.id);
                   setAlbumSwitchOpen(false);
                 }}
@@ -963,6 +1029,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         albums={albums}
         selectedAlbumId={selectedAlbumId}
         onConfirm={(albumId) => {
+          resetMediaViewToDefault();
           setSelectedAlbumId(albumId);
           setAlbumSwitchOpen(false);
           setActiveTab('media');

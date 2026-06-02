@@ -1,5 +1,8 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+
 export default function GalleryCmsShell({
   header,
   sidebar,
@@ -10,6 +13,27 @@ export default function GalleryCmsShell({
   sidebarCollapsed = false,
   embedded = false,
 }) {
+  const reduceMotion = useReducedMotion();
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const update = () => setIsDesktop(Boolean(mediaQuery.matches));
+    update();
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', update);
+      return () => mediaQuery.removeEventListener('change', update);
+    }
+    mediaQuery.addListener(update);
+    return () => mediaQuery.removeListener(update);
+  }, []);
+
+  const disableMotion = reduceMotion || !isDesktop;
+  const motionTransition = disableMotion
+    ? { duration: 0 }
+    : { type: 'spring', stiffness: 420, damping: 38, mass: 0.8 };
+
   // Tailwind needs these classes to be statically present for arbitrary grid template values.
   const desktopGridColumns = inspector
     ? sidebarCollapsed
@@ -23,12 +47,34 @@ export default function GalleryCmsShell({
     <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       {header}
 
-      <div className={`grid ${desktopGridColumns}`}>
-        {sidebar}
+      <motion.div
+        className={`grid transition-[grid-template-columns] duration-300 ease-out lg:h-[calc(100vh-145px)] lg:min-h-[520px] lg:overflow-hidden ${desktopGridColumns}`}
+        layout
+        transition={motionTransition}
+      >
+        <motion.div className="min-w-0 lg:h-full lg:overflow-hidden" layout transition={motionTransition}>
+          {sidebar}
+        </motion.div>
         {mobileTabs}
-        {main}
-        {inspector}
-      </div>
+        <motion.div className="min-w-0 lg:h-full lg:overflow-y-auto lg:overscroll-contain" layout transition={motionTransition}>
+          {main}
+        </motion.div>
+        <AnimatePresence initial={false}>
+          {inspector ? (
+            <motion.div
+              key="gallery-inspector"
+              className="min-w-0 lg:h-full lg:overflow-y-auto lg:overscroll-contain"
+              layout
+              initial={disableMotion ? false : { opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={disableMotion ? { opacity: 0 } : { opacity: 0, x: 18 }}
+              transition={motionTransition}
+            >
+              {inspector}
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </motion.div>
 
       {mobileFooterActions}
     </div>

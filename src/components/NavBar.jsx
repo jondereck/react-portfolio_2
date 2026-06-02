@@ -46,7 +46,7 @@ const NavBar = ({ darkMode, onToggleDark, config }) => {
 
     logoTapCountRef.current += 1;
 
-    if (logoTapCountRef.current >= 7) {
+    if (logoTapCountRef.current >= 3) {
       logoTapCountRef.current = 0;
       logoTapStartRef.current = 0;
       event?.preventDefault?.();

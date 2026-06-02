@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { experienceSchema } from '@/lib/validators';
 import { isRateLimited } from '@/lib/server/rate-limit';
@@ -54,7 +54,7 @@ export async function PUT(request: Request, context: RouteContext) {
   try {
     const payload = await request.json();
     const { actor, profile } = await resolveManagedProfileFromRequest(request, payload);
-    if (!canMutateContent(actor.user.role)) {
+    if (!(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'createUpdate'))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     const existing = await prisma.experience.findFirst({ where: { id, profileId: profile.id } });

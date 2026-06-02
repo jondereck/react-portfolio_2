@@ -143,13 +143,13 @@ export class GalleryService {
         return leftOrder - rightOrder;
       }
 
-      const leftCreatedAt = new Date(left.createdAt ?? left.uploadedAt).getTime();
-      const rightCreatedAt = new Date(right.createdAt ?? right.uploadedAt).getTime();
+      const leftCreatedAt = new Date(left.uploadedAt ?? left.createdAt).getTime();
+      const rightCreatedAt = new Date(right.uploadedAt ?? right.createdAt).getTime();
       if (leftCreatedAt !== rightCreatedAt) {
-        return leftCreatedAt - rightCreatedAt;
+        return rightCreatedAt - leftCreatedAt;
       }
 
-      return left.id - right.id;
+      return right.id - left.id;
     });
   }
 
@@ -562,9 +562,9 @@ export class GalleryService {
             };
           }
 
-          const last = await tx.albumPhoto.findFirst({
+          const first = await tx.albumPhoto.findFirst({
             where: { albumId: targetAlbumId },
-            orderBy: [{ sortOrder: 'desc' }, { id: 'desc' }],
+            orderBy: [{ sortOrder: 'asc' }, { uploadedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
             select: { sortOrder: true },
           });
 
@@ -581,7 +581,7 @@ export class GalleryService {
               dateTaken: photo.dateTaken,
               sourceType: photo.sourceType,
               sourceId: photo.sourceId,
-              sortOrder: (last?.sortOrder ?? -1) + 1,
+              sortOrder: (first?.sortOrder ?? 0) - 1,
             },
             select: albumPhotoSelect,
           });

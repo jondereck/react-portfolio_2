@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { canMutateContent } from '@/lib/auth/roles';
+import { canAccessAdminModuleAction } from '@/lib/auth/module-access';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
 import { defaultSiteConfig } from '@/lib/siteContentDefaults';
 import { DEFAULT_PORTFOLIO_THEME, isPortfolioThemeId, normalizePortfolioThemeRandomPool } from '@/lib/portfolioThemes';
@@ -315,9 +315,6 @@ export async function PUT(request: Request) {
   if (!actor || !profile) {
     return createFormErrorResponse({ error: 'Unauthorized', errorCode: 'UNAUTHENTICATED' }, 401);
   }
-  if (!canMutateContent(actor.user.role)) {
-    return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
-  }
 
   try {
     const body = await request.json();
@@ -360,6 +357,23 @@ export async function PUT(request: Request) {
         },
         400,
       );
+    }
+
+    const updatesNavigation = Boolean(parsed.data.navigation);
+    const updatesPortfolioConfig = Boolean(
+      parsed.data.logoText ||
+        parsed.data.logoImage ||
+        parsed.data.portfolioTheme ||
+        parsed.data.portfolioThemeRotationMinutes !== undefined ||
+        parsed.data.portfolioThemeRandomPool,
+    );
+
+    if (updatesNavigation && !(await canAccessAdminModuleAction(actor.user.role, 'navigation', 'configure'))) {
+      return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
+    }
+
+    if (updatesPortfolioConfig && !(await canAccessAdminModuleAction(actor.user.role, 'portfolio', 'createUpdate'))) {
+      return createFormErrorResponse({ error: 'Forbidden', errorCode: 'FORBIDDEN' }, 403);
     }
 
     const current = await prisma.siteConfig.findUnique({ where: { profileId: profile.id } });

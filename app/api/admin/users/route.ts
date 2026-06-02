@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { USER_MANAGEMENT_ROLES } from '@/lib/auth/roles';
 import { toAuthErrorResponse } from '@/lib/auth/responses';
-import { requireRole } from '@/lib/auth/session';
+import { requireModuleAccess } from '@/lib/auth/session';
 import { createManagedUser, listManagedUsers, MANAGEABLE_ROLES } from '@/lib/auth/user-management';
 import { MIN_PASSWORD_LENGTH } from '@/lib/password/policy';
 import { createFieldErrorResponse, createFormErrorResponse, createZodFormErrorResponse } from '@/lib/server/form-responses';
@@ -17,7 +16,7 @@ const createUserSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    await requireRole(USER_MANAGEMENT_ROLES, request);
+    await requireModuleAccess('users', 'view', request);
     const users = await listManagedUsers();
     return NextResponse.json({ users });
   } catch (error) {
@@ -29,7 +28,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const actor = await requireRole(USER_MANAGEMENT_ROLES, request);
+    const actor = await requireModuleAccess('users', 'createUpdate', request);
     const parsed = createUserSchema.safeParse(await request.json());
     if (!parsed.success) {
       return createZodFormErrorResponse(parsed.error, { errorCode: 'INVALID_USER_PAYLOAD' });
