@@ -2,7 +2,7 @@
 'use client';
 
 import { getAdminMediaUrl, getPlayableMediaUrl, isVideoUrl } from '../utils';
-import { isPhotoVideo } from '@/lib/gallery-media';
+import { isPhotoAudio, isPhotoVideo } from '@/lib/gallery-media';
 
 export default function MediaPreview({
   url,
@@ -25,6 +25,23 @@ export default function MediaPreview({
     url && typeof url === 'object'
       ? url
       : { imageUrl: resolvedUrl, mimeType, sourceType, sourceId };
+
+  if (isPhotoAudio(mediaRecord, resolvedUrl)) {
+    return (
+      <audio
+        ref={mediaRef}
+        src={resolvedUrl}
+        controls={controls}
+        onLoadStart={onLoadStart}
+        onLoadedData={onLoadedData}
+        onCanPlay={onCanPlay}
+        onError={onError}
+        preload="metadata"
+        className="w-full"
+        {...videoProps}
+      />
+    );
+  }
 
   if (isPhotoVideo(mediaRecord, resolvedUrl) || isVideoUrl(resolvedUrl)) {
     return (

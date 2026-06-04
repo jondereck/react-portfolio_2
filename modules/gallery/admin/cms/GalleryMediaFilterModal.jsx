@@ -26,6 +26,7 @@ const defaultFilterOptions = [
   { id: 'all', title: 'All media', description: 'Show every media item in the album.' },
   { id: 'images', title: 'Images', description: 'Show photos and still image files only.' },
   { id: 'videos', title: 'Videos', description: 'Show video media only.' },
+  { id: 'audio', title: 'Audio', description: 'Show audio files only.' },
   { id: 'nsfw', title: 'NSFW images', description: 'Show images flagged by the NSFW scanner.' },
 ];
 

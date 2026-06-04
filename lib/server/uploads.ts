@@ -4,6 +4,7 @@ import { getCloudinaryFolderPath } from '@/lib/server/admin-settings';
 
 export const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
 export const MAX_VIDEO_FILE_SIZE = 120 * 1024 * 1024;
+export const MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024;
 export const MAX_DOCUMENT_FILE_SIZE = 20 * 1024 * 1024;
 export const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 export const ALLOWED_VIDEO_MIME_TYPES = new Set([
@@ -12,8 +13,20 @@ export const ALLOWED_VIDEO_MIME_TYPES = new Set([
   'video/webm',
   'video/x-matroska',
 ]);
+export const ALLOWED_AUDIO_MIME_TYPES = new Set([
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/ogg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/flac',
+  'audio/x-flac',
+  'audio/x-m4a',
+]);
 export const ALLOWED_DOCUMENT_MIME_TYPES = new Set(['application/pdf']);
 export const ALLOWED_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'mkv']);
+export const ALLOWED_AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'aac', 'ogg', 'm4a', 'flac']);
 export const ALLOWED_DOCUMENT_EXTENSIONS = new Set(['pdf']);
 
 export class RequestValidationError extends Error {
@@ -95,8 +108,32 @@ export function validateMediaFile(file: File, fieldName = 'imageFile') {
     return;
   }
 
+  const isAudioByMime = ALLOWED_AUDIO_MIME_TYPES.has(normalizedType);
+  const isAudioByExtension = ALLOWED_AUDIO_EXTENSIONS.has(extension);
+
+  if (isAudioByMime || (!normalizedType && isAudioByExtension)) {
+    if (!isAudioByExtension) {
+      throw new RequestValidationError(
+        `${fieldName} audio format is not allowed. Use MP3, WAV, AAC, OGG, M4A, or FLAC.`,
+        400,
+        { [fieldName]: ['Unsupported audio extension.'] },
+        'UNSUPPORTED_MEDIA_TYPE',
+      );
+    }
+
+    if (file.size > MAX_AUDIO_FILE_SIZE) {
+      throw new RequestValidationError(
+        `${fieldName} audio must be 50MB or smaller.`,
+        413,
+        { [fieldName]: ['Audio file is too large.'] },
+        'AUDIO_TOO_LARGE',
+      );
+    }
+    return;
+  }
+
   throw new RequestValidationError(
-    `${fieldName} must be a supported image or video format.`,
+    `${fieldName} must be a supported image, video, or audio format.`,
     400,
     { [fieldName]: ['Unsupported media type.'] },
     'UNSUPPORTED_MEDIA_TYPE',
@@ -419,7 +456,8 @@ export async function uploadPreparedMediaFile(prepared: PreparedMediaUpload, fol
     throw new RequestValidationError('Media upload failed.', 502, undefined, 'MEDIA_UPLOAD_FAILED');
   }
 
-  const isVideoResource = result.resource_type === 'video';
+  const isAudioUpload = prepared.mimeType.startsWith('audio/');
+  const isVideoResource = result.resource_type === 'video' && !isAudioUpload;
   const playbackUrl =
     isVideoResource && result.public_id
       ? cloudinary.url(result.public_id, {

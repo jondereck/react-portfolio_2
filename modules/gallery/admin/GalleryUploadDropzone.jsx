@@ -7,7 +7,7 @@ import GalleryBatchProgressCard from './GalleryBatchProgressCard';
 
 export default function GalleryUploadDropzone({
   title = 'Upload files',
-  description = 'Drag and drop images or videos here, or choose files from your device.',
+  description = 'Drag and drop images, videos, or audio here, or choose files from your device.',
   helpText = 'Uploads go directly into the selected album.',
   uploadLabel = 'Choose files',
   buttonTone = 'outline',
@@ -107,7 +107,7 @@ export default function GalleryUploadDropzone({
         ref={inputRef}
         className="hidden"
         type="file"
-        accept="image/*,video/*"
+        accept="image/*,video/*,audio/*"
         multiple
         disabled={uploading}
         onChange={async (event) => {

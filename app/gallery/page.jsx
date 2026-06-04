@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { getVideoPosterUrl, isPhotoVideo, shouldBlurPhoto } from '@/lib/gallery-media';
+import { getVideoPosterUrl, isPhotoAudio, isPhotoVideo, shouldBlurPhoto } from '@/lib/gallery-media';
 import { useLoadingStore } from '@/store/loading';
 
 const GALLERY_VIEW_STORAGE_KEY = 'private-gallery-view';
@@ -37,7 +37,7 @@ const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
 const AlbumCover = ({ photo, alt, className, fallbackClassName, blurUnclothyGenerated = true }) => {
   const src = typeof photo?.imageUrl === 'string' ? photo.imageUrl : '';
   const shouldBlur = Boolean(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated });
-  if (!src) {
+  if (!src || isPhotoAudio(photo)) {
     return <div className={fallbackClassName} />;
   }
 
@@ -135,13 +135,15 @@ const attachAlbumMediaCounts = async (albums) => {
       try {
         const payload = await fetchJson(`/api/gallery/albums/${album.id}/photos?sort=custom`);
         const mediaItems = normalizeAlbumPhotosPayload(payload);
-        const videos = mediaItems.reduce((total, item) => (isPhotoVideo(item) ? total + 1 : total), 0);
+        const audio = mediaItems.reduce((total, item) => (isPhotoAudio(item) ? total + 1 : total), 0);
+        const videos = mediaItems.reduce((total, item) => (!isPhotoAudio(item) && isPhotoVideo(item) ? total + 1 : total), 0);
 
         return {
           ...album,
           mediaCount: {
-            photos: Math.max(mediaItems.length - videos, 0),
+            photos: Math.max(mediaItems.length - videos - audio, 0),
             videos,
+            audio,
           },
         };
       } catch {
@@ -150,6 +152,7 @@ const attachAlbumMediaCounts = async (albums) => {
           mediaCount: {
             photos: album?._count?.photos ?? 0,
             videos: 0,
+            audio: 0,
           },
         };
       }
@@ -169,13 +172,16 @@ const getAlbumMediaCounts = (album) => {
     return {
       photos: album?._count?.photos ?? 0,
       videos: 0,
+      audio: 0,
     };
   }
 
-  const videos = mediaItems.reduce((total, item) => (isPhotoVideo(item) ? total + 1 : total), 0);
+  const audio = mediaItems.reduce((total, item) => (isPhotoAudio(item) ? total + 1 : total), 0);
+  const videos = mediaItems.reduce((total, item) => (!isPhotoAudio(item) && isPhotoVideo(item) ? total + 1 : total), 0);
   return {
-    photos: Math.max(mediaItems.length - videos, 0),
+    photos: Math.max(mediaItems.length - videos - audio, 0),
     videos,
+    audio,
   };
 };
 
@@ -239,6 +245,16 @@ function AlbumStats({ counts, pillClassName = '', className = '' }) {
           )}
         >
           {counts.videos} Videos
+        </span>
+      ) : null}
+      {counts.audio > 0 ? (
+        <span
+          className={joinClassNames(
+            'rounded-full border border-white/28 bg-white/[0.03] px-4 py-2 text-[11px] uppercase tracking-[0.22em] text-white/92',
+            pillClassName,
+          )}
+        >
+          {counts.audio} Audio
         </span>
       ) : null}
     </div>
@@ -376,7 +392,7 @@ function CinematicGalleryView({
                           {album.name}
                         </p>
                         <p className="text-[11px] uppercase tracking-[0.2em] text-white/82">
-                          {albumCounts.photos} photos{albumCounts.videos > 0 ? ` • ${albumCounts.videos} videos` : ''}
+                          {albumCounts.photos} photos{albumCounts.videos > 0 ? ` • ${albumCounts.videos} videos` : ''}{albumCounts.audio > 0 ? ` • ${albumCounts.audio} audio` : ''}
                         </p>
                       </div>
                     </button>

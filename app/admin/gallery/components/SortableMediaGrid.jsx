@@ -18,9 +18,9 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Move, ScanLine } from 'lucide-react';
+import { GripVertical, Move, Music2, ScanLine } from 'lucide-react';
 import MediaPreview from './MediaPreview';
-import { shouldBlurPhoto } from '@/lib/gallery-media';
+import { isPhotoAudio, shouldBlurPhoto } from '@/lib/gallery-media';
 
 const TOUCH_MULTI_SELECT_DISTANCE = 14;
 
@@ -67,7 +67,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
     }
     if (isDragging) return;
     const target = event.target;
-    if (target instanceof Element && target.closest('button,input,label,a,video')) {
+    if (target instanceof Element && target.closest('button,input,label,a,video,audio')) {
       return;
     }
     onToggleSelect(photo.id, { shiftKey: event.shiftKey });
@@ -82,7 +82,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
       onPointerDown={(event) => {
         if (event.pointerType !== 'touch' || isDragging) return;
         const target = event.target;
-        if (target instanceof Element && target.closest('button,input,label,a,video,[data-drag-handle]')) {
+        if (target instanceof Element && target.closest('button,input,label,a,video,audio,[data-drag-handle]')) {
           return;
         }
         event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -219,17 +219,26 @@ const SortableMediaCard = memo(function SortableMediaCard({
             }}
             aria-label={`View ${photo.caption || `media ${photo.id}`}`}
           >
-            <MediaPreview
-              url={photo.imageUrl}
-              mimeType={photo.mimeType}
-              sourceType={photo.sourceType}
-              sourceId={photo.sourceId}
-              alt={photo.caption || `Media ${photo.id}`}
-              className={`h-full w-full bg-slate-100 object-contain dark:bg-slate-800 ${
-                shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated }) ? 'blur-md' : ''
-              }`}
-              controls={false}
-            />
+            {isPhotoAudio(photo) ? (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-100 p-4 dark:bg-slate-800">
+                <Music2 className="h-10 w-10 text-slate-400 dark:text-slate-500" />
+                <p className="max-w-full truncate text-xs text-slate-500 dark:text-slate-400">
+                  {photo.originalFilename || photo.caption || 'Audio'}
+                </p>
+              </div>
+            ) : (
+              <MediaPreview
+                url={photo.imageUrl}
+                mimeType={photo.mimeType}
+                sourceType={photo.sourceType}
+                sourceId={photo.sourceId}
+                alt={photo.caption || `Media ${photo.id}`}
+                className={`h-full w-full bg-slate-100 object-contain dark:bg-slate-800 ${
+                  shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated }) ? 'blur-md' : ''
+                }`}
+                controls={false}
+              />
+            )}
           </button>
 
           <button
@@ -260,7 +269,7 @@ const SortableMediaCard = memo(function SortableMediaCard({
           </div>
         ) : null}
 
-        {onSetCover ? (
+        {onSetCover && !isPhotoAudio(photo) ? (
           <div className="flex justify-center">
             <button
               type="button"
@@ -301,17 +310,26 @@ const OverlayCard = memo(function OverlayCard({ photo, draggingCount, blurUnclot
         </span>
       ) : null}
       <div className="mb-2 aspect-[4/3] overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800">
-        <MediaPreview
-          url={photo.imageUrl}
-          mimeType={photo.mimeType}
-          sourceType={photo.sourceType}
-          sourceId={photo.sourceId}
-          alt={photo.caption || `Media ${photo.id}`}
-          className={`h-full w-full bg-slate-100 object-contain dark:bg-slate-800 ${
-            shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated }) ? 'blur-md' : ''
-          }`}
-          controls={false}
-        />
+        {isPhotoAudio(photo) ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 p-4">
+            <Music2 className="h-8 w-8 text-slate-400 dark:text-slate-500" />
+            <p className="max-w-full truncate text-xs text-slate-500 dark:text-slate-400">
+              {photo.originalFilename || photo.caption || 'Audio'}
+            </p>
+          </div>
+        ) : (
+          <MediaPreview
+            url={photo.imageUrl}
+            mimeType={photo.mimeType}
+            sourceType={photo.sourceType}
+            sourceId={photo.sourceId}
+            alt={photo.caption || `Media ${photo.id}`}
+            className={`h-full w-full bg-slate-100 object-contain dark:bg-slate-800 ${
+              shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated }) ? 'blur-md' : ''
+            }`}
+            controls={false}
+          />
+        )}
       </div>
       <p className="truncate text-xs font-medium">{photo.caption || 'Untitled media'}</p>
       <div className="mt-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">

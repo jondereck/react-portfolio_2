@@ -9,6 +9,7 @@ import { downloadFromApi } from "@/lib/download-client";
 import {
   getPlayableMediaUrl,
   getVideoPosterUrl,
+  isPhotoAudio,
   isPhotoVideo,
   shouldBlurPhoto,
 } from "@/lib/gallery-media";
@@ -18,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Music2,
   Pause,
   Play,
   Repeat2,
@@ -124,8 +126,8 @@ const getSplitPanelFilter = (panelId) =>
 
 const mediaMatchesFilter = (item, filter) => {
   if (!item) return false;
-  if (filter === "photos") return !isPhotoVideo(item);
-  if (filter === "videos") return isPhotoVideo(item);
+  if (filter === "photos") return !isPhotoVideo(item) && !isPhotoAudio(item);
+  if (filter === "videos") return isPhotoVideo(item) && !isPhotoAudio(item);
   return true;
 };
 
@@ -595,6 +597,12 @@ export default function AlbumDetailPage({ params }) {
   const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
   const [isAlbumDownloadPending, setIsAlbumDownloadPending] = useState(false);
   const [downloadingPhotoId, setDownloadingPhotoId] = useState(null);
+  const [audioPlayerOpen, setAudioPlayerOpen] = useState(false);
+  const [currentAudioTrackIndex, setCurrentAudioTrackIndex] = useState(0);
+  const [audioIsPlaying, setAudioIsPlaying] = useState(false);
+  const [audioLoop, setAudioLoop] = useState(false);
+  const audioRef = useRef(null);
+  const audioIsPlayingRef = useRef(false);
   const activeVideoRef = useRef(null);
   const splitLeftVideoRef = useRef(null);
   const splitRightVideoRef = useRef(null);
@@ -761,15 +769,10 @@ export default function AlbumDetailPage({ params }) {
   }, [shareToken, slug, sort, startGlobalLoading, stopGlobalLoading]);
 
   const filteredPhotos = photos.filter((item) => {
-    if (mediaFilter === "photos") {
-      return !isPhotoVideo(item);
-    }
-    if (mediaFilter === "videos") {
-      return isPhotoVideo(item);
-    }
-    if (mediaFilter === "nsfw") {
-      return !isPhotoVideo(item) && shouldBlurPhoto(item, { blurEnabled: true });
-    }
+    if (isPhotoAudio(item)) return false;
+    if (mediaFilter === "photos") return !isPhotoVideo(item);
+    if (mediaFilter === "videos") return isPhotoVideo(item);
+    if (mediaFilter === "nsfw") return !isPhotoVideo(item) && shouldBlurPhoto(item, { blurEnabled: true });
     return true;
   });
   const activeFilterLabel =
@@ -786,6 +789,45 @@ export default function AlbumDetailPage({ params }) {
       dateDesc: "Newest first",
     }[sort] || "Manual";
   const filteredPhotoCount = filteredPhotos.length;
+
+  const audioTracks = useMemo(() => photos.filter((item) => isPhotoAudio(item)), [photos]);
+  const currentAudioTrack = audioTracks[currentAudioTrackIndex] ?? null;
+
+  // Keep audioIsPlayingRef in sync so track-change effect can read it without stale closure
+  useEffect(() => { audioIsPlayingRef.current = audioIsPlaying; }, [audioIsPlaying]);
+
+  // When the current track index changes, reload the audio element and resume if it was playing
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (audioIsPlayingRef.current) {
+      el.load();
+      el.play().catch(() => {});
+    }
+  // currentAudioTrackIndex is the only intended dep; audioIsPlayingRef is a ref, not state
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentAudioTrackIndex]);
+
+  const handleAudioTogglePlay = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    if (el.paused) {
+      el.play().catch(() => {});
+    } else {
+      el.pause();
+    }
+  };
+
+  const handleAudioPrev = () => {
+    if (audioTracks.length <= 1) return;
+    setCurrentAudioTrackIndex((i) => (i - 1 + audioTracks.length) % audioTracks.length);
+  };
+
+  const handleAudioNext = useCallback(() => {
+    if (audioTracks.length === 0) return;
+    setCurrentAudioTrackIndex((i) => (i + 1) % audioTracks.length);
+  }, [audioTracks.length]);
+
   const handleDownloadAlbumZip = useCallback(async () => {
     if (accessMode === "public") {
       toast.error("Downloads are disabled for public viewers.");
@@ -1854,9 +1896,11 @@ export default function AlbumDetailPage({ params }) {
   const albumCover =
     album?.coverPhoto?.imageUrl ||
     (Array.isArray(photos) && photos.length > 0 ? photos[0].imageUrl : "");
-  const albumCoverIsVideo = isPhotoVideo(album?.coverPhoto, albumCover);
+  const albumCoverIsAudio = isPhotoAudio(album?.coverPhoto, albumCover);
+  const albumCoverIsVideo = !albumCoverIsAudio && isPhotoVideo(album?.coverPhoto, albumCover);
   const totalPhotos = photos.length;
-  const totalVideos = photos.filter((item) => isPhotoVideo(item)).length;
+  const totalAudio = photos.filter((item) => isPhotoAudio(item)).length;
+  const totalVideos = photos.filter((item) => !isPhotoAudio(item) && isPhotoVideo(item)).length;
   const profileLinks = useMemo(() => {
     const links = album?.profileLinks;
     if (!Array.isArray(links)) return [];
@@ -1881,7 +1925,7 @@ export default function AlbumDetailPage({ params }) {
         </Link>
 
         <section className="relative overflow-hidden rounded-3xl border border-white/15 bg-slate-900/70 shadow-2xl shadow-slate-950/70">
-          {albumCover ? (
+          {albumCover && !albumCoverIsAudio ? (
             albumCoverIsVideo ? (
               <VideoPoster
                 src={albumCover}
@@ -1948,8 +1992,8 @@ export default function AlbumDetailPage({ params }) {
               Viewing Mode
             </p>
             <p className="text-sm text-slate-200">
-              {totalPhotos} total · {totalPhotos - totalVideos} photos ·{" "}
-              {totalVideos} videos
+              {totalPhotos - totalAudio} items · {totalPhotos - totalVideos - totalAudio} photos · {totalVideos} videos
+              {totalAudio > 0 ? ` · ${totalAudio} audio track${totalAudio > 1 ? "s" : ""}` : ""}
             </p>
           </div>
           <div className="flex w-full flex-col gap-2 text-sm sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
@@ -2562,7 +2606,93 @@ export default function AlbumDetailPage({ params }) {
 
             {!hideUI ? (
               viewerMode !== "split" ? (
-                <div className="relative z-[70] mt-3 flex justify-center overflow-visible pb-14 transition-opacity duration-300 md:pb-2">
+                <div className="relative z-[70] mt-3 flex flex-col items-center gap-2 overflow-visible pb-14 transition-opacity duration-300 md:pb-2">
+                  {/* Embedded audio player — visible when album has tracks and player is open */}
+                  {audioTracks.length > 0 && audioPlayerOpen ? (
+                    <div className="flex w-full max-w-sm flex-col gap-2 rounded-2xl border border-white/15 bg-slate-900/80 px-3 py-2.5 backdrop-blur">
+                      <div className="flex items-center gap-2">
+                        <Music2 className={`h-3.5 w-3.5 shrink-0 ${audioIsPlaying ? "text-emerald-400 animate-pulse" : "text-slate-400"}`} />
+                        <p className="min-w-0 flex-1 truncate text-xs text-slate-200">
+                          {currentAudioTrack?.caption || currentAudioTrack?.originalFilename || "Audio track"}
+                        </p>
+                        <span className="shrink-0 text-[10px] text-slate-500">
+                          {currentAudioTrackIndex + 1} / {audioTracks.length}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleAudioPrev}
+                          disabled={audioTracks.length <= 1}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/20 text-white transition hover:bg-white/10 disabled:opacity-30"
+                          aria-label="Previous track"
+                        >
+                          <ChevronLeft className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAudioTogglePlay}
+                          className={`inline-flex h-8 w-8 items-center justify-center rounded-full border transition ${
+                            audioIsPlaying
+                              ? "border-emerald-300/60 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
+                              : "border-white/25 bg-white/10 text-white hover:bg-white/20"
+                          }`}
+                          aria-label={audioIsPlaying ? "Pause music" : "Play music"}
+                        >
+                          {audioIsPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleAudioNext}
+                          disabled={audioTracks.length <= 1}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/20 text-white transition hover:bg-white/10 disabled:opacity-30"
+                          aria-label="Next track"
+                        >
+                          <ChevronRight className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAudioLoop((l) => !l)}
+                          aria-pressed={audioLoop}
+                          aria-label={audioLoop ? "Disable loop" : "Enable loop"}
+                          title={audioLoop ? "Loop on" : "Loop off"}
+                          className={`inline-flex h-7 w-7 items-center justify-center rounded-full border transition ${
+                            audioLoop
+                              ? "border-emerald-300/60 bg-emerald-500/25 text-emerald-200 hover:bg-emerald-500/35"
+                              : "border-white/20 text-slate-400 hover:bg-white/10 hover:text-white"
+                          }`}
+                        >
+                          <Repeat2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {audioTracks.length > 1 ? (
+                        <div className="max-h-28 space-y-0.5 overflow-y-auto">
+                          {audioTracks.map((track, index) => (
+                            <button
+                              key={track.id}
+                              type="button"
+                              onClick={() => setCurrentAudioTrackIndex(index)}
+                              className={`flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-left text-[11px] transition ${
+                                index === currentAudioTrackIndex
+                                  ? "bg-emerald-500/20 text-emerald-200"
+                                  : "text-slate-400 hover:bg-white/8 hover:text-white"
+                              }`}
+                            >
+                              <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                index === currentAudioTrackIndex && audioIsPlaying
+                                  ? "bg-emerald-400 animate-pulse"
+                                  : "bg-slate-600"
+                              }`} />
+                              <span className="min-w-0 truncate">
+                                {track.caption || track.originalFilename || `Track ${index + 1}`}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   <div className="flex max-w-6xl flex-wrap items-center justify-center gap-2 overflow-visible">
                     <button
                       type="button"
@@ -2594,6 +2724,23 @@ export default function AlbumDetailPage({ params }) {
                         {isPlaying ? "Pause" : "Play"}
                       </span>
                     </button>
+                    {audioTracks.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setAudioPlayerOpen((open) => !open)}
+                        title={audioIsPlaying ? "Music playing" : "Background music"}
+                        className={`relative rounded-md border px-2 py-2 transition sm:px-3 ${
+                          audioPlayerOpen || audioIsPlaying
+                            ? "border-emerald-300/50 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"
+                            : "border-white/25 text-white hover:bg-white/10"
+                        }`}
+                      >
+                        <Music2 className="h-3.5 w-3.5" />
+                        {audioIsPlaying ? (
+                          <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-emerald-400 ring-1 ring-slate-900 animate-pulse" />
+                        ) : null}
+                      </button>
+                    ) : null}
                     <span className="text-xs uppercase tracking-[0.12em] text-slate-300">
                       Mode
                     </span>
@@ -2980,6 +3127,21 @@ export default function AlbumDetailPage({ params }) {
           </div>
         </div>
       ) : null}
+
+      {/* Persistent background audio element — always mounted when album has audio tracks */}
+      {audioTracks.length > 0 ? (
+        <audio
+          ref={audioRef}
+          src={currentAudioTrack?.imageUrl || ""}
+          onPlay={() => setAudioIsPlaying(true)}
+          onPause={() => setAudioIsPlaying(false)}
+          onEnded={audioLoop ? undefined : handleAudioNext}
+          loop={audioLoop}
+          preload="metadata"
+          className="sr-only"
+        />
+      ) : null}
+
     </main>
   );
 }

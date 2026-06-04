@@ -4,6 +4,7 @@ import { fetchJson, toRequestError, uploadFormDataWithProgress } from './gallery
 
 const MAX_IMAGE_FILE_SIZE = 5 * 1024 * 1024;
 const MAX_VIDEO_FILE_SIZE = 120 * 1024 * 1024;
+const MAX_AUDIO_FILE_SIZE = 50 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const ALLOWED_VIDEO_MIME_TYPES = new Set([
   'video/mp4',
@@ -11,7 +12,19 @@ const ALLOWED_VIDEO_MIME_TYPES = new Set([
   'video/webm',
   'video/x-matroska',
 ]);
+const ALLOWED_AUDIO_MIME_TYPES = new Set([
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/aac',
+  'audio/ogg',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/flac',
+  'audio/x-flac',
+  'audio/x-m4a',
+]);
 const ALLOWED_VIDEO_EXTENSIONS = new Set(['mp4', 'mov', 'webm', 'mkv']);
+const ALLOWED_AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'aac', 'ogg', 'm4a', 'flac']);
 
 const DIRECT_UPLOAD_NOT_AVAILABLE = 'DIRECT_UPLOAD_NOT_AVAILABLE';
 const DEFAULT_UPLOAD_CONCURRENCY = 3;
@@ -25,6 +38,7 @@ function validateMediaFile(file) {
   const extension = getFileExtension(file);
   const isImage = ALLOWED_IMAGE_MIME_TYPES.has(normalizedType);
   const isVideo = ALLOWED_VIDEO_MIME_TYPES.has(normalizedType) || (!normalizedType && ALLOWED_VIDEO_EXTENSIONS.has(extension));
+  const isAudio = ALLOWED_AUDIO_MIME_TYPES.has(normalizedType) || (!normalizedType && ALLOWED_AUDIO_EXTENSIONS.has(extension));
 
   if (isImage) {
     if ((file?.size || 0) > MAX_IMAGE_FILE_SIZE) {
@@ -65,9 +79,34 @@ function validateMediaFile(file) {
     return;
   }
 
+  if (isAudio) {
+    if (!ALLOWED_AUDIO_EXTENSIONS.has(extension)) {
+      throw toRequestError(
+        {
+          error: 'Audio uploads must use MP3, WAV, AAC, OGG, M4A, or FLAC files.',
+          errorCode: 'UNSUPPORTED_MEDIA_TYPE',
+        },
+        'Unsupported audio format.',
+        400,
+      );
+    }
+
+    if ((file?.size || 0) > MAX_AUDIO_FILE_SIZE) {
+      throw toRequestError(
+        {
+          error: 'Audio files must be 50MB or smaller.',
+          errorCode: 'AUDIO_TOO_LARGE',
+        },
+        'Audio file is too large.',
+        413,
+      );
+    }
+    return;
+  }
+
   throw toRequestError(
     {
-      error: 'Only PNG, JPG, WEBP, GIF, MP4, MOV, WEBM, or MKV files are supported.',
+      error: 'Only PNG, JPG, WEBP, GIF, MP4, MOV, WEBM, MKV, MP3, WAV, AAC, OGG, M4A, or FLAC files are supported.',
       errorCode: 'UNSUPPORTED_MEDIA_TYPE',
     },
     'Unsupported media type.',
@@ -87,8 +126,9 @@ async function sha256Hex(file) {
     .join('');
 }
 
-function buildCloudinaryPlaybackUrl({ cloudName, publicId, resourceType, secureUrl }) {
-  if (resourceType !== 'video' || !cloudName || !publicId) {
+function buildCloudinaryPlaybackUrl({ cloudName, publicId, resourceType, secureUrl, mimeType }) {
+  const isAudio = typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('audio/');
+  if (resourceType !== 'video' || !cloudName || !publicId || isAudio) {
     return secureUrl;
   }
 
@@ -179,6 +219,7 @@ async function saveUploadedAlbumPhoto({ albumId, file, uploaded }) {
         publicId: uploaded.public_id,
         resourceType: uploaded.resource_type,
         secureUrl: uploaded.secure_url,
+        mimeType: file.type,
       }),
       caption: file.name,
       cloudinaryPublicId: typeof uploaded.public_id === 'string' ? uploaded.public_id : undefined,
