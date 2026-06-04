@@ -3,8 +3,20 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment, useEffect, useRef, useState } from 'react';
-import { Camera, Download, Loader2, Pause, Play, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Camera,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Loader2,
+  Pause,
+  Play,
+  Sparkles,
+  Volume2,
+  VolumeX,
+  X,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import GalleryUnclothySection from './GalleryUnclothySection';
@@ -90,6 +102,8 @@ export default function GalleryMediaViewer({
   onClose,
   controller,
   album,
+  mediaItems = [],
+  onNavigate,
   openGenerate = false,
   onGenerateOpened,
   blurUnclothyGenerated = true,
@@ -112,6 +126,9 @@ export default function GalleryMediaViewer({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [unclothyAvailable, setUnclothyAvailable] = useState(false);
   const generateSheetRef = useRef(null);
+  const previewStageRef = useRef(null);
+  const mediaSwipeRef = useRef({ active: false, id: null, x: 0, y: 0 });
+  const lastTapRef = useRef({ time: 0, x: 0, y: 0 });
   const videoRef = useRef(null);
   const snapshotPlaybackRef = useRef(null);
   const videoPlaybackRef = useRef(new Map());
@@ -122,6 +139,16 @@ export default function GalleryMediaViewer({
   const [videoState, setVideoState] = useState(DEFAULT_VIDEO_STATE);
   const [enhancingSnapshot, setEnhancingSnapshot] = useState(false);
   const shouldBlurPreview = Boolean(photo) && shouldBlurPhoto(photo, { blurEnabled: blurUnclothyGenerated });
+  const normalizedMediaItems = useMemo(
+    () => (Array.isArray(mediaItems) ? mediaItems.filter(Boolean) : []),
+    [mediaItems],
+  );
+  const activeMediaIndex = useMemo(
+    () => normalizedMediaItems.findIndex((item) => item?.id === photo?.id),
+    [normalizedMediaItems, photo?.id],
+  );
+  const canNavigatePrevious = activeMediaIndex > 0;
+  const canNavigateNext = activeMediaIndex >= 0 && activeMediaIndex < normalizedMediaItems.length - 1;
   const queue = useUnclothyTasksStore((state) => state.queue);
   const activeTasks = useUnclothyTasksStore((state) => state.activeTasks);
   const selectedAlbumId = album?.id ?? null;
@@ -141,6 +168,123 @@ export default function GalleryMediaViewer({
   const [statusIndex, setStatusIndex] = useState(0);
   const canOpenGenerate = canGenerate && unclothyAvailable;
   const snapshotBusy = uploadingSnapshot || enhancingSnapshot;
+  const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
+
+  const clearSwipeGesture = () => {
+    mediaSwipeRef.current = { active: false, id: null, x: 0, y: 0 };
+  };
+
+  const enterPreviewFullscreen = async () => {
+    if (!photo || isVideoMedia || snapshot?.url) return;
+    const stage = previewStageRef.current;
+
+    if (stage?.requestFullscreen) {
+      try {
+        await stage.requestFullscreen();
+        setIsPreviewFullscreen(true);
+      } catch {
+        setIsPreviewFullscreen(true);
+      }
+      return;
+    }
+
+    setIsPreviewFullscreen(true);
+  };
+
+  const exitPreviewFullscreen = async () => {
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        setIsPreviewFullscreen(false);
+      }
+      return;
+    }
+
+    setIsPreviewFullscreen(false);
+  };
+
+  const togglePreviewFullscreen = () => {
+    if (!photo || isVideoMedia || snapshot?.url) return;
+    if (isPreviewFullscreen) {
+      void exitPreviewFullscreen();
+      return;
+    }
+
+    void enterPreviewFullscreen();
+  };
+
+  const navigateMedia = (direction) => {
+    if (!onNavigate || activeMediaIndex < 0) return;
+
+    const nextIndex = direction === 'next' ? activeMediaIndex + 1 : activeMediaIndex - 1;
+    const nextPhoto = normalizedMediaItems[nextIndex];
+    if (!nextPhoto) return;
+
+    setGenerateOpen(false);
+    clearSwipeGesture();
+    clearSnapshot();
+    onNavigate(nextPhoto);
+  };
+
+  const handleMediaPointerDown = (event) => {
+    if (!photo || isVideoMedia || snapshot?.url) return;
+    if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+    if (event.target instanceof Element && event.target.closest('button,input,label,a,video')) return;
+
+    mediaSwipeRef.current = {
+      active: true,
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+
+    try {
+      event.currentTarget?.setPointerCapture?.(event.pointerId);
+    } catch {
+      // Some mobile browsers can reject pointer capture during gesture negotiation.
+    }
+  };
+
+  const handleMediaPointerEnd = (event) => {
+    if (!mediaSwipeRef.current.active) return;
+    if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+    if (mediaSwipeRef.current.id !== event.pointerId) return;
+
+    const start = mediaSwipeRef.current;
+    clearSwipeGesture();
+
+    try {
+      event.currentTarget?.releasePointerCapture?.(event.pointerId);
+    } catch {
+      // Pointer capture may already be released after browser gestures.
+    }
+
+    const deltaX = event.clientX - start.x;
+    const deltaY = event.clientY - start.y;
+
+    if (Math.abs(deltaX) < 12 && Math.abs(deltaY) < 12) {
+      const now = Date.now();
+      const lastTap = lastTapRef.current;
+      const isDoubleTap =
+        now - lastTap.time < 280 &&
+        Math.abs(event.clientX - lastTap.x) < 18 &&
+        Math.abs(event.clientY - lastTap.y) < 18;
+
+      if (isDoubleTap) {
+        lastTapRef.current = { time: 0, x: 0, y: 0 };
+        togglePreviewFullscreen();
+        return;
+      }
+
+      lastTapRef.current = { time: now, x: event.clientX, y: event.clientY };
+      return;
+    }
+
+    if (Math.abs(deltaX) < 45 || Math.abs(deltaX) < Math.abs(deltaY)) return;
+
+    navigateMedia(deltaX < 0 ? 'next' : 'prev');
+  };
 
   const saveVideoPlaybackForId = (photoId, video, overrides = {}) => {
     if (!photoId || !video) return;
@@ -318,6 +462,7 @@ export default function GalleryMediaViewer({
   useEffect(() => {
     if (!open) {
       saveActiveVideoPlayback();
+      void exitPreviewFullscreen();
       setGenerateOpen(false);
       setUnclothyAvailable(false);
       setPreviewLoading(false);
@@ -364,6 +509,10 @@ export default function GalleryMediaViewer({
   }, [canGenerate, open]);
 
   useEffect(() => {
+    clearSwipeGesture();
+    lastTapRef.current = { time: 0, x: 0, y: 0 };
+    void exitPreviewFullscreen();
+    setGenerateOpen(false);
     setPreviewLoading(Boolean(photo));
     setSnapshot((current) => {
       if (current?.url) {
@@ -395,6 +544,46 @@ export default function GalleryMediaViewer({
 
     return () => clearInterval(interval);
   }, [isGeneratingPreview]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+
+    const handleFullscreenChange = () => {
+      setIsPreviewFullscreen(document.fullscreenElement === previewStageRef.current);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!open || !isPreviewFullscreen) return undefined;
+    if (typeof window === 'undefined') return undefined;
+
+    const handleKeyDown = (event) => {
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        (target.closest('input,textarea,select,button,a') || target.getAttribute('contenteditable') === 'true')
+      ) {
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        navigateMedia('next');
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        navigateMedia('prev');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPreviewFullscreen, open, activeMediaIndex, normalizedMediaItems, onNavigate]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -714,11 +903,36 @@ export default function GalleryMediaViewer({
                 </div>
 
                 <div className="grid flex-1 min-h-0 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(0,1fr)_420px]">
-                  <section className="relative min-h-0 bg-slate-100 p-2 dark:bg-slate-950 sm:p-4">
-                    <div className="relative flex h-full min-h-0 items-center justify-center overflow-hidden rounded-[22px] border border-slate-200 bg-[radial-gradient(circle_at_top,#f8fbff,#eef4fb_48%,#e2e8f0_100%)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top,#0b1220,#0b1220_30%,#020617_100%)] sm:rounded-[24px]">
+                  <section
+                    ref={previewStageRef}
+                    className={`relative min-h-0 bg-slate-100 p-2 dark:bg-slate-950 sm:p-4 ${
+                      isPreviewFullscreen
+                        ? 'fixed inset-0 z-[70] flex h-[100dvh] w-[100dvw] items-center justify-center bg-black p-0 dark:bg-black'
+                        : ''
+                    }`}
+                  >
+                    <div
+                      className={`relative flex h-full min-h-0 items-center justify-center overflow-hidden border border-slate-200 bg-[radial-gradient(circle_at_top,#f8fbff,#eef4fb_48%,#e2e8f0_100%)] dark:border-slate-800 dark:bg-[radial-gradient(circle_at_top,#0b1220,#0b1220_30%,#020617_100%)] ${
+                        isPreviewFullscreen ? 'w-full rounded-none border-0 bg-black dark:bg-black' : 'rounded-[22px] sm:rounded-[24px]'
+                      }`}
+                      style={{ touchAction: photo && !isVideoMedia && !snapshot?.url ? 'pan-y' : 'auto' }}
+                      onPointerDown={handleMediaPointerDown}
+                      onPointerUp={handleMediaPointerEnd}
+                      onPointerCancel={clearSwipeGesture}
+                      onDoubleClick={togglePreviewFullscreen}
+                    >
                       <div className="absolute left-4 top-4 z-20 rounded-full border border-slate-300 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-700 backdrop-blur dark:border-slate-700 dark:bg-slate-950/70 dark:text-slate-200">
                         Preview
                       </div>
+                      {isPreviewFullscreen ? (
+                        <button
+                          type="button"
+                          onClick={exitPreviewFullscreen}
+                          className="absolute right-4 top-4 z-40 inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 bg-white/10 px-3 py-2 text-sm font-medium text-white backdrop-blur transition hover:bg-white/20"
+                        >
+                          Exit full screen
+                        </button>
+                      ) : null}
 
                       <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-80">
                         <div className="absolute -left-10 top-12 h-44 w-44 rounded-full bg-sky-200/25 blur-3xl dark:bg-sky-400/10" />
@@ -726,15 +940,29 @@ export default function GalleryMediaViewer({
                         <div className="absolute bottom-0 left-1/2 h-36 w-44 -translate-x-1/2 rounded-full bg-blue-200/20 blur-3xl dark:bg-blue-500/10" />
                       </div>
 
-                      <div className="relative z-10 flex h-full min-h-0 w-full items-center justify-center px-2 py-2 sm:px-6 sm:pt-6 sm:pb-20">
+                      <div
+                        className={`relative z-10 flex h-full min-h-0 w-full items-center justify-center ${
+                          isPreviewFullscreen ? 'px-0 py-0' : 'px-2 py-2 sm:px-6 sm:pt-6 sm:pb-20'
+                        }`}
+                      >
                         {(() => {
                           const previewCard = (
                             <div
-                              className={`relative flex h-full max-h-full w-full max-w-full overflow-hidden rounded-[24px] border border-white/70 bg-white/90 p-2 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-500 dark:border-slate-700/70 dark:bg-slate-950/75 sm:inline-flex sm:h-auto sm:w-auto sm:rounded-[28px] sm:p-3 ${
+                              className={`relative flex h-full max-h-full w-full max-w-full overflow-hidden border border-white/70 bg-white/90 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl transition-all duration-500 dark:border-slate-700/70 dark:bg-slate-950/75 ${
+                                isPreviewFullscreen
+                                  ? 'rounded-none border-0 bg-black p-0 shadow-none backdrop-blur-0 dark:bg-black'
+                                  : 'rounded-[24px] p-2 sm:inline-flex sm:h-auto sm:w-auto sm:rounded-[28px] sm:p-3'
+                              } ${
                                 isGeneratingPreview ? 'animate-samsung-breathe animate-samsung-glow' : ''
                               }`}
                             >
-                              <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[24px] border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-950 sm:block sm:h-auto sm:w-auto">
+                              <div
+                                className={`relative flex h-full w-full items-center justify-center overflow-hidden border border-slate-200 bg-slate-100 dark:border-slate-800 dark:bg-slate-950 ${
+                                  isPreviewFullscreen
+                                    ? 'rounded-none border-0 bg-black dark:bg-black sm:h-full sm:w-full'
+                                    : 'rounded-[24px] sm:block sm:h-auto sm:w-auto'
+                                }`}
+                              >
                                 {photo ? (
                                   <MediaPreview
                                     url={photo.imageUrl}
@@ -743,7 +971,11 @@ export default function GalleryMediaViewer({
                                     sourceId={photo.sourceId}
                                     alt={title}
                                     mediaRef={canSnapshot ? videoRef : undefined}
-                                    className={`mx-auto block h-full w-full max-h-[calc(100dvh_-_8.75rem_-_env(safe-area-inset-bottom))] object-contain sm:h-auto sm:max-h-[62dvh] sm:max-w-full lg:max-h-[66dvh] ${
+                                    className={`mx-auto block h-full w-full object-contain ${
+                                      isPreviewFullscreen
+                                        ? 'max-h-[100dvh] max-w-[100dvw]'
+                                        : 'max-h-[calc(100dvh_-_8.75rem_-_env(safe-area-inset-bottom))] sm:h-auto sm:max-h-[62dvh] sm:max-w-full lg:max-h-[66dvh]'
+                                    } ${
                                       shouldBlurPreview ? 'blur-md' : ''
                                     }`}
                                     onLoadStart={() => setPreviewLoading(true)}
@@ -801,6 +1033,31 @@ export default function GalleryMediaViewer({
                                 ) : (
                                   <div className="h-full min-h-[420px] w-full max-w-full rounded-[24px] bg-[radial-gradient(circle_at_top,#cbd5e1,#94a3b8_40%,#334155_100%)] dark:bg-[radial-gradient(circle_at_top,#0f172a,#1f2937_45%,#020617_100%)] sm:h-[560px] sm:w-[380px]" />
                                 )}
+
+                                {normalizedMediaItems.length > 1 && !snapshot?.url ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigateMedia('prev')}
+                                      disabled={!canNavigatePrevious}
+                                      className="absolute left-3 top-1/2 z-30 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200/80 bg-white/85 text-slate-700 shadow-lg transition hover:bg-white disabled:pointer-events-none disabled:opacity-35 dark:border-slate-700 dark:bg-slate-950/75 dark:text-slate-200"
+                                      aria-label="Previous media"
+                                      title="Previous"
+                                    >
+                                      <ChevronLeft className="size-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => navigateMedia('next')}
+                                      disabled={!canNavigateNext}
+                                      className="absolute right-3 top-1/2 z-30 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200/80 bg-white/85 text-slate-700 shadow-lg transition hover:bg-white disabled:pointer-events-none disabled:opacity-35 dark:border-slate-700 dark:bg-slate-950/75 dark:text-slate-200"
+                                      aria-label="Next media"
+                                      title="Next"
+                                    >
+                                      <ChevronRight className="size-4" />
+                                    </button>
+                                  </>
+                                ) : null}
 
                                 <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.42),transparent_65%)] dark:bg-[radial-gradient(circle_at_center,rgba(56,189,248,0.20),transparent_65%)]" />
                                 <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-32 bg-[linear-gradient(to_top,rgba(17,24,39,0.16),transparent)] dark:bg-[linear-gradient(to_top,rgba(2,6,23,0.55),transparent)]" />

@@ -113,16 +113,8 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const [blurUnclothyGenerated, setBlurUnclothyGenerated] = useState(true);
   const [mediaPage, setMediaPage] = useState(1);
   const [mediaPageSize, setMediaPageSize] = useState(48);
-  const [mediaGridColumns, setMediaGridColumns] = useState(() => {
-    if (typeof window === 'undefined') return 4;
-    const storedValue = Number(window.localStorage.getItem(mediaGridColumnsStorageKey));
-    return Number.isFinite(storedValue) ? Math.max(2, Math.min(6, storedValue)) : 4;
-  });
-  const [manualSidebarCollapsed, setManualSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const storedValue = window.localStorage.getItem(sidebarCollapsedStorageKey);
-    return storedValue === null ? true : storedValue === 'true';
-  });
+  const [mediaGridColumns, setMediaGridColumns] = useState(4);
+  const [manualSidebarCollapsed, setManualSidebarCollapsed] = useState(true);
 
   const unclothyQueue = useUnclothyTasksStore((state) => state.queue);
   const unclothyActive = useUnclothyTasksStore((state) => state.active);
@@ -161,6 +153,20 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     mediaQuery.addListener(update);
     return () => mediaQuery.removeListener(update);
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const storedGridColumns = Number(window.localStorage.getItem(mediaGridColumnsStorageKey));
+    if (Number.isFinite(storedGridColumns)) {
+      setMediaGridColumns(Math.max(2, Math.min(6, storedGridColumns)));
+    }
+
+    const storedSidebarCollapsed = window.localStorage.getItem(sidebarCollapsedStorageKey);
+    if (storedSidebarCollapsed !== null) {
+      setManualSidebarCollapsed(storedSidebarCollapsed === 'true');
+    }
+  }, [mediaGridColumnsStorageKey, sidebarCollapsedStorageKey]);
 
   useEffect(() => {
     startUnclothyRunner?.();
@@ -1046,6 +1052,11 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         }}
         controller={controller}
         album={selectedAlbum}
+        mediaItems={photos}
+        onNavigate={(nextPhoto) => {
+          setPreviewPhoto(nextPhoto);
+          setPreviewOpenGenerate(false);
+        }}
         openGenerate={previewOpenGenerate}
         onGenerateOpened={() => setPreviewOpenGenerate(false)}
         blurUnclothyGenerated={blurUnclothyGenerated}

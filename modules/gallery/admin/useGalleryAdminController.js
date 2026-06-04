@@ -36,7 +36,8 @@ const persistSelectedAlbumId = (albumId) => {
 
 export function useGalleryAdminController() {
   const [albums, setAlbums] = useState([]);
-  const [selectedAlbumId, setSelectedAlbumId] = useState(() => readStoredAlbumId());
+  const [selectedAlbumId, setSelectedAlbumId] = useState(null);
+  const [selectionStorageReady, setSelectionStorageReady] = useState(false);
   const [photos, setPhotos] = useState([]);
   const previousPhotoIdsRef = useRef([]);
   const preserveSelectionOnNextPhotoSyncRef = useRef(false);
@@ -164,12 +165,16 @@ export function useGalleryAdminController() {
   };
 
   useEffect(() => {
-    loadAlbums();
+    void (async () => {
+      await loadAlbums();
+      setSelectionStorageReady(true);
+    })();
   }, []);
 
   useEffect(() => {
+    if (!selectionStorageReady) return;
     persistSelectedAlbumId(selectedAlbumId);
-  }, [selectedAlbumId]);
+  }, [selectedAlbumId, selectionStorageReady]);
 
   useEffect(() => {
     if (loadingAlbums) {

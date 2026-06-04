@@ -21,30 +21,9 @@ export default function AdminShell({ children }) {
   const stopGlobalLoading = useLoadingStore((state) => state.stopLoading);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [moduleAccess, setModuleAccess] = useState(null);
-  const [accountName, setAccountName] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    try {
-      return window.localStorage.getItem(accountNameStorageKey) || '';
-    } catch {
-      return '';
-    }
-  });
-  const [accountImage, setAccountImage] = useState(() => {
-    if (typeof window === 'undefined') return '';
-    try {
-      return window.localStorage.getItem(accountImageStorageKey) || '';
-    } catch {
-      return '';
-    }
-  });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return window.localStorage.getItem(sidebarCollapsedStorageKey) === '1';
-    } catch {
-      return false;
-    }
-  });
+  const [accountName, setAccountName] = useState('');
+  const [accountImage, setAccountImage] = useState('');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -61,6 +40,14 @@ export default function AdminShell({ children }) {
 
     const loadAccount = async () => {
       try {
+        try {
+          setAccountName(window.localStorage.getItem(accountNameStorageKey) || '');
+          setAccountImage(window.localStorage.getItem(accountImageStorageKey) || '');
+          setSidebarCollapsed(window.localStorage.getItem(sidebarCollapsedStorageKey) === '1');
+        } catch {
+          // ignore persistence errors
+        }
+
         const response = await fetch('/api/admin/account', {
           method: 'GET',
           signal: controller.signal,

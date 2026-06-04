@@ -395,6 +395,8 @@ export default function GalleryArrangePanel({ controller, embedded = false }) {
               onClose={() => setPreviewPhoto(null)}
               controller={controller}
               album={selectedAlbum}
+              mediaItems={arrangePhotos}
+              onNavigate={setPreviewPhoto}
               blurUnclothyGenerated={blurUnclothyGenerated}
             />
           </main>
