@@ -103,9 +103,9 @@ const VideoPoster = ({ src, alt, className, fallbackClassName }) => {
 };
 
 const densityGridMap = {
-  small: "grid-cols-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5",
-  medium: "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
-  large: "grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3",
+  large:  "grid-cols-1 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3",
+  medium: "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4",
+  small:  "grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5",
 };
 const timerPresetMs = [2000, 5000, 10000, 15000, 20000, 30000];
 const splitPanelSettingsDefaults = {
@@ -532,6 +532,28 @@ const SplitPanelMediaSurface = ({
     </div>
   );
 };
+
+const GRID_SIZES = ["large", "medium", "small"];
+
+function GridSizeSwiper({ density, onDensityChange }) {
+  const currentIndex = GRID_SIZES.indexOf(density);
+  return (
+    <div className="flex flex-1 items-center gap-3 sm:flex-none sm:min-w-[200px]">
+      <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Grid</span>
+      <input
+        type="range"
+        min={0}
+        max={2}
+        step={1}
+        value={currentIndex}
+        onChange={(e) => onDensityChange(GRID_SIZES[Number(e.target.value)])}
+        aria-label="Grid size"
+        className="flex-1 accent-white"
+      />
+      <span className="w-3 shrink-0 text-center text-[10px] text-slate-400">{currentIndex + 1}</span>
+    </div>
+  );
+}
 
 export default function AlbumDetailPage({ params }) {
   const getInitialDensity = () => {
@@ -1986,83 +2008,54 @@ export default function AlbumDetailPage({ params }) {
           </div>
         </section>
 
-        <header className="flex flex-col gap-3 rounded-2xl border border-white/15 bg-slate-900/50 p-4 text-slate-100 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1">
-            <p className="text-xs uppercase tracking-[0.15em] text-slate-300">
-              Viewing Mode
-            </p>
-            <p className="text-sm text-slate-200">
-              {totalPhotos - totalAudio} items · {totalPhotos - totalVideos - totalAudio} photos · {totalVideos} videos
-              {totalAudio > 0 ? ` · ${totalAudio} audio track${totalAudio > 1 ? "s" : ""}` : ""}
-            </p>
-          </div>
-          <div className="flex w-full flex-col gap-2 text-sm sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setFilterOpen(true)}
-                className="inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-md border border-white/30 bg-white/10 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-white/15 sm:flex-none"
-              >
-                <SlidersHorizontal className="h-4 w-4 shrink-0" />
-                <span className="truncate">{activeFilterLabel} / {activeSortLabel}</span>
-              </button>
-            </div>
-            <div className="flex w-full items-center gap-2 sm:w-auto">
-              <span className="shrink-0 text-xs uppercase tracking-[0.12em] text-slate-300">Density</span>
-              <div className="flex min-w-0 flex-1 items-center gap-1 rounded-full border border-white/25 bg-white/10 p-1 sm:flex-none">
-              <button
-                type="button"
-                onClick={() => setDensity("small")}
-                className={`flex-1 rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition sm:flex-none ${
-                  density === "small"
-                    ? "bg-white text-slate-900"
-                    : "text-white/85 hover:bg-white/15"
-                }`}
-              >
-                Small
-              </button>
-              <button
-                type="button"
-                onClick={() => setDensity("medium")}
-                className={`flex-1 rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition sm:flex-none ${
-                  density === "medium"
-                    ? "bg-white text-slate-900"
-                    : "text-white/85 hover:bg-white/15"
-                }`}
-              >
-                Medium
-              </button>
-              <button
-                type="button"
-                onClick={() => setDensity("large")}
-                className={`flex-1 rounded-full px-3 py-1 text-xs uppercase tracking-[0.12em] transition sm:flex-none ${
-                  density === "large"
-                    ? "bg-white text-slate-900"
-                    : "text-white/85 hover:bg-white/15"
-                }`}
-              >
-                Large
-              </button>
-              </div>
+        <header className="overflow-hidden rounded-2xl border border-white/12 bg-slate-900/60 shadow-[0_8px_32px_rgba(2,6,23,0.4)] backdrop-blur-md">
+          {/* Top info row */}
+          <div className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+                VIEWING MODE
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-300">
+                {totalPhotos - totalAudio} items · {totalPhotos - totalVideos - totalAudio} photos
+                {totalVideos > 0 ? ` · ${totalVideos} videos` : ""}
+                {totalAudio > 0 ? ` · ${totalAudio} audio track${totalAudio > 1 ? "s" : ""}` : ""}
+              </p>
             </div>
             <button
               type="button"
-              onClick={() => openViewerAt(0, { mode: "slideshow" })}
-              disabled={filteredPhotos.length === 0}
-              className="h-10 w-full rounded-md border border-emerald-300/50 bg-emerald-500/20 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+              onClick={() => setFilterOpen(true)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 bg-white/8 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/90 transition active:scale-95 hover:bg-white/14"
             >
-              Slideshow
+              <SlidersHorizontal className="h-3 w-3" />
+              <span className="max-w-[110px] truncate">{activeFilterLabel} / {activeSortLabel}</span>
             </button>
-            {accessMode !== "public" ? (
+          </div>
+
+          {/* Controls row */}
+          <div className="flex flex-col gap-2.5 p-3 sm:flex-row sm:items-center sm:gap-3">
+            <GridSizeSwiper density={density} onDensityChange={setDensity} />
+
+            {/* Action buttons */}
+            <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex sm:gap-2">
               <button
                 type="button"
-                onClick={handleDownloadAlbumZip}
-                disabled={isAlbumDownloadPending || !album?.id}
-                className="h-10 w-full rounded-md border border-sky-300/50 bg-sky-500/20 px-3 text-xs font-semibold uppercase tracking-[0.12em] text-sky-100 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                onClick={() => openViewerAt(0, { mode: "slideshow" })}
+                disabled={filteredPhotos.length === 0}
+                className="inline-flex h-9 items-center justify-center rounded-full border border-emerald-400/35 bg-emerald-500/15 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200 transition active:scale-95 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {isAlbumDownloadPending ? "Preparing ZIP..." : "Download ZIP"}
+                Slideshow
               </button>
-            ) : null}
+              {accessMode !== "public" ? (
+                <button
+                  type="button"
+                  onClick={handleDownloadAlbumZip}
+                  disabled={isAlbumDownloadPending || !album?.id}
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-sky-400/35 bg-sky-500/15 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-200 transition active:scale-95 hover:bg-sky-500/25 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isAlbumDownloadPending ? "Preparing…" : "Download ZIP"}
+                </button>
+              ) : null}
+            </div>
           </div>
         </header>
 
