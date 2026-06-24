@@ -17,6 +17,7 @@ import {
   photoSelect as albumPhotoSelect,
   type AlbumRecord,
   type AlbumPhotoRecord,
+  type DuplicatePhotoRecord,
 } from '@/src/modules/gallery/repositories/galleryRepository';
 import { GoogleDriveAdapter } from '@/src/modules/gallery/adapters/googleDriveAdapter';
 import { moderateImageUrlForNsfw } from '@/lib/server/nsfw-moderation';
@@ -40,43 +41,48 @@ export class GalleryService {
     private readonly driveAdapter = new GoogleDriveAdapter(),
   ) {}
 
-  private createDuplicateMediaError(existing?: AlbumPhotoRecord | null) {
+  private describeDuplicateAlbum(existing?: DuplicatePhotoRecord | AlbumPhotoRecord | null) {
+    const album = (existing as DuplicatePhotoRecord | null)?.album;
+    return album?.name ? `the album “${album.name}”` : 'another album';
+  }
+
+  private duplicateMeta(existing?: DuplicatePhotoRecord | AlbumPhotoRecord | null) {
+    if (!existing) {
+      return undefined;
+    }
+
+    const album = (existing as DuplicatePhotoRecord).album ?? null;
+    return {
+      duplicate: {
+        id: existing.id,
+        caption: existing.caption,
+        imageUrl: existing.imageUrl,
+        originalFilename: existing.originalFilename,
+        mimeType: existing.mimeType,
+        fileSizeBytes: existing.fileSizeBytes,
+        sourceId: existing.sourceId,
+        album: album ? { id: album.id, name: album.name, slug: album.slug } : null,
+      },
+    };
+  }
+
+  private createDuplicateMediaError(existing?: DuplicatePhotoRecord | AlbumPhotoRecord | null) {
     return new RequestValidationError(
-      'Duplicate media already exists in this album.',
+      `This media already exists in ${this.describeDuplicateAlbum(existing)}. Duplicate uploads are not allowed.`,
       409,
       undefined,
       'DUPLICATE_MEDIA',
-      existing
-        ? {
-            duplicate: {
-              id: existing.id,
-              caption: existing.caption,
-              imageUrl: existing.imageUrl,
-              originalFilename: existing.originalFilename,
-              mimeType: existing.mimeType,
-              fileSizeBytes: existing.fileSizeBytes,
-            },
-          }
-        : undefined,
+      this.duplicateMeta(existing),
     );
   }
 
-  private createDuplicateSourceError(existing?: AlbumPhotoRecord | null) {
+  private createDuplicateSourceError(existing?: DuplicatePhotoRecord | AlbumPhotoRecord | null) {
     return new RequestValidationError(
-      'This Google Drive media already exists in the selected album.',
+      `This Google Drive media is already imported into ${this.describeDuplicateAlbum(existing)}. Duplicate imports are not allowed.`,
       409,
       undefined,
       'DUPLICATE_SOURCE_MEDIA',
-      existing
-        ? {
-            duplicate: {
-              id: existing.id,
-              caption: existing.caption,
-              imageUrl: existing.imageUrl,
-              sourceId: existing.sourceId,
-            },
-          }
-        : undefined,
+      this.duplicateMeta(existing),
     );
   }
 
@@ -347,17 +353,23 @@ export class GalleryService {
       nsfwScores?: Prisma.InputJsonValue;
       blurOverride?: string;
     },
-    options: { skipContentHashDuplicateCheck?: boolean } = {},
+    options: { skipContentHashDuplicateCheck?: boolean; profileId?: number | null } = {},
   ) {
-    if (input.contentHash && !options.skipContentHashDuplicateCheck) {
-      const existing = await this.repo.findAlbumPhotoByContentHash(albumId, input.contentHash);
+    const needsProfileLookup =
+      (input.contentHash && !options.skipContentHashDuplicateCheck) ||
+      (input.sourceType === 'gdrive' && input.sourceId);
+    const profileId =
+      options.profileId ?? (needsProfileLookup ? await this.repo.getAlbumProfileId(albumId) : null);
+
+    if (input.contentHash && !options.skipContentHashDuplicateCheck && profileId) {
+      const existing = await this.repo.findProfilePhotoByContentHash(profileId, input.contentHash);
       if (existing) {
         throw this.createDuplicateMediaError(existing);
       }
     }
 
-    if (input.sourceType === 'gdrive' && input.sourceId) {
-      const existing = await this.repo.findAlbumPhotoBySourceId(albumId, PhotoSourceType.gdrive, input.sourceId);
+    if (input.sourceType === 'gdrive' && input.sourceId && profileId) {
+      const existing = await this.repo.findProfilePhotoBySourceId(profileId, PhotoSourceType.gdrive, input.sourceId);
       if (existing) {
         throw this.createDuplicateSourceError(existing);
       }
@@ -383,13 +395,19 @@ export class GalleryService {
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        if (input.contentHash) {
-          const existing = await this.repo.findAlbumPhotoByContentHash(albumId, input.contentHash);
+        const fallbackProfileId = profileId ?? (await this.repo.getAlbumProfileId(albumId));
+
+        if (input.contentHash && fallbackProfileId) {
+          const existing = await this.repo.findProfilePhotoByContentHash(fallbackProfileId, input.contentHash);
           throw this.createDuplicateMediaError(existing);
         }
 
-        if (input.sourceType === 'gdrive' && input.sourceId) {
-          const existing = await this.repo.findAlbumPhotoBySourceId(albumId, PhotoSourceType.gdrive, input.sourceId);
+        if (input.sourceType === 'gdrive' && input.sourceId && fallbackProfileId) {
+          const existing = await this.repo.findProfilePhotoBySourceId(
+            fallbackProfileId,
+            PhotoSourceType.gdrive,
+            input.sourceId,
+          );
           throw this.createDuplicateSourceError(existing);
         }
       }
@@ -405,9 +423,10 @@ export class GalleryService {
   ) {
     const prepared = await prepareMediaUpload(args.file);
     const allowDuplicateContent = options.allowDuplicateContent === true;
+    const profileId = allowDuplicateContent ? null : await this.repo.getAlbumProfileId(albumId);
 
-    if (!allowDuplicateContent) {
-      const existing = await this.repo.findAlbumPhotoByContentHash(albumId, prepared.contentHash);
+    if (!allowDuplicateContent && profileId) {
+      const existing = await this.repo.findProfilePhotoByContentHash(profileId, prepared.contentHash);
       if (existing) {
         throw this.createDuplicateMediaError(existing);
       }
@@ -464,7 +483,7 @@ export class GalleryService {
         nsfwScores,
         blurOverride: 'auto',
       },
-      { skipContentHashDuplicateCheck: true },
+      { skipContentHashDuplicateCheck: true, profileId },
     );
   }
 
@@ -679,6 +698,8 @@ export class GalleryService {
       mediaTypeFilter: args.mediaTypeFilter || 'all',
     });
 
+    const profileId = await this.repo.getAlbumProfileId(albumId);
+
     const created = [];
     const skipped = [];
     let checkedCount = 0;
@@ -695,15 +716,22 @@ export class GalleryService {
       });
     };
 
+    const describeImportDuplicate = (existing: DuplicatePhotoRecord | null, fallback: string) => {
+      const albumName = existing?.album?.name;
+      return albumName ? `Already exists in the album “${albumName}”.` : fallback;
+    };
+
     for (const photo of drivePhotos) {
-      const existing = await this.repo.findAlbumPhotoBySourceId(albumId, PhotoSourceType.gdrive, photo.sourceId);
+      const existing = profileId
+        ? await this.repo.findProfilePhotoBySourceId(profileId, PhotoSourceType.gdrive, photo.sourceId)
+        : null;
       if (existing) {
         checkedCount += 1;
         duplicateCount += 1;
         skipped.push({
           sourceId: photo.sourceId,
           caption: photo.caption,
-          reason: 'Already imported into this album.',
+          reason: describeImportDuplicate(existing, 'Already imported into this gallery.'),
           duplicateId: existing.id,
         });
         emitProgress(photo.caption);
@@ -715,14 +743,16 @@ export class GalleryService {
         fileId: photo.sourceId,
       });
 
-      const duplicateByHash = await this.repo.findAlbumPhotoByContentHash(albumId, contentHash);
+      const duplicateByHash = profileId
+        ? await this.repo.findProfilePhotoByContentHash(profileId, contentHash)
+        : null;
       if (duplicateByHash) {
         checkedCount += 1;
         duplicateCount += 1;
         skipped.push({
           sourceId: photo.sourceId,
           caption: photo.caption,
-          reason: 'Duplicate media already exists in this album.',
+          reason: describeImportDuplicate(duplicateByHash, 'Duplicate media already exists in this gallery.'),
           duplicateId: duplicateByHash.id,
         });
         emitProgress(photo.caption);
@@ -731,28 +761,36 @@ export class GalleryService {
 
       const dateTaken = photo.dateTaken ? new Date(photo.dateTaken) : undefined;
       try {
-        const row = await this.addAlbumPhoto(albumId, {
-          imageUrl: photo.imageUrl,
-          caption: photo.caption,
-          dateTaken: dateTaken && !Number.isNaN(dateTaken.getTime()) ? dateTaken.toISOString() : undefined,
-          mimeType: photo.mimeType,
-          contentHash,
-          sourceType: 'gdrive',
-          sourceId: photo.sourceId,
-        });
+        const row = await this.addAlbumPhoto(
+          albumId,
+          {
+            imageUrl: photo.imageUrl,
+            caption: photo.caption,
+            dateTaken: dateTaken && !Number.isNaN(dateTaken.getTime()) ? dateTaken.toISOString() : undefined,
+            mimeType: photo.mimeType,
+            contentHash,
+            sourceType: 'gdrive',
+            sourceId: photo.sourceId,
+          },
+          { profileId },
+        );
         created.push(row);
         checkedCount += 1;
         importedCount += 1;
         emitProgress(photo.caption);
       } catch (error) {
+        type DuplicateMeta = { duplicate?: { id?: number; album?: { name?: string } | null } } | undefined;
         if (error instanceof RequestValidationError && error.errorCode === 'DUPLICATE_MEDIA') {
-          const duplicate = error.meta as { duplicate?: { id?: number } } | undefined;
+          const duplicate = error.meta as DuplicateMeta;
+          const albumName = duplicate?.duplicate?.album?.name;
           checkedCount += 1;
           duplicateCount += 1;
           skipped.push({
             sourceId: photo.sourceId,
             caption: photo.caption,
-            reason: 'Duplicate media already exists in this album.',
+            reason: albumName
+              ? `Already exists in the album “${albumName}”.`
+              : 'Duplicate media already exists in this gallery.',
             duplicateId: duplicate?.duplicate?.id,
           });
           emitProgress(photo.caption);
@@ -760,13 +798,16 @@ export class GalleryService {
         }
 
         if (error instanceof RequestValidationError && error.errorCode === 'DUPLICATE_SOURCE_MEDIA') {
-          const duplicate = error.meta as { duplicate?: { id?: number } } | undefined;
+          const duplicate = error.meta as DuplicateMeta;
+          const albumName = duplicate?.duplicate?.album?.name;
           checkedCount += 1;
           duplicateCount += 1;
           skipped.push({
             sourceId: photo.sourceId,
             caption: photo.caption,
-            reason: 'Already imported into this album.',
+            reason: albumName
+              ? `Already imported into the album “${albumName}”.`
+              : 'Already imported into this gallery.',
             duplicateId: duplicate?.duplicate?.id,
           });
           emitProgress(photo.caption);

@@ -266,12 +266,18 @@ export function createEmptyUploadSummary() {
 const pluralize = (count, singular, plural = `${singular}s`) => `${count} ${count === 1 ? singular : plural}`;
 
 export function isDuplicateUploadError(error) {
-  return error?.errorCode === 'DUPLICATE_MEDIA';
+  return error?.errorCode === 'DUPLICATE_MEDIA' || error?.errorCode === 'DUPLICATE_SOURCE_MEDIA';
 }
 
 export function getUploadResultReason(error) {
   if (isDuplicateUploadError(error)) {
-    return error.message || 'Duplicate media already exists in this album.';
+    const albumName = error?.duplicate?.album?.name;
+    if (error.message) {
+      return error.message;
+    }
+    return albumName
+      ? `This media already exists in the album “${albumName}”.`
+      : 'This media already exists in another album.';
   }
 
   return error?.message || 'Upload failed.';

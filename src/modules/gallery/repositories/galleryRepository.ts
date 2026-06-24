@@ -30,8 +30,16 @@ const albumInclude = {
   _count: { select: { photos: true } },
 } as const;
 
+// Includes the owning album so duplicate errors can tell the user *where* the
+// existing copy lives (duplicates are now blocked profile-wide, not per album).
+export const duplicatePhotoSelect = {
+  ...photoSelect,
+  album: { select: { id: true, name: true, slug: true } },
+} as const;
+
 export type AlbumRecord = Prisma.AlbumGetPayload<{ include: typeof albumInclude }>;
 export type AlbumPhotoRecord = Prisma.AlbumPhotoGetPayload<{ select: typeof photoSelect }>;
+export type DuplicatePhotoRecord = Prisma.AlbumPhotoGetPayload<{ select: typeof duplicatePhotoSelect }>;
 export type AlbumDownloadRecord = Prisma.AlbumGetPayload<{ include: { photos: { select: typeof photoSelect } } }>;
 export type AlbumPhotoActivityRecord = {
   albumId: number;
@@ -254,6 +262,32 @@ export class GalleryRepository {
     return prisma.albumPhoto.findFirst({
       where: { albumId, sourceType, sourceId },
       select: photoSelect,
+    });
+  }
+
+  async getAlbumProfileId(albumId: number) {
+    const album = await prisma.album.findUnique({
+      where: { id: albumId },
+      select: { profileId: true },
+    });
+    return album?.profileId ?? null;
+  }
+
+  // Profile-wide duplicate lookups: a media item is considered a duplicate if it
+  // already exists in *any* album owned by the same profile, not just this album.
+  async findProfilePhotoByContentHash(profileId: number, contentHash: string) {
+    return prisma.albumPhoto.findFirst({
+      where: { contentHash, album: { profileId } },
+      orderBy: { id: 'asc' },
+      select: duplicatePhotoSelect,
+    });
+  }
+
+  async findProfilePhotoBySourceId(profileId: number, sourceType: PhotoSourceType, sourceId: string) {
+    return prisma.albumPhoto.findFirst({
+      where: { sourceType, sourceId, album: { profileId } },
+      orderBy: { id: 'asc' },
+      select: duplicatePhotoSelect,
     });
   }
 

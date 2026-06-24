@@ -7,11 +7,15 @@ import { createFormErrorResponse } from '@/lib/server/form-responses';
 
 export function toErrorResponse(error: unknown, fallbackMessage: string) {
   if (error instanceof RequestValidationError) {
+    const duplicate = (error.meta as { duplicate?: unknown } | undefined)?.duplicate;
     return createFormErrorResponse(
       {
         error: error.message,
         errorCode: error.errorCode,
         fieldErrors: error.details,
+        // Surface the duplicate (incl. which album owns it) at the top level so the
+        // client error object exposes `error.duplicate` directly.
+        ...(duplicate ? { duplicate } : {}),
         details: {
           ...(error.details ? { validation: error.details } : {}),
           ...(error.meta ?? {}),

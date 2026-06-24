@@ -9,6 +9,7 @@ type FormErrorPayload = {
   errorCode?: string;
   fieldErrors?: FormFieldErrors;
   details?: Record<string, unknown>;
+  duplicate?: unknown;
 };
 
 function firstFieldError(fieldErrors?: FormFieldErrors) {
@@ -54,6 +55,7 @@ export function createFormErrorResponse(payload: FormErrorPayload, status = 400)
       errorCode: payload.errorCode,
       fieldErrors: payload.fieldErrors,
       details: payload.details ?? payload.fieldErrors,
+      ...(payload.duplicate !== undefined ? { duplicate: payload.duplicate } : {}),
     },
     { status },
   );

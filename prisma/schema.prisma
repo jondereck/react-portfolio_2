@@ -357,5 +357,10 @@ model AlbumPhoto {
   @@index([albumId, uploadedAt])
   @@index([albumId, sourceType, sourceId])
   @@unique([albumId, contentHash])
+  // Profile-wide duplicate lookups filter by contentHash / (sourceType, sourceId)
+  // without albumId, so they need their own indexes to stay an index seek
+  // (not a full table scan) as the library grows.
+  @@index([contentHash])
+  @@index([sourceType, sourceId])
 }
 
