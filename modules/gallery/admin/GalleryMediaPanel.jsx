@@ -219,19 +219,45 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     };
   }, [loadGallerySettings]);
 
-  const chips = useMemo(
-    () => [
-      { id: 'all', label: 'All' },
-      { id: 'images', label: 'Images' },
-      { id: 'videos', label: 'Videos' },
-      { id: 'audio', label: 'Audio' },
-      { id: 'nsfw', label: 'NSFW' },
-      { id: 'recent', label: 'Recent' },
-      { id: 'manual', label: 'Manual' },
-      { id: 'selected', label: `Selected${selectedCount ? ` (${selectedCount})` : ''}` },
-    ],
-    [selectedCount],
-  );
+  const chips = useMemo(() => {
+    const list = Array.isArray(photos) ? photos : [];
+    let images = 0;
+    let videos = 0;
+    let audio = 0;
+    let nsfw = 0;
+    for (const photo of list) {
+      const video = isVideoMime(photo?.mimeType);
+      const isAud = isAudioPhoto(photo);
+      if (video) {
+        videos += 1;
+      } else if (isAud) {
+        audio += 1;
+      } else {
+        images += 1;
+      }
+      if (!video && shouldBlurPhoto(photo, { blurEnabled: true })) {
+        nsfw += 1;
+      }
+    }
+
+    // Only show type/flag chips that actually have media; All/Recent/Manual stay.
+    const next = [{ id: 'all', label: 'All' }];
+    if (images > 0) next.push({ id: 'images', label: 'Images' });
+    if (videos > 0) next.push({ id: 'videos', label: 'Videos' });
+    if (audio > 0) next.push({ id: 'audio', label: 'Audio' });
+    if (nsfw > 0) next.push({ id: 'nsfw', label: 'NSFW' });
+    next.push({ id: 'recent', label: 'Recent' });
+    next.push({ id: 'manual', label: 'Manual' });
+    if (selectedCount > 0) next.push({ id: 'selected', label: `Selected (${selectedCount})` });
+    return next;
+  }, [photos, selectedCount]);
+
+  useEffect(() => {
+    // If the active chip got hidden (e.g. no media of that type left), fall back to All.
+    if (!chips.some((chip) => chip.id === activeChip)) {
+      setActiveChip('all');
+    }
+  }, [chips, activeChip]);
 
   const handleOpenPreview = useCallback(
     (photo) => {
