@@ -38,7 +38,7 @@ export default function GalleryMediaToolbar({
             <input
               type="range"
               min="2"
-              max="6"
+              max="8"
               step="1"
               value={gridColumns}
               onChange={(event) => {

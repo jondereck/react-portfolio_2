@@ -48,7 +48,7 @@ export default function GalleryCmsShell({
       {header}
 
       <motion.div
-        className={`grid transition-[grid-template-columns] duration-300 ease-out lg:h-[calc(100vh-145px)] lg:min-h-[520px] lg:overflow-hidden ${desktopGridColumns}`}
+        className={`grid transition-[grid-template-columns] duration-300 ease-out lg:h-[calc(100vh-160px)] lg:min-h-[520px] lg:overflow-hidden ${desktopGridColumns}`}
         layout
         transition={motionTransition}
       >
@@ -85,8 +85,8 @@ export default function GalleryCmsShell({
   }
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
-      <div className="mx-auto max-w-screen-2xl lg:px-6 lg:py-6 2xl:px-10 2xl:py-8">{shell}</div>
+    <div className="text-slate-900 dark:text-slate-50">
+      <div className="mx-auto max-w-none">{shell}</div>
     </div>
   );
 }

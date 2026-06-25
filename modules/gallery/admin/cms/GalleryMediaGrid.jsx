@@ -24,14 +24,14 @@ export default function GalleryMediaGrid({
 }) {
   const orderedIds = useMemo(() => (Array.isArray(photos) ? photos.map((photo) => photo.id) : []), [photos]);
   const selectedCount = Array.isArray(selectedPhotoIds) ? selectedPhotoIds.length : 0;
-  const normalizedGridColumns = Math.max(2, Math.min(6, Number(gridColumns) || 4));
+  const normalizedGridColumns = Math.max(2, Math.min(8, Number(gridColumns) || 4));
   const mobileGridColumns = 2;
   const smallGridColumns = Math.max(2, Math.min(3, normalizedGridColumns));
   const largeGridColumns = inspectorOpen
     ? Math.max(3, Math.min(4, normalizedGridColumns))
-    : Math.max(3, Math.min(5, normalizedGridColumns));
+    : Math.max(3, Math.min(6, normalizedGridColumns));
   const extraLargeGridColumns = inspectorOpen
-    ? Math.max(3, Math.min(4, normalizedGridColumns))
+    ? Math.max(3, Math.min(5, normalizedGridColumns))
     : normalizedGridColumns;
   const [touchSelecting, setTouchSelecting] = useState(false);
   const touchSelectStateRef = useRef({

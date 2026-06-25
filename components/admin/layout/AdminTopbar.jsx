@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useMemo, useState } from 'react';
-import { ArrowLeft, LogOut, User, X } from 'lucide-react';
+import { LogOut, User, X } from 'lucide-react';
 import AdminBreadcrumbs from '@/components/admin/layout/AdminBreadcrumbs';
 import { adminNavigationSections } from '@/components/admin/navigation/admin-nav-config';
 
@@ -84,24 +84,6 @@ export default function AdminTopbar({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 space-y-2">
               <div className="flex items-center gap-2">
-                {canGoBack ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (typeof window !== 'undefined' && window.history.length > 1) {
-                        router.back();
-                        return;
-                      }
-                      router.push('/admin');
-                    }}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                    aria-label="Go back"
-                    title="Go back"
-                  >
-                    <ArrowLeft className="size-4" />
-                  </button>
-                ) : null}
-
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
               </div>
               <h1 className="text-2xl font-bold leading-tight text-slate-900 dark:text-slate-100">{title}</h1>
@@ -122,24 +104,6 @@ export default function AdminTopbar({
         <div className="hidden md:flex md:flex-row md:items-start md:justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              {canGoBack ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (typeof window !== 'undefined' && window.history.length > 1) {
-                      router.back();
-                      return;
-                    }
-                    router.push('/admin');
-                  }}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-                  aria-label="Go back"
-                  title="Go back"
-                >
-                  <ArrowLeft className="size-4" />
-                </button>
-              ) : null}
-
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Control Center</p>
             </div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{title}</h1>

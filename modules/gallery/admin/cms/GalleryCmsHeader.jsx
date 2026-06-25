@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, FolderOpen, Info, Search, SlidersHorizontal, Upload } from 'lucide-react';
+import { FolderOpen, Info, Search, SlidersHorizontal, Upload } from 'lucide-react';
 
 export default function GalleryCmsHeader({
   albumName,
@@ -17,8 +17,6 @@ export default function GalleryCmsHeader({
   showUploadButton = true,
   desktopActions,
   mobileActions,
-  showMobileBack = false,
-  onMobileBack,
 }) {
   const renderDefaultDesktopActions = () => (
     <>
@@ -99,16 +97,6 @@ export default function GalleryCmsHeader({
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/95">
       <div className="flex items-center gap-4 px-4 py-4 sm:px-5 lg:px-6">
-        {showMobileBack ? (
-          <button
-            type="button"
-            onClick={onMobileBack}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-600 dark:border-slate-800 dark:text-slate-300 lg:hidden"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-        ) : null}
-
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.26em] text-slate-500 dark:text-slate-400">
             Gallery CMS

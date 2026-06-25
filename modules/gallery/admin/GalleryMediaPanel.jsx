@@ -10,7 +10,7 @@ import GalleryDriveImportSection from './GalleryDriveImportSection';
 import GalleryMediaViewer from './GalleryMediaViewer';
 import GalleryUnclothyTasksPanel from './GalleryUnclothyTasksPanel';
 import GalleryUploadDropzone from './GalleryUploadDropzone';
-import { fetchJson, GalleryEmptyState, GalleryPageHeader } from './galleryAdminShared';
+import { fetchJson, GalleryEmptyState } from './galleryAdminShared';
 import {
   GalleryAlbumMovePicker,
   GalleryAlbumsSidebar,
@@ -27,10 +27,14 @@ import {
 } from './cms';
 import MediaPreview from '@/app/admin/gallery/components/MediaPreview';
 import { useUnclothyTasksStore } from '@/store/unclothyTasks';
-import { shouldBlurPhoto } from '@/lib/gallery-media';
+import { isPhotoAudio, shouldBlurPhoto } from '@/lib/gallery-media';
 
 function isVideoMime(mimeType) {
   return typeof mimeType === 'string' && mimeType.toLowerCase().startsWith('video/');
+}
+
+function isAudioPhoto(photo) {
+  return Boolean(photo) && isPhotoAudio(photo, photo?.imageUrl);
 }
 
 function getPhotoSearchText(photo) {
@@ -159,7 +163,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
 
     const storedGridColumns = Number(window.localStorage.getItem(mediaGridColumnsStorageKey));
     if (Number.isFinite(storedGridColumns)) {
-      setMediaGridColumns(Math.max(2, Math.min(6, storedGridColumns)));
+      setMediaGridColumns(Math.max(2, Math.min(8, storedGridColumns)));
     }
 
     const storedSidebarCollapsed = window.localStorage.getItem(sidebarCollapsedStorageKey);
@@ -220,6 +224,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       { id: 'all', label: 'All' },
       { id: 'images', label: 'Images' },
       { id: 'videos', label: 'Videos' },
+      { id: 'audio', label: 'Audio' },
       { id: 'nsfw', label: 'NSFW' },
       { id: 'recent', label: 'Recent' },
       { id: 'manual', label: 'Manual' },
@@ -288,9 +293,11 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
     let next = list;
 
     if (activeChip === 'images') {
-      next = next.filter((photo) => !isVideoMime(photo.mimeType));
+      next = next.filter((photo) => !isVideoMime(photo.mimeType) && !isAudioPhoto(photo));
     } else if (activeChip === 'videos') {
       next = next.filter((photo) => isVideoMime(photo.mimeType));
+    } else if (activeChip === 'audio') {
+      next = next.filter((photo) => isAudioPhoto(photo));
     } else if (activeChip === 'nsfw') {
       next = next.filter((photo) => !isVideoMime(photo.mimeType) && shouldBlurPhoto(photo, { blurEnabled: true }));
     } else if (activeChip === 'selected') {
@@ -340,13 +347,10 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
   const pagedPhotos = filteredPhotos.slice((mediaPage - 1) * mediaPageSize, mediaPage * mediaPageSize);
 
   useEffect(() => {
-    // Selecting an image auto-opens details. When nothing is selected and no generation task is pending, collapse it.
+    // Selecting media no longer auto-opens details (open it manually via the Details button).
+    // When nothing is selected and no generation task is pending, collapse it.
     if (!isDesktop) return;
-    if (selectedPhoto) {
-      setDetailsOpenDesktop(true);
-      return;
-    }
-    if (!hasPendingTaskDetails) {
+    if (!selectedPhoto && !hasPendingTaskDetails) {
       setDetailsOpenDesktop(false);
     }
   }, [hasPendingTaskDetails, isDesktop, selectedPhoto]);
@@ -560,14 +564,6 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
         }}
       />
 
-      {!embedded ? (
-        <GalleryPageHeader
-          eyebrow="Media Intake"
-          title="Media"
-          description="Upload files and review the current album's intake list from one focused page."
-        />
-      ) : null}
-
       <GalleryCmsShell
         embedded={embedded}
         sidebarCollapsed={effectiveSidebarCollapsed}
@@ -655,7 +651,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
                     togglePhotoSelect={togglePhotoSelect}
                     selectPhotoRange={selectPhotoRange}
                     onOpenPreview={handleOpenPreview}
-                    inspectorOpen={Boolean(selectedPhoto)}
+                    inspectorOpen={detailsOpenDesktop}
                     blurUnclothyGenerated={blurUnclothyGenerated}
                     gridColumns={mediaGridColumns}
                     emptyState={
@@ -931,7 +927,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
       <GalleryMediaFilterModal
         open={filterOpen}
         sortMode={sortMode}
-        mediaFilter={['all', 'images', 'videos', 'nsfw', 'selected'].includes(activeChip) ? activeChip : 'all'}
+        mediaFilter={['all', 'images', 'videos', 'audio', 'nsfw', 'selected'].includes(activeChip) ? activeChip : 'all'}
         onClose={() => setFilterOpen(false)}
         onApplySort={(nextSort) => {
           if (typeof setSortMode === 'function') {
@@ -953,6 +949,7 @@ export default function GalleryMediaPanel({ controller, embedded = false }) {
           { id: 'all', title: 'All media', description: 'Show every media item in this album.' },
           { id: 'images', title: 'Images', description: 'Show photos and still image files only.' },
           { id: 'videos', title: 'Videos', description: 'Show video media only.' },
+          { id: 'audio', title: 'Audio', description: 'Show audio files (MP3, WAV, and similar) only.' },
           { id: 'nsfw', title: 'NSFW images', description: 'Show images flagged by the scanner or manual blur mode.' },
           { id: 'selected', title: 'Selected', description: 'Show only the media items currently selected.' },
         ]}

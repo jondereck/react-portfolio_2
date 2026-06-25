@@ -140,7 +140,7 @@ export default function AdminShell({ children }) {
         </div>
 
         <div className="min-w-0 flex-1 p-4 md:p-6">
-          <div className="mx-auto max-w-[1640px] space-y-6">
+          <div className="mx-auto max-w-[1920px] space-y-6">
             <AdminTopbar
               onLogout={handleLogout}
               isLoggingOut={isLoggingOut}
