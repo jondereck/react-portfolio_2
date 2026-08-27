@@ -1,12 +1,10 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
 import GlobalLoader from '@/components/GlobalLoader';
 import { getRouteLoadingCopy } from '@/lib/route-loading-copy';
 
-export default function Loading() {
-  const pathname = usePathname();
-  const copy = getRouteLoadingCopy(pathname);
+export default function ToolsLoading() {
+  const copy = getRouteLoadingCopy('/tools');
 
   return (
     <GlobalLoader

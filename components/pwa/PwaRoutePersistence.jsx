@@ -40,7 +40,7 @@ const isPersistentRoute = (value) => {
     return false;
   }
 
-  return !value.startsWith('/api') && !value.startsWith('/register');
+  return !value.startsWith('/api') && !value.startsWith('/register') && !value.startsWith('/tools');
 };
 const isProtectedRoute = (value) => isSafeInternalPath(value) && value.startsWith('/admin');
 
