@@ -15,6 +15,11 @@ import {
 } from "@/lib/gallery-media";
 import GalleryMediaFilterModal from "@/modules/gallery/admin/cms/GalleryMediaFilterModal";
 import {
+  VIEWER_MODES,
+  isResumableSession,
+  viewerSessionStorageKey,
+} from "@/lib/gallery/viewer-session";
+import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
@@ -318,6 +323,12 @@ const SplitPanelMediaSurface = ({
   onPinchStart,
   onPinchMove,
   onPinchEnd,
+  isActive = false,
+  showActiveHint = false,
+  positionLabel = "",
+  positionLabelMobile = "",
+  onActivate,
+  onDoubleClickZoom,
 }) => {
   const [layers, setLayers] = useState(() =>
     item && media?.key
@@ -393,11 +404,24 @@ const SplitPanelMediaSurface = ({
   return (
     <div
       ref={surfaceRef}
-      className={`relative min-h-0 h-full overflow-hidden ${className} ${
+      className={`relative min-h-0 h-full overflow-hidden transition-shadow ${className} ${
         hideUI
-          ? "rounded-none border border-transparent bg-black"
-          : "rounded-lg border border-white/10 bg-black/70"
+          ? "rounded-none border bg-black"
+          : "rounded-lg border bg-black/70"
+      } ${
+        isActive
+          ? "border-emerald-300/70 shadow-[inset_0_0_0_2px_rgba(52,211,153,0.55)]"
+          : hideUI
+            ? "border-transparent"
+            : "border-white/10"
       }`}
+      onPointerEnter={onActivate ? () => onActivate(panelId) : undefined}
+      onPointerDown={onActivate ? () => onActivate(panelId) : undefined}
+      onDoubleClick={
+        onDoubleClickZoom
+          ? (event) => onDoubleClickZoom(panelId, event)
+          : undefined
+      }
       onTouchStart={onPinchStart}
       onTouchMove={onPinchMove}
       onTouchEnd={onPinchEnd}
@@ -407,6 +431,17 @@ const SplitPanelMediaSurface = ({
       {!hideUI ? (
         <span className="absolute left-2 top-2 z-20 rounded-full border border-white/20 bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-white">
           {label}
+        </span>
+      ) : null}
+
+      {isActive && positionLabel ? (
+        <span
+          className={`pointer-events-none absolute right-2 top-2 z-30 rounded-full border border-emerald-300/60 bg-emerald-500/25 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-50 transition-opacity duration-300 ${
+            showActiveHint ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <span className="lg:hidden">{positionLabelMobile || positionLabel}</span>
+          <span className="hidden lg:inline">{positionLabel}</span>
         </span>
       ) : null}
 
@@ -611,6 +646,12 @@ export default function AlbumDetailPage({ params }) {
     left: { ...splitPanelSettingsDefaults },
     right: { ...splitPanelRightDefaults },
   });
+  const [activeSplitPanel, setActiveSplitPanel] = useState("left");
+  const [splitHintVisible, setSplitHintVisible] = useState(false);
+  const splitHintTimerRef = useRef(null);
+  const [viewerUserId, setViewerUserId] = useState(null);
+  const [resumePrompt, setResumePrompt] = useState(null);
+  const resumeHandledRef = useRef(false);
   const navigationEpochRef = useRef(0);
   const [mediaLoadingByPanel, setMediaLoadingByPanel] = useState({});
   const [mediaErrors, setMediaErrors] = useState({});
@@ -999,11 +1040,209 @@ export default function AlbumDetailPage({ params }) {
         left: { ...splitPanelSettingsDefaults },
         right: { ...splitPanelRightDefaults },
       });
+      setActiveSplitPanel("left");
       setMediaLoadingByPanel({ primary: true });
       setHideUI(false);
     },
     [invalidatePendingNavigation],
   );
+
+  const handleSplitPanelActivate = useCallback((panelId) => {
+    setActiveSplitPanel((current) => (current === panelId ? current : panelId));
+  }, []);
+
+  const revealSplitHint = useCallback(() => {
+    setSplitHintVisible(true);
+    if (splitHintTimerRef.current) {
+      window.clearTimeout(splitHintTimerRef.current);
+    }
+    splitHintTimerRef.current = window.setTimeout(() => {
+      setSplitHintVisible(false);
+    }, 800);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (splitHintTimerRef.current) {
+        window.clearTimeout(splitHintTimerRef.current);
+      }
+    };
+  }, []);
+
+  const clampPhotoIndex = useCallback(
+    (value) => {
+      if (!Number.isFinite(value)) return 0;
+      if (filteredPhotoCount <= 0) return 0;
+      return Math.min(Math.max(0, Math.trunc(value)), filteredPhotoCount - 1);
+    },
+    [filteredPhotoCount],
+  );
+
+  const resumeFromSession = useCallback(
+    (session) => {
+      if (!session) return;
+      const mode = VIEWER_MODES.includes(session.viewerMode)
+        ? session.viewerMode
+        : "focus";
+      const baseIndex = clampPhotoIndex(
+        mode === "split"
+          ? session.splitLeftIndex ?? session.photoIndex
+          : session.photoIndex,
+      );
+      openViewerAt(baseIndex, { mode });
+      if (Number.isFinite(session.delayMs)) {
+        setDelayMs(session.delayMs);
+      }
+      if (mode === "split") {
+        setSplitPanels((current) => ({
+          ...current,
+          right: {
+            ...current.right,
+            index: clampPhotoIndex(
+              session.splitRightIndex ?? current.right.index,
+            ),
+          },
+        }));
+      } else {
+        setIsPlaying(Boolean(session.isPlaying) || mode === "slideshow");
+      }
+      resumeHandledRef.current = true;
+      setResumePrompt(null);
+    },
+    [clampPhotoIndex, openViewerAt],
+  );
+
+  const startFreshSession = useCallback(() => {
+    resumeHandledRef.current = true;
+    setResumePrompt(null);
+    if (viewerUserId && album?.id) {
+      try {
+        window.localStorage.removeItem(
+          viewerSessionStorageKey(viewerUserId, album.id),
+        );
+      } catch {
+        // ignore storage errors (private mode, quota)
+      }
+    }
+    if (album?.id) {
+      fetch(`/api/gallery/albums/${album.id}/viewer-session`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
+  }, [album?.id, viewerUserId]);
+
+  // Load the saved viewer session for this album and prompt to resume once.
+  useEffect(() => {
+    resumeHandledRef.current = false;
+    setResumePrompt(null);
+    if (!album?.id) return undefined;
+
+    let active = true;
+    (async () => {
+      let remote = null;
+      let userId = null;
+      try {
+        const res = await fetch(
+          `/api/gallery/albums/${album.id}/viewer-session`,
+          { cache: "no-store" },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          userId = data?.userId ?? null;
+          remote = data?.session ?? null;
+        }
+      } catch {
+        // ignore fetch failures; fall back to local cache
+      }
+      if (!active) return;
+      if (userId) setViewerUserId(userId);
+
+      let local = null;
+      if (userId) {
+        try {
+          const raw = window.localStorage.getItem(
+            viewerSessionStorageKey(userId, album.id),
+          );
+          if (raw) local = JSON.parse(raw);
+        } catch {
+          local = null;
+        }
+      }
+
+      let chosen = remote;
+      if (
+        local &&
+        (!remote ||
+          (local.updatedAt &&
+            remote.updatedAt &&
+            local.updatedAt > remote.updatedAt))
+      ) {
+        chosen = local;
+      }
+
+      if (!active) return;
+      if (!resumeHandledRef.current && isResumableSession(chosen)) {
+        setResumePrompt({ session: chosen });
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [album?.id]);
+
+  // Persist viewer session: immediate localStorage + debounced server PUT.
+  useEffect(() => {
+    if (!viewerOpen || !viewerUserId || !album?.id) return undefined;
+
+    const payload = {
+      photoIndex: activeIndex,
+      viewerMode,
+      delayMs,
+      isPlaying,
+      splitLeftIndex: viewerMode === "split" ? activeIndex : null,
+      splitRightIndex:
+        viewerMode === "split" ? splitPanels.right?.index ?? null : null,
+    };
+
+    try {
+      window.localStorage.setItem(
+        viewerSessionStorageKey(viewerUserId, album.id),
+        JSON.stringify({ ...payload, updatedAt: new Date().toISOString() }),
+      );
+    } catch {
+      // ignore storage errors
+    }
+
+    const timer = window.setTimeout(() => {
+      fetch(`/api/gallery/albums/${album.id}/viewer-session`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }, 800);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    viewerOpen,
+    viewerUserId,
+    album?.id,
+    activeIndex,
+    viewerMode,
+    delayMs,
+    isPlaying,
+    splitPanels,
+  ]);
+
+  // Opening a photo from the grid before answering suppresses the prompt for
+  // this visit (without deleting the saved session).
+  useEffect(() => {
+    if (viewerOpen && resumePrompt) {
+      resumeHandledRef.current = true;
+      setResumePrompt(null);
+    }
+  }, [viewerOpen, resumePrompt]);
 
   useEffect(() => {
     if (!viewerOpen) {
@@ -1023,6 +1262,17 @@ export default function AlbumDetailPage({ params }) {
       return;
     }
 
+    const isTypingTarget = (target) => {
+      if (!target || typeof target.tagName !== "string") return false;
+      const tag = target.tagName.toLowerCase();
+      return (
+        tag === "input" ||
+        tag === "textarea" ||
+        tag === "select" ||
+        target.isContentEditable === true
+      );
+    };
+
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -1031,6 +1281,21 @@ export default function AlbumDetailPage({ params }) {
           return;
         }
         closeViewer();
+        return;
+      }
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+      if (event.key === "f" || event.key === "F") {
+        event.preventDefault();
+        void handleHideUI();
+        return;
+      }
+      if (event.key === "h" || event.key === "H") {
+        if (hideUI && (viewerMode === "slideshow" || viewerMode === "split")) {
+          event.preventDefault();
+          setFullscreenControlsHidden((current) => !current);
+        }
         return;
       }
       if (event.key === "ArrowLeft") {
@@ -1051,7 +1316,16 @@ export default function AlbumDetailPage({ params }) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [viewerOpen, hideUI, closeViewer, goToPrev, goToNext, handleShowUI]);
+  }, [
+    viewerOpen,
+    hideUI,
+    viewerMode,
+    closeViewer,
+    goToPrev,
+    goToNext,
+    handleShowUI,
+    handleHideUI,
+  ]);
 
   useEffect(() => {
     if (typeof document === "undefined" || !viewerOpen) return undefined;
@@ -1310,6 +1584,118 @@ export default function AlbumDetailPage({ params }) {
     return () => surface.removeEventListener("wheel", onWheel);
   }, [viewerOpen, activeItemIsVideo, viewerMode, updateImageZoom]);
 
+  const DOUBLE_TAP_SCALE = 2;
+  const lastTapRef = useRef({ time: 0, x: 0, y: 0, panelId: null });
+
+  const toggleImageDoubleZoom = useCallback(
+    (clientX, clientY) => {
+      const current = imageZoomRef.current;
+      if (current.scale > 1) {
+        resetImageZoom();
+        return;
+      }
+      const surface = zoomSurfaceRef.current;
+      let nextX = 0;
+      let nextY = 0;
+      if (surface && Number.isFinite(clientX) && Number.isFinite(clientY)) {
+        const rect = surface.getBoundingClientRect();
+        const offsetX = clientX - (rect.left + rect.width / 2);
+        const offsetY = clientY - (rect.top + rect.height / 2);
+        nextX = -DOUBLE_TAP_SCALE * offsetX;
+        nextY = -DOUBLE_TAP_SCALE * offsetY;
+      }
+      updateImageZoom(DOUBLE_TAP_SCALE, nextX, nextY);
+    },
+    [resetImageZoom, updateImageZoom],
+  );
+
+  const handleImageDoubleClickZoom = useCallback(
+    (event) => {
+      if (activeItemIsVideo) return;
+      toggleImageDoubleZoom(event?.clientX, event?.clientY);
+    },
+    [activeItemIsVideo, toggleImageDoubleZoom],
+  );
+
+  const toggleSplitDoubleZoom = useCallback(
+    (panelId, clientX, clientY) => {
+      const current = splitZoom[panelId] || { scale: 1, x: 0, y: 0 };
+      if (current.scale > 1) {
+        updateSplitZoom(panelId, 1, 0, 0);
+        return;
+      }
+      const surface = splitSurfaceRefs.current[panelId];
+      let nextX = 0;
+      let nextY = 0;
+      if (surface && Number.isFinite(clientX) && Number.isFinite(clientY)) {
+        const rect = surface.getBoundingClientRect();
+        const offsetX = clientX - (rect.left + rect.width / 2);
+        const offsetY = clientY - (rect.top + rect.height / 2);
+        nextX = -DOUBLE_TAP_SCALE * offsetX;
+        nextY = -DOUBLE_TAP_SCALE * offsetY;
+      }
+      updateSplitZoom(panelId, DOUBLE_TAP_SCALE, nextX, nextY);
+    },
+    [splitZoom, updateSplitZoom],
+  );
+
+  const handleSplitDoubleClickZoom = useCallback(
+    (panelId, event) => {
+      toggleSplitDoubleZoom(panelId, event?.clientX, event?.clientY);
+    },
+    [toggleSplitDoubleZoom],
+  );
+
+  // Manual double-tap detector for touch devices (dblclick is unreliable on mobile).
+  const registerTap = useCallback(
+    (panelId, clientX, clientY) => {
+      const now = Date.now();
+      const last = lastTapRef.current;
+      const isDouble =
+        last.panelId === panelId &&
+        now - last.time < 300 &&
+        Math.abs(clientX - last.x) < 30 &&
+        Math.abs(clientY - last.y) < 30;
+
+      if (isDouble) {
+        lastTapRef.current = { time: 0, x: 0, y: 0, panelId: null };
+        if (panelId === "primary") {
+          toggleImageDoubleZoom(clientX, clientY);
+        } else {
+          toggleSplitDoubleZoom(panelId, clientX, clientY);
+        }
+        return true;
+      }
+
+      lastTapRef.current = { time: now, x: clientX, y: clientY, panelId };
+      return false;
+    },
+    [toggleImageDoubleZoom, toggleSplitDoubleZoom],
+  );
+
+  // Wheel zoom on the active split panel (desktop parity with single-image zoom).
+  useEffect(() => {
+    if (!viewerOpen || viewerMode !== "split") return undefined;
+    const surface = splitSurfaceRefs.current[activeSplitPanel];
+    if (!surface) return undefined;
+
+    const onWheel = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const current = splitZoom[activeSplitPanel] || { scale: 1, x: 0, y: 0 };
+      const zoomDelta = event.deltaY < 0 ? 0.22 : -0.22;
+      updateSplitZoom(
+        activeSplitPanel,
+        current.scale + zoomDelta,
+        current.x,
+        current.y,
+      );
+    };
+
+    surface.addEventListener("wheel", onWheel, { passive: false });
+    return () => surface.removeEventListener("wheel", onWheel);
+  }, [viewerOpen, viewerMode, activeSplitPanel, splitZoom, updateSplitZoom]);
+
   const getPanelMediaKey = useCallback((panelId, item) => {
     if (!item) return `${panelId}:none`;
     return `${panelId}:${item.id}`;
@@ -1446,6 +1832,10 @@ export default function AlbumDetailPage({ params }) {
 
   const leftSplitPanel = splitResolved?.left || null;
   const rightSplitPanel = splitResolved?.right || null;
+  const activeSplitSettings =
+    (activeSplitPanel === "left" ? leftSplitPanel : rightSplitPanel) ||
+    splitPanelSettingsDefaults;
+  const activeSplitPanelLabel = activeSplitPanel === "left" ? "Left" : "Right";
   const leftSplitItem = leftSplitPanel?.item || null;
   const rightSplitItem = rightSplitPanel?.item || null;
   const leftSplitIsVideo = leftSplitItem ? isPhotoVideo(leftSplitItem) : false;
@@ -1548,10 +1938,18 @@ export default function AlbumDetailPage({ params }) {
             offsetX: currentZoom.x || 0,
             offsetY: currentZoom.y || 0,
           };
+          // Double-tap to toggle zoom on this panel (single-finger stationary taps).
+          if (event.changedTouches?.length === 1 && event.touches.length === 0) {
+            const touch = event.changedTouches[0];
+            if (registerTap(panelId, touch.clientX, touch.clientY)) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }
         },
       };
     },
-    [splitZoom, updateSplitZoom],
+    [splitZoom, updateSplitZoom, registerTap],
   );
 
   const leftSplitPinchHandlers = useMemo(
@@ -1913,7 +2311,15 @@ export default function AlbumDetailPage({ params }) {
       zoomGestureRef.current.pinchOffsetX = imageZoom.x;
       zoomGestureRef.current.pinchOffsetY = imageZoom.y;
     }
-  }, [imageZoom.scale, imageZoom.x, imageZoom.y]);
+    // Double-tap to toggle zoom (single-finger only, small stationary taps).
+    if (event.changedTouches?.length === 1 && event.touches.length === 0) {
+      const touch = event.changedTouches[0];
+      if (registerTap("primary", touch.clientX, touch.clientY)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    }
+  }, [imageZoom.scale, imageZoom.x, imageZoom.y, registerTap]);
 
   const albumCover =
     album?.coverPhoto?.imageUrl ||
@@ -1945,6 +2351,43 @@ export default function AlbumDetailPage({ params }) {
         >
           Back to albums
         </Link>
+
+        {resumePrompt && !viewerOpen ? (
+          <div
+            role="dialog"
+            aria-label="Resume viewing"
+            className="flex flex-col gap-3 rounded-2xl border border-emerald-300/40 bg-emerald-500/10 p-4 text-slate-100 shadow-lg shadow-emerald-950/20 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-emerald-100">
+                Continue where you left off?
+              </p>
+              <p className="mt-0.5 truncate text-xs text-emerald-100/80">
+                {`Resume in ${resumePrompt.session?.viewerMode || "focus"} mode`}
+                {Number.isFinite(resumePrompt.session?.photoIndex)
+                  ? ` at item ${clampPhotoIndex(resumePrompt.session.photoIndex) + 1}`
+                  : ""}
+                .
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => resumeFromSession(resumePrompt.session)}
+                className="rounded-full border border-emerald-300/60 bg-emerald-500/25 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-50 transition hover:bg-emerald-500/40"
+              >
+                Continue
+              </button>
+              <button
+                type="button"
+                onClick={startFreshSession}
+                className="rounded-full border border-white/25 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
+              >
+                Start fresh
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         <section className="relative overflow-hidden rounded-3xl border border-white/15 bg-slate-900/70 shadow-2xl shadow-slate-950/70">
           {albumCover && !albumCoverIsAudio ? (
@@ -2205,6 +2648,7 @@ export default function AlbumDetailPage({ params }) {
               } ${showSplitMode ? `${hideUI ? "grid grid-cols-1 gap-1 p-0 lg:grid-cols-2" : "grid grid-cols-1 gap-3 p-2 lg:grid-cols-2"}` : ""}`}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
+              onPointerMove={showSplitMode ? revealSplitHint : undefined}
             >
               {showSplitMode ? (
                 <>
@@ -2222,10 +2666,22 @@ export default function AlbumDetailPage({ params }) {
                         ? "order-2 lg:order-1"
                         : "order-1"
                     }
+                    isActive={activeSplitPanel === "left"}
+                    showActiveHint={splitHintVisible}
+                    positionLabel="Left"
+                    positionLabelMobile={isSplitMobileSwapped ? "Bottom" : "Top"}
+                    onActivate={handleSplitPanelActivate}
+                    onDoubleClickZoom={handleSplitDoubleClickZoom}
                     item={leftSplitItem}
                     media={leftSplitMedia}
                     assignVideoRef={splitLeftVideoRef}
                     zoomState={splitZoom.left}
+                    muted={Boolean(leftSplitPanel?.isMuted)}
+                    autoPlay={Boolean(leftSplitPanel?.isPlaying)}
+                    onForegroundVideoReady={(player) => {
+                      if (!leftSplitPanel?.isPlaying) return;
+                      player?.play().catch(() => {});
+                    }}
                     onPinchStart={leftSplitPinchHandlers.onPinchStart}
                     onPinchMove={leftSplitPinchHandlers.onPinchMove}
                     onPinchEnd={leftSplitPinchHandlers.onPinchEnd}
@@ -2267,6 +2723,12 @@ export default function AlbumDetailPage({ params }) {
                         ? "order-1 lg:order-2"
                         : "order-2"
                     }
+                    isActive={activeSplitPanel === "right"}
+                    showActiveHint={splitHintVisible}
+                    positionLabel="Right"
+                    positionLabelMobile={isSplitMobileSwapped ? "Top" : "Bottom"}
+                    onActivate={handleSplitPanelActivate}
+                    onDoubleClickZoom={handleSplitDoubleClickZoom}
                     item={rightSplitItem}
                     media={rightSplitMedia}
                     assignVideoRef={splitRightVideoRef}
@@ -2365,6 +2827,7 @@ export default function AlbumDetailPage({ params }) {
                   onPointerMove={handleImagePointerMove}
                   onPointerUp={handleImagePointerEnd}
                   onPointerCancel={handleImagePointerEnd}
+                  onDoubleClick={handleImageDoubleClickZoom}
                   onTouchStart={handleImageTouchStart}
                   onTouchMove={handleImageTouchMove}
                   onTouchEnd={handleImageTouchEnd}
@@ -2418,16 +2881,29 @@ export default function AlbumDetailPage({ params }) {
                       <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/20 bg-black/35 p-1.5 backdrop-blur-md">
                         <button
                           type="button"
-                          onClick={() => moveSplitPanel("right", "prev")}
-                          aria-label="Previous right panel media"
+                          onClick={() =>
+                            setActiveSplitPanel((current) =>
+                              current === "left" ? "right" : "left",
+                            )
+                          }
+                          aria-label={`Controlling ${activeSplitPanelLabel} panel. Switch active panel.`}
+                          title={`Controlling ${activeSplitPanelLabel} panel`}
+                          className="rounded-full border border-emerald-300/50 bg-emerald-500/20 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/35"
+                        >
+                          {activeSplitPanelLabel}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveSplitPanel(activeSplitPanel, "prev")}
+                          aria-label={`Previous ${activeSplitPanelLabel} panel media`}
                           className="rounded-full border border-white/25 p-2 text-white transition hover:bg-white/15"
                         >
                           <ChevronLeft className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"
-                          onClick={() => moveSplitPanel("right", "next")}
-                          aria-label="Next right panel media"
+                          onClick={() => moveSplitPanel(activeSplitPanel, "next")}
+                          aria-label={`Next ${activeSplitPanelLabel} panel media`}
                           className="rounded-full border border-white/25 p-2 text-white transition hover:bg-white/15"
                         >
                           <ChevronRight className="h-3.5 w-3.5" />
@@ -2439,7 +2915,7 @@ export default function AlbumDetailPage({ params }) {
                           }
                           aria-label="Swap split layout"
                           aria-pressed={isSplitMobileSwapped}
-                          className={`rounded-full border p-2 transition md:hidden ${
+                          className={`rounded-full border p-2 transition ${
                             isSplitMobileSwapped
                               ? "border-emerald-300/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
                               : "border-white/25 text-white hover:bg-white/15"
@@ -2452,24 +2928,24 @@ export default function AlbumDetailPage({ params }) {
                           onClick={() => {
                             setSplitPanels((current) => ({
                               ...current,
-                              right: {
-                                ...current.right,
-                                isPlaying: !current.right.isPlaying,
+                              [activeSplitPanel]: {
+                                ...current[activeSplitPanel],
+                                isPlaying: !current[activeSplitPanel].isPlaying,
                               },
                             }));
                           }}
                           aria-label={
-                            rightSplitPanel?.isPlaying
-                              ? "Pause right panel autoplay"
-                              : "Play right panel autoplay"
+                            activeSplitSettings?.isPlaying
+                              ? `Pause ${activeSplitPanelLabel} panel autoplay`
+                              : `Play ${activeSplitPanelLabel} panel autoplay`
                           }
                           className={`rounded-full border p-2 transition ${
-                            rightSplitPanel?.isPlaying
+                            activeSplitSettings?.isPlaying
                               ? "border-emerald-300/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
                               : "border-white/25 text-white hover:bg-white/15"
                           }`}
                         >
-                          {rightSplitPanel?.isPlaying ? (
+                          {activeSplitSettings?.isPlaying ? (
                             <Pause className="h-3.5 w-3.5" />
                           ) : (
                             <Play className="h-3.5 w-3.5" />
@@ -2477,24 +2953,24 @@ export default function AlbumDetailPage({ params }) {
                         </button>
                         <button
                           type="button"
-                          aria-label="Toggle right panel mute"
-                          aria-pressed={Boolean(rightSplitPanel?.isMuted)}
+                          aria-label={`Toggle ${activeSplitPanelLabel} panel mute`}
+                          aria-pressed={Boolean(activeSplitSettings?.isMuted)}
                           onClick={() => {
                             setSplitPanels((current) => ({
                               ...current,
-                              right: {
-                                ...current.right,
-                                isMuted: !current.right.isMuted,
+                              [activeSplitPanel]: {
+                                ...current[activeSplitPanel],
+                                isMuted: !current[activeSplitPanel].isMuted,
                               },
                             }));
                           }}
                           className={`rounded-full border p-2 transition ${
-                            rightSplitPanel?.isMuted
+                            activeSplitSettings?.isMuted
                               ? "border-emerald-300/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
                               : "border-white/25 text-white hover:bg-white/15"
                           }`}
                         >
-                          {rightSplitPanel?.isMuted ? (
+                          {activeSplitSettings?.isMuted ? (
                             <VolumeX className="h-3.5 w-3.5" />
                           ) : (
                             <Volume2 className="h-3.5 w-3.5" />
@@ -2502,19 +2978,19 @@ export default function AlbumDetailPage({ params }) {
                         </button>
                         <button
                           type="button"
-                          aria-label="Toggle right panel loop"
-                          aria-pressed={Boolean(rightSplitPanel?.loop)}
+                          aria-label={`Toggle ${activeSplitPanelLabel} panel loop`}
+                          aria-pressed={Boolean(activeSplitSettings?.loop)}
                           onClick={() => {
                             setSplitPanels((current) => ({
                               ...current,
-                              right: {
-                                ...current.right,
-                                loop: !current.right.loop,
+                              [activeSplitPanel]: {
+                                ...current[activeSplitPanel],
+                                loop: !current[activeSplitPanel].loop,
                               },
                             }));
                           }}
                           className={`rounded-full border p-2 transition ${
-                            rightSplitPanel?.loop
+                            activeSplitSettings?.loop
                               ? "border-emerald-300/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
                               : "border-white/25 text-white hover:bg-white/15"
                           }`}
