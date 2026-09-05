@@ -16,8 +16,10 @@ import {
 import GalleryMediaFilterModal from "@/modules/gallery/admin/cms/GalleryMediaFilterModal";
 import {
   VIEWER_MODES,
+  clearLocalViewerSession,
   isResumableSession,
-  viewerSessionStorageKey,
+  readLocalViewerSession,
+  writeLocalViewerSession,
 } from "@/lib/gallery/viewer-session";
 import {
   ArrowUpDown,
@@ -184,7 +186,11 @@ const viewerModeStorageKey = "galleryViewerMode";
 const splitMobileSwapStorageKey = "gallerySplitMobileSwapped";
 const authLastVisitedPathStorageKey = "auth:lastVisitedPath";
 const splitPanelTransitionMs = 260;
-const gdrivePreloadConcurrency = 3;
+const gdrivePreloadConcurrency = 2;
+const gdriveLookaheadConcurrency = 3;
+const slideshowLookaheadCount = 4;
+const slideshowLookbehindCount = 1;
+const videoPrefetchCount = 3;
 
 const createDefaultSplitZoomState = () => ({
   left: { scale: 1, x: 0, y: 0 },
@@ -314,6 +320,7 @@ const SplitPanelMediaSurface = ({
   onMediaSuccess,
   onMediaError,
   hasError,
+  isLoading = false,
   onForegroundVideoReady,
   className = "",
   zoomState = { scale: 1, x: 0, y: 0 },
@@ -329,6 +336,7 @@ const SplitPanelMediaSurface = ({
   positionLabelMobile = "",
   onActivate,
   onDoubleClickZoom,
+  onZoomPan,
 }) => {
   const [layers, setLayers] = useState(() =>
     item && media?.key
@@ -342,6 +350,7 @@ const SplitPanelMediaSurface = ({
         ]
       : [],
   );
+  const panGestureRef = useRef(null);
 
   useEffect(() => {
     if (!item || !media?.key) {
@@ -362,41 +371,51 @@ const SplitPanelMediaSurface = ({
         layerKey: `${panelId}:${media.key}`,
         item,
         media,
-        phase: current.length === 0 ? "center" : "enter",
+        // Stay hidden until media loads so the previous frame stays visible.
+        phase: current.length === 0 ? "center" : "loading",
       };
 
       if (current.length === 0) {
         return [nextLayer];
       }
 
+      // Keep the previous center layer until the new one reports ready.
       return [
-        ...current.slice(-1).map((layer) => ({
-          ...layer,
-          phase: "exit",
-        })),
+        ...current
+          .filter((layer) => layer.phase === "center" || layer.phase === "exit")
+          .slice(-1),
         nextLayer,
       ];
     });
   }, [item, media, panelId]);
 
-  useEffect(() => {
-    const hasEnteringLayer = layers.some((layer) => layer.phase === "enter");
-    if (!hasEnteringLayer) return undefined;
-
-    const frame = window.requestAnimationFrame(() => {
-      setLayers((current) =>
-        current.map((layer) =>
-          layer.phase === "enter" ? { ...layer, phase: "center" } : layer,
-        ),
-      );
+  const promoteLayer = useCallback((layerKey) => {
+    setLayers((current) => {
+      const target = current.find((layer) => layer.layerKey === layerKey);
+      if (!target || target.phase === "center") {
+        return current;
+      }
+      return current.map((layer) => {
+        if (layer.layerKey === layerKey) {
+          return { ...layer, phase: "center" };
+        }
+        if (layer.phase === "center") {
+          return { ...layer, phase: "exit" };
+        }
+        return layer;
+      });
     });
+  }, []);
+
+  useEffect(() => {
+    const hasExitingLayer = layers.some((layer) => layer.phase === "exit");
+    if (!hasExitingLayer) return undefined;
 
     const timeout = window.setTimeout(() => {
       setLayers((current) => current.filter((layer) => layer.phase !== "exit"));
     }, splitPanelTransitionMs);
 
     return () => {
-      window.cancelAnimationFrame(frame);
       window.clearTimeout(timeout);
     };
   }, [layers]);
@@ -414,9 +433,58 @@ const SplitPanelMediaSurface = ({
           : hideUI
             ? "border-transparent"
             : "border-white/10"
+      } ${
+        zoomState?.scale > 1 && !media?.isVideo
+          ? "cursor-grab active:cursor-grabbing"
+          : ""
       }`}
       onPointerEnter={onActivate ? () => onActivate(panelId) : undefined}
-      onPointerDown={onActivate ? () => onActivate(panelId) : undefined}
+      onPointerDown={(event) => {
+        onActivate?.(panelId);
+        if (
+          !onZoomPan ||
+          media?.isVideo ||
+          !zoomState ||
+          zoomState.scale <= 1 ||
+          !event.isPrimary
+        ) {
+          return;
+        }
+        panGestureRef.current = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          originX: zoomState.x || 0,
+          originY: zoomState.y || 0,
+        };
+        event.currentTarget.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onPointerMove={(event) => {
+        const gesture = panGestureRef.current;
+        if (!gesture || gesture.pointerId !== event.pointerId) return;
+        if (!onZoomPan || !zoomState || zoomState.scale <= 1) return;
+        onZoomPan(
+          panelId,
+          gesture.originX + (event.clientX - gesture.startX),
+          gesture.originY + (event.clientY - gesture.startY),
+        );
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onPointerUp={(event) => {
+        if (panGestureRef.current?.pointerId === event.pointerId) {
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+          panGestureRef.current = null;
+        }
+      }}
+      onPointerCancel={(event) => {
+        if (panGestureRef.current?.pointerId === event.pointerId) {
+          event.currentTarget.releasePointerCapture?.(event.pointerId);
+          panGestureRef.current = null;
+        }
+      }}
       onDoubleClick={
         onDoubleClickZoom
           ? (event) => onDoubleClickZoom(panelId, event)
@@ -452,11 +520,13 @@ const SplitPanelMediaSurface = ({
           const layerItem = layer.item;
           const layerMedia = layer.media;
           const layerIsVideo = layerMedia.isVideo;
+          const imageSrc =
+            layerMedia.playableSrc || layerItem?.imageUrl || "";
           const transitionClass =
             layer.phase === "center"
               ? "opacity-100 translate-y-0"
-              : layer.phase === "enter"
-                ? "opacity-0 translate-y-2"
+              : layer.phase === "loading"
+                ? "opacity-0"
                 : "opacity-0 -translate-y-2";
 
           return (
@@ -482,19 +552,25 @@ const SplitPanelMediaSurface = ({
                   <video
                     ref={isForeground ? assignVideoRef : undefined}
                     className="h-full w-full object-contain"
-                    controls={controls && isForeground}
+                    controls={
+                      Boolean(controls) &&
+                      isForeground &&
+                      // In split mode, native controls only on the hovered/clicked panel.
+                      (typeof onActivate === "function" ? isActive : true)
+                    }
                     autoPlay={autoPlay && isForeground}
                     muted={isForeground ? muted : true}
                     playsInline
-                    preload="metadata"
+                    preload="auto"
                     poster={
                       getVideoPosterUrl(layerItem?.imageUrl) || undefined
                     }
-                    crossOrigin="anonymous"
                     onLoadedMetadata={() => {
+                      promoteLayer(layer.layerKey);
                       onMediaSuccess(layerItem);
                     }}
                     onLoadedData={(event) => {
+                      promoteLayer(layer.layerKey);
                       onMediaSuccess(layerItem);
                       if (isForeground) {
                         onForegroundVideoReady?.(
@@ -505,6 +581,7 @@ const SplitPanelMediaSurface = ({
                       }
                     }}
                     onCanPlay={(event) => {
+                      promoteLayer(layer.layerKey);
                       onMediaSuccess(layerItem);
                       if (isForeground) {
                         onForegroundVideoReady?.(
@@ -516,6 +593,7 @@ const SplitPanelMediaSurface = ({
                     }}
                     onEnded={isForeground ? onEnded : undefined}
                     onError={(event) => {
+                      promoteLayer(layer.layerKey);
                       onMediaError(
                         layerItem,
                         "onError",
@@ -530,13 +608,16 @@ const SplitPanelMediaSurface = ({
                   </video>
                 ) : (
                   <img
-                    src={layerItem?.imageUrl}
+                    src={imageSrc}
                     alt={layerItem?.caption || `Photo ${layerItem?.id}`}
                     className="h-full w-full object-contain"
+                    decoding="async"
                     onLoad={() => {
+                      promoteLayer(layer.layerKey);
                       onMediaSuccess(layerItem);
                     }}
                     onError={(event) => {
+                      promoteLayer(layer.layerKey);
                       onMediaError(
                         layerItem,
                         "onError",
@@ -550,14 +631,16 @@ const SplitPanelMediaSurface = ({
                   <WatermarkOverlay text={watermarkText} variant="viewer" />
                 ) : null}
               </div>
-
-              {!isVisible ? (
-                <div className="absolute inset-0 bg-black/20" />
-              ) : null}
             </div>
           );
         })}
       </div>
+
+      {isLoading && !hasError ? (
+        <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/35">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/25 border-t-emerald-300" />
+        </div>
+      ) : null}
 
       {hasError ? (
         <div className="absolute inset-0 z-30 grid place-items-center bg-black/60 p-4 text-center text-sm text-rose-200">
@@ -651,7 +734,16 @@ export default function AlbumDetailPage({ params }) {
   const splitHintTimerRef = useRef(null);
   const [viewerUserId, setViewerUserId] = useState(null);
   const [resumePrompt, setResumePrompt] = useState(null);
+  const [savedViewerSession, setSavedViewerSession] = useState(null);
   const resumeHandledRef = useRef(false);
+  const viewerSessionRef = useRef({
+    userId: null,
+    albumId: null,
+    payload: null,
+  });
+  const persistTimerRef = useRef(null);
+  const activeSplitPanelRef = useRef("left");
+  const moveSplitPanelRef = useRef(null);
   const navigationEpochRef = useRef(0);
   const [mediaLoadingByPanel, setMediaLoadingByPanel] = useState({});
   const [mediaErrors, setMediaErrors] = useState({});
@@ -1019,28 +1111,79 @@ export default function AlbumDetailPage({ params }) {
     await exitBrowserFullscreen();
   }, [exitBrowserFullscreen]);
 
+  const flushViewerSession = useCallback((options = {}) => {
+    const { keepalive = false } = options;
+    const { userId, albumId, payload } = viewerSessionRef.current;
+    if (!albumId || !payload) return;
+
+    writeLocalViewerSession(albumId, {
+      ...payload,
+      updatedAt: new Date().toISOString(),
+    }, userId);
+
+    if (persistTimerRef.current) {
+      window.clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+
+    if (!userId) return;
+
+    fetch(`/api/gallery/albums/${albumId}/viewer-session`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      keepalive: Boolean(keepalive),
+    }).catch(() => {});
+  }, []);
+
   const closeViewer = useCallback(() => {
+    flushViewerSession({ keepalive: true });
+    const latest = viewerSessionRef.current.payload;
+    if (latest) {
+      setSavedViewerSession({
+        ...latest,
+        updatedAt: new Date().toISOString(),
+      });
+    }
     invalidatePendingNavigation();
     setViewerOpen(false);
     setIsPlaying(false);
     setMediaLoadingByPanel({});
     setHideUI(false);
     void exitBrowserFullscreen();
-  }, [exitBrowserFullscreen, invalidatePendingNavigation]);
+  }, [exitBrowserFullscreen, flushViewerSession, invalidatePendingNavigation]);
 
   const openViewerAt = useCallback(
     (index, options = {}) => {
-      const { mode = "focus" } = options;
+      const {
+        mode = "focus",
+        delayMs: resumeDelayMs,
+        isPlaying: resumeIsPlaying,
+        splitRightIndex = null,
+        activePanel = "left",
+      } = options;
       invalidatePendingNavigation();
       setActiveIndex(index);
       setViewerMode(mode);
       setViewerOpen(true);
-      setIsPlaying(mode === "slideshow");
+      if (Number.isFinite(resumeDelayMs)) {
+        setDelayMs(resumeDelayMs);
+      }
+      if (typeof resumeIsPlaying === "boolean") {
+        setIsPlaying(resumeIsPlaying);
+      } else {
+        setIsPlaying(mode === "slideshow");
+      }
       setSplitPanels({
         left: { ...splitPanelSettingsDefaults },
-        right: { ...splitPanelRightDefaults },
+        right: {
+          ...splitPanelRightDefaults,
+          ...(Number.isFinite(splitRightIndex)
+            ? { index: splitRightIndex }
+            : {}),
+        },
       });
-      setActiveSplitPanel("left");
+      setActiveSplitPanel(activePanel === "right" ? "right" : "left");
       setMediaLoadingByPanel({ primary: true });
       setHideUI(false);
     },
@@ -1049,6 +1192,13 @@ export default function AlbumDetailPage({ params }) {
 
   const handleSplitPanelActivate = useCallback((panelId) => {
     setActiveSplitPanel((current) => (current === panelId ? current : panelId));
+    setSplitHintVisible(true);
+    if (splitHintTimerRef.current) {
+      window.clearTimeout(splitHintTimerRef.current);
+    }
+    splitHintTimerRef.current = window.setTimeout(() => {
+      setSplitHintVisible(false);
+    }, 800);
   }, []);
 
   const revealSplitHint = useCallback(() => {
@@ -1089,25 +1239,19 @@ export default function AlbumDetailPage({ params }) {
           ? session.splitLeftIndex ?? session.photoIndex
           : session.photoIndex,
       );
-      openViewerAt(baseIndex, { mode });
-      if (Number.isFinite(session.delayMs)) {
-        setDelayMs(session.delayMs);
-      }
-      if (mode === "split") {
-        setSplitPanels((current) => ({
-          ...current,
-          right: {
-            ...current.right,
-            index: clampPhotoIndex(
-              session.splitRightIndex ?? current.right.index,
-            ),
-          },
-        }));
-      } else {
-        setIsPlaying(Boolean(session.isPlaying) || mode === "slideshow");
-      }
+      const rightIndex =
+        mode === "split" && Number.isFinite(session.splitRightIndex)
+          ? clampPhotoIndex(session.splitRightIndex)
+          : null;
+      openViewerAt(baseIndex, {
+        mode,
+        delayMs: Number.isFinite(session.delayMs) ? session.delayMs : undefined,
+        isPlaying: Boolean(session.isPlaying) || mode === "slideshow",
+        splitRightIndex: rightIndex,
+      });
       resumeHandledRef.current = true;
       setResumePrompt(null);
+      setSavedViewerSession(session);
     },
     [clampPhotoIndex, openViewerAt],
   );
@@ -1115,26 +1259,49 @@ export default function AlbumDetailPage({ params }) {
   const startFreshSession = useCallback(() => {
     resumeHandledRef.current = true;
     setResumePrompt(null);
-    if (viewerUserId && album?.id) {
-      try {
-        window.localStorage.removeItem(
-          viewerSessionStorageKey(viewerUserId, album.id),
-        );
-      } catch {
-        // ignore storage errors (private mode, quota)
-      }
-    }
+    setSavedViewerSession(null);
     if (album?.id) {
+      clearLocalViewerSession(album.id, viewerUserId);
       fetch(`/api/gallery/albums/${album.id}/viewer-session`, {
         method: "DELETE",
       }).catch(() => {});
     }
   }, [album?.id, viewerUserId]);
 
+  const resolveLatestViewerSession = useCallback(() => {
+    if (isResumableSession(savedViewerSession)) {
+      return savedViewerSession;
+    }
+    if (album?.id) {
+      const local = readLocalViewerSession(album.id, viewerUserId)?.session;
+      if (isResumableSession(local)) return local;
+    }
+    if (isResumableSession(resumePrompt?.session)) {
+      return resumePrompt.session;
+    }
+    return null;
+  }, [album?.id, resumePrompt?.session, savedViewerSession, viewerUserId]);
+
+  /** Slideshow entry: restore last per-album view when one exists; otherwise start fresh. */
+  const openSlideshowOrResume = useCallback(() => {
+    const session = resolveLatestViewerSession();
+    if (session) {
+      resumeFromSession(session);
+      return;
+    }
+    openViewerAt(0, { mode: "slideshow" });
+  }, [openViewerAt, resolveLatestViewerSession, resumeFromSession]);
+
+  const startFreshSlideshow = useCallback(() => {
+    startFreshSession();
+    openViewerAt(0, { mode: "slideshow" });
+  }, [openViewerAt, startFreshSession]);
+
   // Load the saved viewer session for this album and prompt to resume once.
   useEffect(() => {
     resumeHandledRef.current = false;
     setResumePrompt(null);
+    setSavedViewerSession(null);
     if (!album?.id) return undefined;
 
     let active = true;
@@ -1155,19 +1322,14 @@ export default function AlbumDetailPage({ params }) {
         // ignore fetch failures; fall back to local cache
       }
       if (!active) return;
+
+      const localMatch = readLocalViewerSession(album.id, userId);
+      if (!userId && localMatch?.userId) {
+        userId = localMatch.userId;
+      }
       if (userId) setViewerUserId(userId);
 
-      let local = null;
-      if (userId) {
-        try {
-          const raw = window.localStorage.getItem(
-            viewerSessionStorageKey(userId, album.id),
-          );
-          if (raw) local = JSON.parse(raw);
-        } catch {
-          local = null;
-        }
-      }
+      const local = localMatch?.session ?? null;
 
       let chosen = remote;
       if (
@@ -1175,12 +1337,16 @@ export default function AlbumDetailPage({ params }) {
         (!remote ||
           (local.updatedAt &&
             remote.updatedAt &&
-            local.updatedAt > remote.updatedAt))
+            local.updatedAt > remote.updatedAt) ||
+          (!remote.updatedAt && local.updatedAt))
       ) {
         chosen = local;
       }
 
       if (!active) return;
+      if (chosen) {
+        setSavedViewerSession(chosen);
+      }
       if (!resumeHandledRef.current && isResumableSession(chosen)) {
         setResumePrompt({ session: chosen });
       }
@@ -1194,7 +1360,7 @@ export default function AlbumDetailPage({ params }) {
 
   // Persist viewer session: immediate localStorage + debounced server PUT.
   useEffect(() => {
-    if (!viewerOpen || !viewerUserId || !album?.id) return undefined;
+    if (!viewerOpen || !album?.id) return undefined;
 
     const payload = {
       photoIndex: activeIndex,
@@ -1206,16 +1372,23 @@ export default function AlbumDetailPage({ params }) {
         viewerMode === "split" ? splitPanels.right?.index ?? null : null,
     };
 
-    try {
-      window.localStorage.setItem(
-        viewerSessionStorageKey(viewerUserId, album.id),
-        JSON.stringify({ ...payload, updatedAt: new Date().toISOString() }),
-      );
-    } catch {
-      // ignore storage errors
-    }
+    viewerSessionRef.current = {
+      userId: viewerUserId,
+      albumId: album.id,
+      payload,
+    };
 
-    const timer = window.setTimeout(() => {
+    const stamped = { ...payload, updatedAt: new Date().toISOString() };
+    setSavedViewerSession(stamped);
+    writeLocalViewerSession(album.id, stamped, viewerUserId);
+
+    if (!viewerUserId) return undefined;
+
+    if (persistTimerRef.current) {
+      window.clearTimeout(persistTimerRef.current);
+    }
+    persistTimerRef.current = window.setTimeout(() => {
+      persistTimerRef.current = null;
       fetch(`/api/gallery/albums/${album.id}/viewer-session`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -1223,7 +1396,12 @@ export default function AlbumDetailPage({ params }) {
       }).catch(() => {});
     }, 800);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      if (persistTimerRef.current) {
+        window.clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+    };
   }, [
     viewerOpen,
     viewerUserId,
@@ -1234,6 +1412,15 @@ export default function AlbumDetailPage({ params }) {
     isPlaying,
     splitPanels,
   ]);
+
+  // Flush the latest session if the tab is hidden/unloaded while viewing.
+  useEffect(() => {
+    const onPageHide = () => {
+      flushViewerSession({ keepalive: true });
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [flushViewerSession]);
 
   // Opening a photo from the grid before answering suppresses the prompt for
   // this visit (without deleting the saved session).
@@ -1298,18 +1485,34 @@ export default function AlbumDetailPage({ params }) {
         }
         return;
       }
-      if (event.key === "ArrowLeft") {
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
-        goToPrev();
-        return;
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        goToNext();
+        const direction = event.key === "ArrowLeft" ? "prev" : "next";
+        if (viewerMode === "split") {
+          const panelId = activeSplitPanelRef.current;
+          moveSplitPanelRef.current?.(panelId, direction);
+          return;
+        }
+        if (direction === "prev") {
+          goToPrev();
+        } else {
+          goToNext();
+        }
         return;
       }
       if (event.key === " " || event.code === "Space") {
         event.preventDefault();
+        if (viewerMode === "split") {
+          const panelId = activeSplitPanelRef.current;
+          setSplitPanels((current) => ({
+            ...current,
+            [panelId]: {
+              ...current[panelId],
+              isPlaying: !current[panelId].isPlaying,
+            },
+          }));
+          return;
+        }
         setIsPlaying((current) => !current);
       }
     };
@@ -1396,12 +1599,129 @@ export default function AlbumDetailPage({ params }) {
 
   const revokePreloadedMediaUrls = useCallback((entries) => {
     Object.values(entries || {}).forEach((value) => {
-      if (typeof value === "string") {
+      if (typeof value === "string" && value.startsWith("blob:")) {
         URL.revokeObjectURL(value);
       }
     });
   }, []);
 
+  const preloadInFlightRef = useRef(new Set());
+  const warmedStreamIdsRef = useRef(new Set());
+  const preloadQueueRef = useRef([]);
+  const preloadWorkersActiveRef = useRef(false);
+
+  const rememberBlobUrl = useCallback((photoId, objectUrl) => {
+    setPreloadedMediaUrls((current) => {
+      if (current[photoId]) {
+        URL.revokeObjectURL(objectUrl);
+        return current;
+      }
+      const next = { ...current, [photoId]: objectUrl };
+      preloadedMediaUrlsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const enqueueGdrivePreload = useCallback((photos, { priority = false } = {}) => {
+    if (!Array.isArray(photos) || photos.length === 0) return;
+    let queue = preloadQueueRef.current;
+    const nextBatch = [];
+    const batchIds = new Set();
+
+    photos.forEach((photo) => {
+      if (!photo?.id || !photo.imageUrl) return;
+      if (photo.sourceType !== "gdrive") return;
+      if (preloadedMediaUrlsRef.current[photo.id]) return;
+      if (
+        (isPhotoVideo(photo) || isPhotoAudio(photo)) &&
+        warmedStreamIdsRef.current.has(photo.id)
+      ) {
+        return;
+      }
+      if (preloadInFlightRef.current.has(photo.id)) return;
+      if (batchIds.has(photo.id)) return;
+      batchIds.add(photo.id);
+      nextBatch.push(photo);
+    });
+
+    if (nextBatch.length === 0) return;
+
+    if (priority) {
+      // Promote lookahead items to the front even if they were already queued.
+      queue = queue.filter((photo) => !batchIds.has(photo.id));
+      preloadQueueRef.current = [...nextBatch, ...queue];
+      return;
+    }
+
+    const queuedIds = new Set(queue.map((photo) => photo.id));
+    const append = nextBatch.filter((photo) => !queuedIds.has(photo.id));
+    if (append.length === 0) return;
+    preloadQueueRef.current = [...queue, ...append];
+  }, []);
+
+  const warmGdrivePhoto = useCallback(
+    async (photo, signal) => {
+      if (!photo?.id || !photo.imageUrl) return;
+      if (preloadedMediaUrlsRef.current[photo.id]) return;
+      if (
+        (isPhotoVideo(photo) || isPhotoAudio(photo)) &&
+        warmedStreamIdsRef.current.has(photo.id)
+      ) {
+        return;
+      }
+      if (preloadInFlightRef.current.has(photo.id)) return;
+
+      preloadInFlightRef.current.add(photo.id);
+      try {
+        if (isPhotoVideo(photo) || isPhotoAudio(photo)) {
+          // Do not full-download videos here — that competes with the visible
+          // player for Drive bandwidth. Progressive buffering is handled by the
+          // hidden <video preload="auto"> pool instead.
+          if (!signal.aborted) {
+            warmedStreamIdsRef.current.add(photo.id);
+          }
+          return;
+        }
+
+        const response = await fetch(photo.imageUrl, {
+          credentials: "same-origin",
+          cache: "default",
+          signal,
+        });
+        if (!response.ok) {
+          throw new Error(`Failed to preload media ${photo.id} (${response.status}).`);
+        }
+
+        const blob = await response.blob();
+        if (signal.aborted) return;
+
+        const objectUrl = URL.createObjectURL(blob);
+        rememberBlobUrl(photo.id, objectUrl);
+
+        try {
+          const img = new Image();
+          img.decoding = "async";
+          img.src = objectUrl;
+          if (typeof img.decode === "function") {
+            await img.decode();
+          }
+        } catch {
+          // decode is best-effort; blob URL is still usable
+        }
+      } catch (preloadError) {
+        if (signal.aborted || preloadError?.name === "AbortError") return;
+        console.warn("[GalleryViewer] Failed to preload imported media", {
+          photoId: photo.id,
+          message: preloadError?.message || String(preloadError),
+        });
+      } finally {
+        preloadInFlightRef.current.delete(photo.id);
+      }
+    },
+    [rememberBlobUrl],
+  );
+
+  // Background + priority queue workers for Google Drive media.
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
@@ -1411,6 +1731,9 @@ export default function AlbumDetailPage({ params }) {
       preloadedMediaUrlsRef.current = {};
       setPreloadedMediaUrls({});
     }
+    preloadQueueRef.current = [];
+    preloadInFlightRef.current = new Set();
+    warmedStreamIdsRef.current = new Set();
 
     if (!album?.id) {
       return undefined;
@@ -1423,58 +1746,26 @@ export default function AlbumDetailPage({ params }) {
 
     const abortController = new AbortController();
     let disposed = false;
-    let cursor = 0;
-
-    const warmPhoto = async (photo) => {
-      try {
-        const response = await fetch(photo.imageUrl, {
-          cache: "force-cache",
-          signal: abortController.signal,
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to preload media ${photo.id}.`);
-        }
-
-        const blob = await response.blob();
-        if (disposed) {
-          return;
-        }
-
-        const objectUrl = URL.createObjectURL(blob);
-        setPreloadedMediaUrls((current) => {
-          if (current[photo.id]) {
-            URL.revokeObjectURL(objectUrl);
-            return current;
-          }
-
-          const next = { ...current, [photo.id]: objectUrl };
-          preloadedMediaUrlsRef.current = next;
-          return next;
-        });
-      } catch (preloadError) {
-        if (abortController.signal.aborted || disposed) {
-          return;
-        }
-        console.warn("[GalleryViewer] Failed to preload imported media", {
-          albumId: album.id,
-          photoId: photo.id,
-          preloadError,
-        });
-      }
-    };
+    preloadWorkersActiveRef.current = true;
+    // Do not enqueue the whole album up front — that floods Google Drive and
+    // starves the slides the user is actually viewing. Lookahead effect feeds
+    // the queue while the viewer is open.
 
     const workers = Array.from(
-      { length: Math.min(gdrivePreloadConcurrency, preloadablePhotos.length) },
+      {
+        length: Math.min(
+          Math.max(gdrivePreloadConcurrency, gdriveLookaheadConcurrency),
+          Math.max(preloadablePhotos.length, 1),
+        ),
+      },
       async () => {
-        while (!disposed) {
-          const nextIndex = cursor;
-          cursor += 1;
-          const photo = preloadablePhotos[nextIndex];
+        while (!disposed && !abortController.signal.aborted) {
+          const photo = preloadQueueRef.current.shift();
           if (!photo) {
-            return;
+            await new Promise((resolve) => window.setTimeout(resolve, 120));
+            continue;
           }
-          // Serial inside each worker keeps concurrent fetches bounded.
-          await warmPhoto(photo);
+          await warmGdrivePhoto(photo, abortController.signal);
         }
       },
     );
@@ -1483,11 +1774,142 @@ export default function AlbumDetailPage({ params }) {
 
     return () => {
       disposed = true;
+      preloadWorkersActiveRef.current = false;
       abortController.abort();
+      preloadQueueRef.current = [];
       revokePreloadedMediaUrls(preloadedMediaUrlsRef.current);
       preloadedMediaUrlsRef.current = {};
+      warmedStreamIdsRef.current = new Set();
+      preloadInFlightRef.current = new Set();
     };
-  }, [album?.id, preloadableGdriveKey, revokePreloadedMediaUrls]);
+  }, [
+    album?.id,
+    preloadableGdriveKey,
+    revokePreloadedMediaUrls,
+    warmGdrivePhoto,
+  ]);
+
+  // Slideshow / viewer lookahead: always warm the next (and nearby) slides first.
+  useEffect(() => {
+    if (!viewerOpen || !album?.id || filteredPhotoCount === 0) {
+      return undefined;
+    }
+
+    const pick = (index) => {
+      const photo = filteredPhotos[index];
+      return photo?.sourceType === "gdrive" ? photo : null;
+    };
+
+    const priorityPhotos = [];
+    const pushIndex = (index) => {
+      if (!filteredPhotoCount) return;
+      const normalized =
+        ((index % filteredPhotoCount) + filteredPhotoCount) % filteredPhotoCount;
+      const photo = pick(normalized);
+      if (photo) priorityPhotos.push(photo);
+    };
+
+    if (viewerMode === "split") {
+      const rightIndex = Number.isFinite(splitPanels.right?.index)
+        ? splitPanels.right.index
+        : 0;
+      for (let step = 0; step <= slideshowLookaheadCount; step += 1) {
+        pushIndex(activeIndex + step);
+        pushIndex(rightIndex + step);
+      }
+      for (let step = 1; step <= slideshowLookbehindCount; step += 1) {
+        pushIndex(activeIndex - step);
+        pushIndex(rightIndex - step);
+      }
+    } else {
+      for (let step = 0; step <= slideshowLookaheadCount; step += 1) {
+        pushIndex(activeIndex + step);
+      }
+      for (let step = 1; step <= slideshowLookbehindCount; step += 1) {
+        pushIndex(activeIndex - step);
+      }
+    }
+
+    // Videos first in the queue — Drive video start latency is the worst case.
+    const videoFirst = [
+      ...priorityPhotos.filter((photo) => isPhotoVideo(photo)),
+      ...priorityPhotos.filter((photo) => !isPhotoVideo(photo)),
+    ];
+    enqueueGdrivePreload(videoFirst, { priority: true });
+    return undefined;
+  }, [
+    viewerOpen,
+    viewerMode,
+    activeIndex,
+    splitPanels.right?.index,
+    filteredPhotos,
+    filteredPhotoCount,
+    album?.id,
+    enqueueGdrivePreload,
+  ]);
+
+  // Hidden decode/buffer aids for the immediate next slide(s) while viewing.
+  const slideshowPrefetchItems = useMemo(() => {
+    if (!viewerOpen || filteredPhotoCount === 0) return [];
+    const items = [];
+    const seen = new Set();
+    const add = (index) => {
+      const normalized =
+        ((index % filteredPhotoCount) + filteredPhotoCount) % filteredPhotoCount;
+      const photo = filteredPhotos[normalized];
+      if (!photo || seen.has(photo.id)) return;
+      seen.add(photo.id);
+      items.push(photo);
+    };
+
+    // Prefer upcoming videos first — those are the slow Drive hits.
+    const addUpcomingVideos = (startIndex, count) => {
+      let found = 0;
+      for (let step = 1; step <= filteredPhotoCount && found < count; step += 1) {
+        const normalized =
+          ((startIndex + step) % filteredPhotoCount + filteredPhotoCount) %
+          filteredPhotoCount;
+        const photo = filteredPhotos[normalized];
+        if (!photo || !isPhotoVideo(photo) || seen.has(photo.id)) continue;
+        seen.add(photo.id);
+        items.push(photo);
+        found += 1;
+      }
+    };
+
+    if (viewerMode === "split") {
+      const rightIndex = Number.isFinite(splitPanels.right?.index)
+        ? splitPanels.right.index
+        : 0;
+      addUpcomingVideos(rightIndex, videoPrefetchCount);
+      addUpcomingVideos(activeIndex, 2);
+      add(activeIndex + 1);
+      add(rightIndex + 1);
+      add(activeIndex + 2);
+      add(rightIndex + 2);
+    } else {
+      addUpcomingVideos(activeIndex, videoPrefetchCount);
+      add(activeIndex + 1);
+      add(activeIndex + 2);
+      add(activeIndex + 3);
+    }
+    return items.slice(0, 5);
+  }, [
+    viewerOpen,
+    viewerMode,
+    activeIndex,
+    splitPanels.right?.index,
+    filteredPhotos,
+    filteredPhotoCount,
+  ]);
+
+  const videoPrefetchItems = useMemo(
+    () =>
+      slideshowPrefetchItems
+        .filter((item) => isPhotoVideo(item) && !preloadedMediaUrls[item.id])
+        .slice(0, 2),
+    [slideshowPrefetchItems, preloadedMediaUrls],
+  );
 
   const activeItem = viewerOpen ? filteredPhotos[activeIndex] : null;
   const activeItemIsVideo = activeItem ? isPhotoVideo(activeItem) : false;
@@ -1836,6 +2258,13 @@ export default function AlbumDetailPage({ params }) {
     (activeSplitPanel === "left" ? leftSplitPanel : rightSplitPanel) ||
     splitPanelSettingsDefaults;
   const activeSplitPanelLabel = activeSplitPanel === "left" ? "Left" : "Right";
+  const activeSplitPanelLabelMobile = isSplitMobileSwapped
+    ? activeSplitPanel === "left"
+      ? "Bottom"
+      : "Top"
+    : activeSplitPanel === "left"
+      ? "Top"
+      : "Bottom";
   const leftSplitItem = leftSplitPanel?.item || null;
   const rightSplitItem = rightSplitPanel?.item || null;
   const leftSplitIsVideo = leftSplitItem ? isPhotoVideo(leftSplitItem) : false;
@@ -2008,6 +2437,9 @@ export default function AlbumDetailPage({ params }) {
     },
     [buildSplitCandidates, filteredPhotos, invalidatePendingNavigation],
   );
+
+  activeSplitPanelRef.current = activeSplitPanel;
+  moveSplitPanelRef.current = moveSplitPanel;
 
   const goToNextVideo = useCallback(() => {
     invalidatePendingNavigation();
@@ -2207,19 +2639,37 @@ export default function AlbumDetailPage({ params }) {
       hideUI &&
       (showSplitMode || viewerMode === "slideshow")
     ) {
+      const zoomedSplit =
+        showSplitMode &&
+        ((splitZoom.left?.scale || 1) > 1 || (splitZoom.right?.scale || 1) > 1);
+      const zoomedPrimary = !showSplitMode && imageZoom.scale > 1;
+      if (zoomedSplit || zoomedPrimary) {
+        return;
+      }
       if (Math.abs(deltaY) >= 45 && Math.abs(deltaY) > Math.abs(deltaX)) {
         setFullscreenControlsHidden(deltaY > 0);
         return;
       }
     }
 
-    // Split fullscreen: swipe horizontally switches the left panel item.
+    // Split fullscreen: swipe horizontally switches the active panel item.
     if (viewerOpen && hideUI && showSplitMode) {
+      if (
+        (splitZoom.left?.scale || 1) > 1 ||
+        (splitZoom.right?.scale || 1) > 1
+      ) {
+        return;
+      }
       if (Math.abs(deltaX) >= 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
-        moveSplitPanel("left", deltaX < 0 ? "next" : "prev");
+        moveSplitPanel(
+          activeSplitPanelRef.current,
+          deltaX < 0 ? "next" : "prev",
+        );
         return;
       }
     }
+
+    if (imageZoom.scale > 1) return;
 
     if (Math.abs(deltaX) < 35 || Math.abs(deltaX) < Math.abs(deltaY)) return;
     if (deltaX < 0) {
@@ -2230,8 +2680,8 @@ export default function AlbumDetailPage({ params }) {
   };
 
   const handleImagePointerDown = useCallback((event) => {
-    if (event.pointerType === "touch") return;
     if (imageZoom.scale <= 1) return;
+    if (!event.isPrimary) return;
     zoomGestureRef.current = {
       ...zoomGestureRef.current,
       pointerId: event.pointerId,
@@ -2241,6 +2691,7 @@ export default function AlbumDetailPage({ params }) {
       startOffsetY: imageZoom.y,
     };
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
   }, [imageZoom.scale, imageZoom.x, imageZoom.y]);
 
   const handleImagePointerMove = useCallback((event) => {
@@ -2259,6 +2710,15 @@ export default function AlbumDetailPage({ params }) {
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     zoomGestureRef.current.pointerId = null;
   }, []);
+
+  const handleSplitZoomPan = useCallback(
+    (panelId, nextX, nextY) => {
+      const current = splitZoom[panelId] || { scale: 1, x: 0, y: 0 };
+      if (current.scale <= 1) return;
+      updateSplitZoom(panelId, current.scale, nextX, nextY);
+    },
+    [splitZoom, updateSplitZoom],
+  );
 
   const handleImageTouchStart = useCallback((event) => {
     if (event.touches.length === 2) {
@@ -2363,10 +2823,23 @@ export default function AlbumDetailPage({ params }) {
                 Continue where you left off?
               </p>
               <p className="mt-0.5 truncate text-xs text-emerald-100/80">
-                {`Resume in ${resumePrompt.session?.viewerMode || "focus"} mode`}
-                {Number.isFinite(resumePrompt.session?.photoIndex)
-                  ? ` at item ${clampPhotoIndex(resumePrompt.session.photoIndex) + 1}`
-                  : ""}
+                {(() => {
+                  const session = resumePrompt.session;
+                  const mode = session?.viewerMode || "focus";
+                  if (mode === "split") {
+                    const left =
+                      clampPhotoIndex(
+                        session?.splitLeftIndex ?? session?.photoIndex ?? 0,
+                      ) + 1;
+                    const right =
+                      clampPhotoIndex(session?.splitRightIndex ?? 0) + 1;
+                    return `Resume split · left item ${left} · right item ${right}`;
+                  }
+                  const item = Number.isFinite(session?.photoIndex)
+                    ? clampPhotoIndex(session.photoIndex) + 1
+                    : null;
+                  return `Resume in ${mode} mode${item ? ` at item ${item}` : ""}`;
+                })()}
                 .
               </p>
             </div>
@@ -2479,15 +2952,29 @@ export default function AlbumDetailPage({ params }) {
             <GridSizeSwiper density={density} onDensityChange={setDensity} />
 
             {/* Action buttons */}
-            <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex sm:gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-2 sm:ml-auto">
               <button
                 type="button"
-                onClick={() => openViewerAt(0, { mode: "slideshow" })}
+                onClick={openSlideshowOrResume}
                 disabled={filteredPhotos.length === 0}
                 className="inline-flex h-9 items-center justify-center rounded-full border border-emerald-400/35 bg-emerald-500/15 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-200 transition active:scale-95 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Slideshow
+                {isResumableSession(savedViewerSession) ||
+                isResumableSession(resumePrompt?.session)
+                  ? "Continue"
+                  : "Slideshow"}
               </button>
+              {isResumableSession(savedViewerSession) ||
+              isResumableSession(resumePrompt?.session) ? (
+                <button
+                  type="button"
+                  onClick={startFreshSlideshow}
+                  disabled={filteredPhotos.length === 0}
+                  className="inline-flex h-9 items-center justify-center rounded-full border border-white/20 bg-white/8 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/85 transition active:scale-95 hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  New slideshow
+                </button>
+              ) : null}
               {accessMode !== "public" ? (
                 <button
                   type="button"
@@ -2577,6 +3064,51 @@ export default function AlbumDetailPage({ params }) {
           onApplyFilter={setMediaFilter}
         />
       </div>
+      {viewerOpen && slideshowPrefetchItems.length > 0 ? (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed h-0 w-0 overflow-hidden opacity-0"
+        >
+          {slideshowPrefetchItems.map((item) => {
+            const src = resolveMediaUrl(item);
+            if (!src) return null;
+            if (isPhotoVideo(item)) return null;
+            if (isPhotoAudio(item)) return null;
+            return (
+              <img
+                key={`prefetch-image-${item.id}`}
+                src={src}
+                alt=""
+                decoding="async"
+              />
+            );
+          })}
+          {videoPrefetchItems.map((item) => {
+            const src = resolveMediaUrl(item);
+            const playable = getPlayableMediaUrl(src) || src;
+            if (!playable) return null;
+            return (
+              <video
+                key={`prefetch-video-${item.id}`}
+                src={playable}
+                muted
+                playsInline
+                preload="auto"
+                // Keep the element attached so the browser can keep buffering
+                // the next Drive clip before the user advances.
+                onLoadedData={(event) => {
+                  try {
+                    event.currentTarget.pause();
+                  } catch {
+                    // ignore
+                  }
+                }}
+              />
+            );
+          })}
+        </div>
+      ) : null}
+
       {viewerOpen && activeItem ? (
         <div
           className={`fixed inset-0 z-50 bg-black/85 backdrop-blur-sm ${hideUI ? "p-0" : "p-4 sm:p-6"}`}
@@ -2672,6 +3204,7 @@ export default function AlbumDetailPage({ params }) {
                     positionLabelMobile={isSplitMobileSwapped ? "Bottom" : "Top"}
                     onActivate={handleSplitPanelActivate}
                     onDoubleClickZoom={handleSplitDoubleClickZoom}
+                    onZoomPan={handleSplitZoomPan}
                     item={leftSplitItem}
                     media={leftSplitMedia}
                     assignVideoRef={splitLeftVideoRef}
@@ -2708,6 +3241,7 @@ export default function AlbumDetailPage({ params }) {
                     hasError={Boolean(
                       mediaErrors[getPanelMediaKey("left", leftSplitItem)],
                     )}
+                    isLoading={Boolean(mediaLoadingByPanel.left)}
                   />
                   <SplitPanelMediaSurface
                     panelId="right"
@@ -2729,6 +3263,7 @@ export default function AlbumDetailPage({ params }) {
                     positionLabelMobile={isSplitMobileSwapped ? "Top" : "Bottom"}
                     onActivate={handleSplitPanelActivate}
                     onDoubleClickZoom={handleSplitDoubleClickZoom}
+                    onZoomPan={handleSplitZoomPan}
                     item={rightSplitItem}
                     media={rightSplitMedia}
                     assignVideoRef={splitRightVideoRef}
@@ -2768,6 +3303,7 @@ export default function AlbumDetailPage({ params }) {
                     hasError={Boolean(
                       mediaErrors[getPanelMediaKey("right", rightSplitItem)],
                     )}
+                    isLoading={Boolean(mediaLoadingByPanel.right)}
                   />
                 </>
               ) : activeItemIsVideo ? (
@@ -2778,9 +3314,8 @@ export default function AlbumDetailPage({ params }) {
                     className="h-full w-full object-contain"
                     controls
                     playsInline
-                    preload="metadata"
+                    preload="auto"
                     poster={getVideoPosterUrl(activeItem.imageUrl) || undefined}
-                    crossOrigin="anonymous"
                     onLoadedMetadata={() => {
                       markPanelMediaSuccess("primary", activeItem);
                     }}
@@ -2877,8 +3412,14 @@ export default function AlbumDetailPage({ params }) {
               {showSplitMode && hideUI ? (
                 <>
                   {!fullscreenControlsHidden ? (
-                    <div className="pointer-events-none absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2">
-                      <div className="pointer-events-auto flex items-center gap-1 rounded-full border border-white/20 bg-black/35 p-1.5 backdrop-blur-md">
+                    <div
+                      className={`pointer-events-none absolute bottom-3 z-40 flex transition-[left,right] duration-200 left-1/2 -translate-x-1/2 ${
+                        activeSplitPanel === "right"
+                          ? "lg:right-3 lg:left-auto lg:translate-x-0"
+                          : "lg:left-3 lg:right-auto lg:translate-x-0"
+                      }`}
+                    >
+                      <div className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] items-center gap-1 overflow-x-auto rounded-full border border-white/20 bg-black/35 p-1.5 backdrop-blur-md">
                         <button
                           type="button"
                           onClick={() =>
@@ -2886,11 +3427,16 @@ export default function AlbumDetailPage({ params }) {
                               current === "left" ? "right" : "left",
                             )
                           }
-                          aria-label={`Controlling ${activeSplitPanelLabel} panel. Switch active panel.`}
-                          title={`Controlling ${activeSplitPanelLabel} panel`}
+                          aria-label={`Controlling ${activeSplitPanelLabelMobile} panel. Switch active panel.`}
+                          title={`Controlling ${activeSplitPanelLabelMobile} / ${activeSplitPanelLabel} panel`}
                           className="rounded-full border border-emerald-300/50 bg-emerald-500/20 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/35"
                         >
-                          {activeSplitPanelLabel}
+                          <span className="lg:hidden">
+                            {activeSplitPanelLabelMobile}
+                          </span>
+                          <span className="hidden lg:inline">
+                            {activeSplitPanelLabel}
+                          </span>
                         </button>
                         <button
                           type="button"

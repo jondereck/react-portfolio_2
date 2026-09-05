@@ -52,3 +52,99 @@ export function isResumableSession(session: ViewerSession | null | undefined): b
 export function viewerSessionStorageKey(userId: string, albumId: number | string): string {
   return `gallery:viewer-session:${userId}:${albumId}`;
 }
+
+/** Device-local fallback key when userId is not known yet (same browser only). */
+export function albumViewerSessionStorageKey(albumId: number | string): string {
+  return `gallery:viewer-session:album:${albumId}`;
+}
+
+/**
+ * Best-effort read of a cached viewer session when the server GET fails or
+ * returns no userId yet. Scans localStorage for any key matching this album.
+ */
+export function readLocalViewerSession(
+  albumId: number | string,
+  preferredUserId?: string | null,
+): { userId: string | null; session: ViewerSession } | null {
+  if (typeof window === 'undefined') return null;
+
+  const tryParse = (
+    key: string,
+    userId: string | null,
+  ): { userId: string | null; session: ViewerSession } | null => {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as ViewerSession;
+      if (!parsed || typeof parsed !== 'object') return null;
+      return { userId, session: parsed };
+    } catch {
+      return null;
+    }
+  };
+
+  if (preferredUserId) {
+    const preferred = tryParse(
+      viewerSessionStorageKey(preferredUserId, albumId),
+      preferredUserId,
+    );
+    if (preferred) return preferred;
+  }
+
+  const albumLocal = tryParse(albumViewerSessionStorageKey(albumId), preferredUserId ?? null);
+  if (albumLocal) return albumLocal;
+
+  try {
+    const prefix = 'gallery:viewer-session:';
+    const suffix = `:${albumId}`;
+    for (let index = 0; index < window.localStorage.length; index += 1) {
+      const key = window.localStorage.key(index);
+      if (!key || !key.startsWith(prefix) || !key.endsWith(suffix)) continue;
+      if (key === albumViewerSessionStorageKey(albumId)) continue;
+      const userId = key.slice(prefix.length, key.length - suffix.length);
+      if (!userId || userId === 'album') continue;
+      const matched = tryParse(key, userId);
+      if (matched) return matched;
+    }
+  } catch {
+    // ignore storage errors (private mode, quota)
+  }
+
+  return null;
+}
+
+export function writeLocalViewerSession(
+  albumId: number | string,
+  session: ViewerSession,
+  userId?: string | null,
+): void {
+  if (typeof window === 'undefined') return;
+  const stamped: ViewerSession = {
+    ...session,
+    updatedAt: session.updatedAt ?? new Date().toISOString(),
+  };
+  const raw = JSON.stringify(stamped);
+  try {
+    window.localStorage.setItem(albumViewerSessionStorageKey(albumId), raw);
+    if (userId) {
+      window.localStorage.setItem(viewerSessionStorageKey(userId, albumId), raw);
+    }
+  } catch {
+    // ignore storage errors (private mode, quota)
+  }
+}
+
+export function clearLocalViewerSession(
+  albumId: number | string,
+  userId?: string | null,
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(albumViewerSessionStorageKey(albumId));
+    if (userId) {
+      window.localStorage.removeItem(viewerSessionStorageKey(userId, albumId));
+    }
+  } catch {
+    // ignore
+  }
+}
