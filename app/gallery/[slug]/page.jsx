@@ -468,6 +468,19 @@ const SplitPanelMediaSurface = ({
       : [],
   );
   const panGestureRef = useRef(null);
+  const rootRef = useRef(null);
+  const startedCenterVideoKeyRef = useRef(null);
+  const setRootRef = useCallback(
+    (node) => {
+      rootRef.current = node;
+      if (typeof surfaceRef === "function") {
+        surfaceRef(node);
+      } else if (surfaceRef && typeof surfaceRef === "object") {
+        surfaceRef.current = node;
+      }
+    },
+    [surfaceRef],
+  );
 
   useEffect(() => {
     if (!item || !media?.key) {
@@ -524,6 +537,54 @@ const SplitPanelMediaSurface = ({
     });
   }, []);
 
+  // Only the center video may play with audio — pause/mute every other layer
+  // so transitions don't double-play or leave the next clip silent.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return undefined;
+
+    const centerLayer = layers.find((entry) => entry.phase === "center");
+    const centerKey = centerLayer?.layerKey || null;
+
+    const videos = root.querySelectorAll("video[data-layer-key]");
+    videos.forEach((video) => {
+      const layerKey = video.getAttribute("data-layer-key");
+      const isCenter = Boolean(centerKey && layerKey === centerKey);
+      if (!isCenter) {
+        video.muted = true;
+        if (!video.paused) {
+          video.pause();
+        }
+      }
+    });
+
+    if (!centerKey || !autoPlay) return undefined;
+
+    const centerVideo = Array.from(
+      root.querySelectorAll("video[data-layer-key]"),
+    ).find((video) => video.getAttribute("data-layer-key") === centerKey);
+    if (!centerVideo) return undefined;
+
+    if (startedCenterVideoKeyRef.current !== centerKey) {
+      startedCenterVideoKeyRef.current = centerKey;
+      const wantSound = !muted;
+      // Start muted so autoplay is allowed, then unmute once playing.
+      centerVideo.muted = true;
+      centerVideo
+        .play()
+        .then(() => {
+          if (wantSound && startedCenterVideoKeyRef.current === centerKey) {
+            centerVideo.muted = false;
+          }
+        })
+        .catch(() => {});
+      return undefined;
+    }
+
+    centerVideo.muted = Boolean(muted);
+    return undefined;
+  }, [autoPlay, layers, muted]);
+
   useEffect(() => {
     const hasExitingLayer = layers.some((layer) => layer.phase === "exit");
     if (!hasExitingLayer) return undefined;
@@ -539,7 +600,7 @@ const SplitPanelMediaSurface = ({
 
   return (
     <div
-      ref={surfaceRef}
+      ref={setRootRef}
       className={`relative min-h-0 h-full overflow-hidden transition-shadow ${className} ${
         hideUI
           ? "rounded-none border bg-black"
@@ -556,7 +617,6 @@ const SplitPanelMediaSurface = ({
           : ""
       }`}
       data-split-panel={panelId}
-      onPointerEnter={onActivate ? () => onActivate(panelId) : undefined}
       onPointerDown={(event) => {
         onActivate?.(panelId);
         if (
@@ -620,7 +680,9 @@ const SplitPanelMediaSurface = ({
       ) : null}
 
       <div className="absolute inset-0">
-        {layers.map((layer, index) => {
+        {hasError
+          ? null
+          : layers.map((layer, index) => {
           const isForeground = index === layers.length - 1;
           const isVisible = layer.phase === "center";
           const layerItem = layer.item;
@@ -638,6 +700,7 @@ const SplitPanelMediaSurface = ({
           return (
             <div
               key={layer.layerKey}
+              data-layer-phase={layer.phase}
               aria-hidden={!isForeground}
               className={`absolute inset-0 flex items-center justify-center transition-[opacity,transform] duration-[260ms] ease-out ${
                 isForeground ? "z-10" : "z-0 pointer-events-none"
@@ -657,7 +720,8 @@ const SplitPanelMediaSurface = ({
                 {layerIsVideo ? (
                   <video
                     key={layer.layerKey}
-                    ref={isForeground ? assignVideoRef : undefined}
+                    data-layer-key={layer.layerKey}
+                    ref={layer.phase === "center" ? assignVideoRef : undefined}
                     src={
                       layerMedia.playableSrc ||
                       layerMedia.sources?.[0] ||
@@ -666,57 +730,60 @@ const SplitPanelMediaSurface = ({
                     }
                     controls={
                       Boolean(controls) &&
-                      isForeground &&
+                      layer.phase === "center" &&
                       !hideUI &&
-                      // In split mode, native controls only on the hovered/clicked panel.
+                      // In split mode, native controls only on the active panel.
                       (typeof onActivate === "function" ? isActive : true)
                     }
                     className="h-full w-full object-contain"
                     style={{ touchAction: hideUI ? "none" : "manipulation" }}
-                    autoPlay={autoPlay && isForeground}
-                    muted={isForeground ? muted : true}
+                    // Playback is synced in an effect — avoid native autoplay
+                    // racing a still-audible previous layer.
+                    autoPlay={false}
+                    muted={Boolean(muted) || layer.phase !== "center"}
                     playsInline
                     preload="auto"
                     poster={
                       getVideoPosterUrl(layerItem?.imageUrl) || undefined
                     }
                     onLoadedMetadata={() => {
-                      promoteLayer(layer.layerKey);
-                      onMediaSuccess(layerItem);
-                    }}
-                    onLoadedData={(event) => {
-                      promoteLayer(layer.layerKey);
-                      onMediaSuccess(layerItem);
-                      if (isForeground) {
-                        onForegroundVideoReady?.(
-                          event.currentTarget,
-                          "onLoadedData",
-                          layerItem,
-                        );
+                      if (layer.phase === "loading" || layer.phase === "center") {
+                        promoteLayer(layer.layerKey);
                       }
-                    }}
-                    onCanPlay={(event) => {
-                      promoteLayer(layer.layerKey);
                       onMediaSuccess(layerItem);
-                      if (isForeground) {
-                        onForegroundVideoReady?.(
-                          event.currentTarget,
-                          "onCanPlay",
-                          layerItem,
-                        );
-                      }
                     }}
-                    onEnded={isForeground ? onEnded : undefined}
+                    onLoadedData={() => {
+                      if (layer.phase === "loading" || layer.phase === "center") {
+                        promoteLayer(layer.layerKey);
+                      }
+                      onMediaSuccess(layerItem);
+                    }}
+                    onCanPlay={() => {
+                      if (layer.phase === "loading" || layer.phase === "center") {
+                        promoteLayer(layer.layerKey);
+                      }
+                      onMediaSuccess(layerItem);
+                    }}
+                    onEnded={
+                      layer.phase === "center"
+                        ? (event) => {
+                            event.currentTarget.pause();
+                            onEnded?.(event);
+                          }
+                        : undefined
+                    }
                     onError={(event) => {
                       // Background/exiting layers often abort mid-load — ignore.
-                      if (!isForeground) return;
+                      if (layer.phase !== "center" && layer.phase !== "loading") {
+                        return;
+                      }
                       const player = event.currentTarget;
                       void handleGalleryVideoElementError({
                         player,
                         playableSrc: layerMedia.playableSrc,
-                        autoPlay: Boolean(autoPlay && isForeground),
+                        autoPlay: Boolean(autoPlay),
                         onGiveUp: ({ permanent, status }) => {
-                          promoteLayer(layer.layerKey);
+                          setLayers([]);
                           onMediaError(
                             layerItem,
                             "onError",
@@ -749,7 +816,7 @@ const SplitPanelMediaSurface = ({
                           permanent = isPermanentGalleryMediaStatus(probe.status);
                           status = probe.status;
                         }
-                        promoteLayer(layer.layerKey);
+                        setLayers([]);
                         onMediaError(
                           layerItem,
                           "onError",
@@ -780,7 +847,7 @@ const SplitPanelMediaSurface = ({
       ) : null}
 
       {hasError ? (
-        <div className="absolute inset-0 z-30 grid place-items-center gap-3 bg-black/60 p-4 text-center text-sm text-rose-200">
+        <div className="absolute inset-0 z-30 grid place-items-center gap-3 bg-black p-4 text-center text-sm text-rose-200">
           <p>
             {hasError === "missing"
               ? "This Google Drive file is missing or was deleted."
@@ -2738,17 +2805,39 @@ export default function AlbumDetailPage({ params }) {
           "right";
         const isVideo =
           panelId === "left" ? leftSplitIsVideo : rightSplitIsVideo;
-        if (!isVideo) return;
         handleSplitPanelActivate(panelId);
-        togglePanelVideoPlayback(panelId);
+        if (isVideo) {
+          togglePanelVideoPlayback(panelId);
+          return;
+        }
+        // Image panel: right-click pauses/resumes the auto-advance timer.
+        setSplitPanels((current) => {
+          const panel = current[panelId];
+          if (!(panel?.delayMs > 0)) return current;
+          return {
+            ...current,
+            [panelId]: {
+              ...panel,
+              isPlaying: !panel.isPlaying,
+            },
+          };
+        });
         return;
       }
 
-      if (!activeItemIsVideo) return;
-      togglePanelVideoPlayback("primary");
+      if (activeItemIsVideo) {
+        togglePanelVideoPlayback("primary");
+        return;
+      }
+
+      // Slideshow/focus image: toggle timer when seconds are set.
+      if (delayMs > 0) {
+        setIsPlaying((current) => !current);
+      }
     },
     [
       activeItemIsVideo,
+      delayMs,
       handleSplitPanelActivate,
       hideUI,
       leftSplitIsVideo,
@@ -3192,21 +3281,6 @@ export default function AlbumDetailPage({ params }) {
     rightSplitIsVideo,
     moveSplitPanel,
   ]);
-
-  // Videos always try to play when shown; timer (delayMs) only controls auto-advance.
-  useEffect(() => {
-    if (!viewerOpen || viewerMode !== "split" || !rightSplitIsVideo) return;
-    const player = splitRightVideoRef.current;
-    if (!player) return;
-    player.play().catch(() => {});
-  }, [viewerOpen, viewerMode, rightSplitIsVideo, rightSplitItem?.id]);
-
-  useEffect(() => {
-    if (!viewerOpen || viewerMode !== "split" || !leftSplitIsVideo) return;
-    const player = splitLeftVideoRef.current;
-    if (!player) return;
-    player.play().catch(() => {});
-  }, [viewerOpen, viewerMode, leftSplitIsVideo, leftSplitItem?.id]);
 
   const handleTouchStart = (event) => {
     if (!viewerOpen) return;
@@ -3842,9 +3916,6 @@ export default function AlbumDetailPage({ params }) {
                     zoomState={splitZoom.left}
                     muted={Boolean(leftSplitPanel?.isMuted)}
                     autoPlay
-                    onForegroundVideoReady={(player) => {
-                      player?.play().catch(() => {});
-                    }}
                     onPinchStart={leftSplitPinchHandlers.onPinchStart}
                     onPinchMove={leftSplitPinchHandlers.onPinchMove}
                     onPinchEnd={leftSplitPinchHandlers.onPinchEnd}
@@ -3854,12 +3925,9 @@ export default function AlbumDetailPage({ params }) {
                         event.currentTarget.play().catch(() => {});
                         return;
                       }
-                      if (
-                        leftSplitPanel?.isPlaying &&
-                        leftSplitPanel?.delayMs > 0
-                      ) {
-                        moveSplitPanel("left", "next");
-                      }
+                      // Videos always advance when finished; timer Off only
+                      // disables timed photo autoplay on this panel.
+                      moveSplitPanel("left", "next");
                     }}
                     onMediaSuccess={(item) => {
                       markPanelMediaSuccess("left", item);
@@ -3915,21 +3983,15 @@ export default function AlbumDetailPage({ params }) {
                     onPinchEnd={rightSplitPinchHandlers.onPinchEnd}
                     muted={Boolean(rightSplitPanel?.isMuted)}
                     autoPlay
-                    onForegroundVideoReady={(player) => {
-                      player?.play().catch(() => {});
-                    }}
                     onEnded={(event) => {
                       if (rightSplitPanel?.loop) {
                         event.currentTarget.currentTime = 0;
                         event.currentTarget.play().catch(() => {});
                         return;
                       }
-                      if (
-                        rightSplitPanel?.isPlaying &&
-                        rightSplitPanel?.delayMs > 0
-                      ) {
-                        moveSplitPanel("right", "next");
-                      }
+                      // Videos always advance when finished; timer Off only
+                      // disables timed photo autoplay on this panel.
+                      moveSplitPanel("right", "next");
                     }}
                     onMediaSuccess={(item) => {
                       markPanelMediaSuccess("right", item);
@@ -3994,7 +4056,8 @@ export default function AlbumDetailPage({ params }) {
                         goToNextVideo();
                         return;
                       }
-                      if (isPlaying) {
+                      // Slideshow videos always chain; photo timer Off does not block this.
+                      if (viewerMode === "slideshow") {
                         goToNext();
                       }
                     }}
@@ -4085,7 +4148,7 @@ export default function AlbumDetailPage({ params }) {
               )}
               {!showSplitMode &&
               mediaErrors[getPanelMediaKey("primary", activeItem)] ? (
-                <div className="absolute inset-0 z-30 grid place-items-center gap-3 bg-black/60 p-4 text-center text-sm text-rose-200">
+                <div className="absolute inset-0 z-30 grid place-items-center gap-3 bg-black p-4 text-center text-sm text-rose-200">
                   <p>
                     {mediaErrors[getPanelMediaKey("primary", activeItem)] ===
                       "missing" || unavailableMediaIds[activeItem?.id] === "missing"
