@@ -23,9 +23,13 @@ import {
 } from "@/lib/gallery/viewer-session";
 import {
   ArrowUpDown,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  CloudUpload,
   Download,
+  Folder,
+  History,
   Music2,
   Pause,
   Play,
@@ -33,6 +37,7 @@ import {
   SlidersHorizontal,
   Volume2,
   VolumeX,
+  X,
 } from "lucide-react";
 import {
   FaFacebookF,
@@ -115,17 +120,18 @@ const densityGridMap = {
   small:  "grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5",
 };
 const timerPresetMs = [2000, 5000, 10000, 15000, 20000, 30000];
+const TIMER_OFF_MS = 0;
 const splitPanelSettingsDefaults = {
   filter: "photos",
   isPlaying: false,
-  delayMs: 5000,
+  delayMs: TIMER_OFF_MS,
   loop: false,
   isMuted: false,
 };
 const splitPanelRightDefaults = {
   ...splitPanelSettingsDefaults,
   filter: "videos",
-  isPlaying: true,
+  isPlaying: false,
   index: 0,
 };
 const getSplitPanelFilter = (panelId) =>
@@ -545,16 +551,16 @@ const SplitPanelMediaSurface = ({
             ? "border-transparent"
             : "border-white/10"
       } ${
-        zoomState?.scale > 1 && !media?.isVideo
+        zoomState?.scale > 1
           ? "cursor-grab active:cursor-grabbing"
           : ""
       }`}
+      data-split-panel={panelId}
       onPointerEnter={onActivate ? () => onActivate(panelId) : undefined}
       onPointerDown={(event) => {
         onActivate?.(panelId);
         if (
           !onZoomPan ||
-          media?.isVideo ||
           !zoomState ||
           zoomState.scale <= 1 ||
           !event.isPrimary
@@ -658,13 +664,15 @@ const SplitPanelMediaSurface = ({
                       layerItem?.imageUrl ||
                       undefined
                     }
-                    className="h-full w-full object-contain"
                     controls={
                       Boolean(controls) &&
                       isForeground &&
+                      !hideUI &&
                       // In split mode, native controls only on the hovered/clicked panel.
                       (typeof onActivate === "function" ? isActive : true)
                     }
+                    className="h-full w-full object-contain"
+                    style={{ touchAction: hideUI ? "none" : "manipulation" }}
                     autoPlay={autoPlay && isForeground}
                     muted={isForeground ? muted : true}
                     playsInline
@@ -762,7 +770,10 @@ const SplitPanelMediaSurface = ({
         })}
       </div>
 
-      {isLoading && !hasError ? (
+      {isLoading &&
+      !hasError &&
+      (layers.length === 0 ||
+        layers.some((layer) => layer.phase === "loading")) ? (
         <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/35">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/25 border-t-emerald-300" />
         </div>
@@ -845,7 +856,7 @@ export default function AlbumDetailPage({ params }) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [delayMs, setDelayMs] = useState(5000);
+  const [delayMs, setDelayMs] = useState(TIMER_OFF_MS);
   const [customDelaySeconds, setCustomDelaySeconds] = useState("12");
   const [hideUI, setHideUI] = useState(false);
   const getInitialViewerMode = () => {
@@ -1335,12 +1346,15 @@ export default function AlbumDetailPage({ params }) {
       setViewerMode(mode);
       setViewerOpen(true);
       if (Number.isFinite(resumeDelayMs)) {
-        setDelayMs(resumeDelayMs);
+        setDelayMs(resumeDelayMs > 0 ? resumeDelayMs : TIMER_OFF_MS);
       }
       if (typeof resumeIsPlaying === "boolean") {
-        setIsPlaying(resumeIsPlaying);
+        const effectiveDelay = Number.isFinite(resumeDelayMs)
+          ? resumeDelayMs
+          : TIMER_OFF_MS;
+        setIsPlaying(Boolean(resumeIsPlaying) && effectiveDelay > 0);
       } else {
-        setIsPlaying(mode === "slideshow");
+        setIsPlaying(false);
       }
       setSplitPanels({
         left: { ...splitPanelSettingsDefaults },
@@ -1378,6 +1392,26 @@ export default function AlbumDetailPage({ params }) {
     [activeSplitPanel],
   );
 
+  const applySplitPanelTimer = useCallback((panelId, nextDelayMs) => {
+    const delay = Number(nextDelayMs);
+    const enabled = Number.isFinite(delay) && delay > 0;
+    setSplitPanels((current) => ({
+      ...current,
+      [panelId]: {
+        ...current[panelId],
+        delayMs: enabled ? delay : TIMER_OFF_MS,
+        isPlaying: enabled,
+      },
+    }));
+  }, []);
+
+  const applySlideshowTimer = useCallback((nextDelayMs) => {
+    const delay = Number(nextDelayMs);
+    const enabled = Number.isFinite(delay) && delay > 0;
+    setDelayMs(enabled ? delay : TIMER_OFF_MS);
+    setIsPlaying(enabled);
+  }, []);
+
   const clampPhotoIndex = useCallback(
     (value) => {
       if (!Number.isFinite(value)) return 0;
@@ -1404,8 +1438,11 @@ export default function AlbumDetailPage({ params }) {
           : null;
       openViewerAt(baseIndex, {
         mode,
-        delayMs: Number.isFinite(session.delayMs) ? session.delayMs : undefined,
-        isPlaying: Boolean(session.isPlaying) || mode === "slideshow",
+        delayMs: Number.isFinite(session.delayMs) ? session.delayMs : TIMER_OFF_MS,
+        isPlaying:
+          Number.isFinite(session.delayMs) &&
+          session.delayMs > 0 &&
+          (Boolean(session.isPlaying) || mode === "slideshow"),
         splitRightIndex: rightIndex,
       });
       resumeHandledRef.current = true;
@@ -1426,6 +1463,11 @@ export default function AlbumDetailPage({ params }) {
       }).catch(() => {});
     }
   }, [album?.id, viewerUserId]);
+
+  const dismissResumePrompt = useCallback(() => {
+    resumeHandledRef.current = true;
+    setResumePrompt(null);
+  }, []);
 
   const resolveLatestViewerSession = useCallback(() => {
     if (isResumableSession(savedViewerSession)) {
@@ -2091,7 +2133,8 @@ export default function AlbumDetailPage({ params }) {
           : activePlayableSrc
       }`
     : "";
-  const isPresetDelay = timerPresetMs.includes(delayMs);
+  const isPresetDelay =
+    delayMs === TIMER_OFF_MS || timerPresetMs.includes(delayMs);
   const clampZoomOffset = useCallback((value, axis, scale) => {
     const container = zoomSurfaceRef.current;
     const size =
@@ -2175,19 +2218,55 @@ export default function AlbumDetailPage({ params }) {
   }, [viewerOpen, activeItemIsVideo, viewerMode, updateImageZoom]);
 
   const DOUBLE_TAP_SCALE = 2;
-  const lastTapRef = useRef({ time: 0, x: 0, y: 0, panelId: null });
+  const lastTapRef = useRef({
+    time: 0,
+    x: 0,
+    y: 0,
+    panelId: null,
+    count: 0,
+  });
+  const pendingVideoZoomTapRef = useRef(null);
+  // Remember chrome state before zoom-in so zoom-out can restore it.
+  const controlsHiddenBeforeZoomRef = useRef(null);
+  const prevSplitItemIdsRef = useRef({ left: null, right: null });
 
   const hideControlsForZoom = useCallback(() => {
-    if (hideUI) {
-      setFullscreenControlsHidden(true);
+    if (!hideUI) return;
+    if (controlsHiddenBeforeZoomRef.current === null) {
+      controlsHiddenBeforeZoomRef.current = fullscreenControlsHidden;
     }
-  }, [hideUI]);
+    setFullscreenControlsHidden(true);
+  }, [fullscreenControlsHidden, hideUI]);
+
+  const restoreControlsAfterZoomOut = useCallback(() => {
+    if (controlsHiddenBeforeZoomRef.current === null) return;
+    setFullscreenControlsHidden(Boolean(controlsHiddenBeforeZoomRef.current));
+    controlsHiddenBeforeZoomRef.current = null;
+  }, []);
+
+  const togglePanelVideoPlayback = useCallback((panelId) => {
+    const player =
+      panelId === "primary"
+        ? activeVideoRef.current
+        : panelId === "left"
+          ? splitLeftVideoRef.current
+          : panelId === "right"
+            ? splitRightVideoRef.current
+            : null;
+    if (!player) return;
+    if (player.paused) {
+      player.play().catch(() => {});
+      return;
+    }
+    player.pause();
+  }, []);
 
   const toggleImageDoubleZoom = useCallback(
     (clientX, clientY) => {
       const current = imageZoomRef.current;
       if (current.scale > 1) {
         resetImageZoom();
+        restoreControlsAfterZoomOut();
         return;
       }
       const surface = zoomSurfaceRef.current;
@@ -2203,7 +2282,12 @@ export default function AlbumDetailPage({ params }) {
       updateImageZoom(DOUBLE_TAP_SCALE, nextX, nextY);
       hideControlsForZoom();
     },
-    [hideControlsForZoom, resetImageZoom, updateImageZoom],
+    [
+      hideControlsForZoom,
+      resetImageZoom,
+      restoreControlsAfterZoomOut,
+      updateImageZoom,
+    ],
   );
 
   const handleImageDoubleClickZoom = useCallback(
@@ -2219,6 +2303,11 @@ export default function AlbumDetailPage({ params }) {
       const current = splitZoom[panelId] || { scale: 1, x: 0, y: 0 };
       if (current.scale > 1) {
         updateSplitZoom(panelId, 1, 0, 0);
+        const otherId = panelId === "left" ? "right" : "left";
+        const otherStillZoomed = (splitZoom[otherId]?.scale || 1) > 1;
+        if (!otherStillZoomed) {
+          restoreControlsAfterZoomOut();
+        }
         return;
       }
       const surface = splitSurfaceRefs.current[panelId];
@@ -2234,7 +2323,12 @@ export default function AlbumDetailPage({ params }) {
       updateSplitZoom(panelId, DOUBLE_TAP_SCALE, nextX, nextY);
       hideControlsForZoom();
     },
-    [hideControlsForZoom, splitZoom, updateSplitZoom],
+    [
+      hideControlsForZoom,
+      restoreControlsAfterZoomOut,
+      splitZoom,
+      updateSplitZoom,
+    ],
   );
 
   const handleSplitDoubleClickZoom = useCallback(
@@ -2244,31 +2338,106 @@ export default function AlbumDetailPage({ params }) {
     [toggleSplitDoubleZoom],
   );
 
-  // Manual double-tap detector for touch devices (dblclick is unreliable on mobile).
+  // Manual double/triple-tap detector for touch devices.
+  // Images: double-tap zooms immediately.
+  // Videos: double-tap zooms (short delay); triple-tap cancels zoom and pauses/plays.
   const registerTap = useCallback(
-    (panelId, clientX, clientY) => {
+    (panelId, clientX, clientY, { isVideo = false } = {}) => {
       const now = Date.now();
       const last = lastTapRef.current;
-      const isDouble =
+      const sameSpot =
         last.panelId === panelId &&
-        now - last.time < 300 &&
-        Math.abs(clientX - last.x) < 30 &&
-        Math.abs(clientY - last.y) < 30;
+        now - last.time < 340 &&
+        Math.abs(clientX - last.x) < 36 &&
+        Math.abs(clientY - last.y) < 36;
+      const count = sameSpot ? (last.count || 1) + 1 : 1;
 
-      if (isDouble) {
-        lastTapRef.current = { time: 0, x: 0, y: 0, panelId: null };
+      const clearPendingVideoZoom = () => {
+        if (pendingVideoZoomTapRef.current) {
+          window.clearTimeout(pendingVideoZoomTapRef.current);
+          pendingVideoZoomTapRef.current = null;
+        }
+      };
+
+      const fireZoom = () => {
         if (panelId === "primary") {
           toggleImageDoubleZoom(clientX, clientY);
         } else {
           toggleSplitDoubleZoom(panelId, clientX, clientY);
         }
+      };
+
+      if (isVideo) {
+        if (count >= 3) {
+          clearPendingVideoZoom();
+          lastTapRef.current = {
+            time: 0,
+            x: 0,
+            y: 0,
+            panelId: null,
+            count: 0,
+          };
+          togglePanelVideoPlayback(panelId);
+          return true;
+        }
+
+        if (count === 2) {
+          clearPendingVideoZoom();
+          lastTapRef.current = {
+            time: now,
+            x: clientX,
+            y: clientY,
+            panelId,
+            count: 2,
+          };
+          pendingVideoZoomTapRef.current = window.setTimeout(() => {
+            pendingVideoZoomTapRef.current = null;
+            lastTapRef.current = {
+              time: 0,
+              x: 0,
+              y: 0,
+              panelId: null,
+              count: 0,
+            };
+            fireZoom();
+          }, 280);
+          return true;
+        }
+
+        clearPendingVideoZoom();
+        lastTapRef.current = {
+          time: now,
+          x: clientX,
+          y: clientY,
+          panelId,
+          count: 1,
+        };
+        return false;
+      }
+
+      clearPendingVideoZoom();
+      if (count >= 2) {
+        lastTapRef.current = {
+          time: 0,
+          x: 0,
+          y: 0,
+          panelId: null,
+          count: 0,
+        };
+        fireZoom();
         return true;
       }
 
-      lastTapRef.current = { time: now, x: clientX, y: clientY, panelId };
+      lastTapRef.current = {
+        time: now,
+        x: clientX,
+        y: clientY,
+        panelId,
+        count: 1,
+      };
       return false;
     },
-    [toggleImageDoubleZoom, toggleSplitDoubleZoom],
+    [toggleImageDoubleZoom, togglePanelVideoPlayback, toggleSplitDoubleZoom],
   );
 
   // Wheel zoom on the active split panel (desktop parity with single-image zoom).
@@ -2458,8 +2627,11 @@ export default function AlbumDetailPage({ params }) {
   const handleViewerModeChange = useCallback(
     (nextMode) => {
       setViewerMode(nextMode);
-      if (nextMode === "slideshow" && !isPlaying) {
+      if (nextMode === "slideshow" && delayMs > 0 && !isPlaying) {
         setIsPlaying(true);
+      }
+      if (nextMode === "slideshow" && delayMs <= 0) {
+        setIsPlaying(false);
       }
       if (nextMode === "split") {
         setSplitPanels((current) => {
@@ -2478,14 +2650,13 @@ export default function AlbumDetailPage({ params }) {
             right: {
               ...current.right,
               filter: getSplitPanelFilter("right"),
-              isPlaying: true,
               index: rightIndex,
             },
           };
         });
       }
     },
-    [activeIndex, buildSplitCandidates, isPlaying],
+    [activeIndex, buildSplitCandidates, delayMs, isPlaying],
   );
 
   const splitResolved = useMemo(() => {
@@ -2553,6 +2724,41 @@ export default function AlbumDetailPage({ params }) {
   const showSplitMode =
     viewerMode === "split" && !!leftSplitItem && !!rightSplitItem;
 
+  const handleFullscreenVideoContextMenu = useCallback(
+    (event) => {
+      if (!viewerOpen || !hideUI) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (showSplitMode) {
+        const panelEl = event.target?.closest?.("[data-split-panel]");
+        const panelId =
+          panelEl?.getAttribute("data-split-panel") ||
+          activeSplitPanelRef.current ||
+          "right";
+        const isVideo =
+          panelId === "left" ? leftSplitIsVideo : rightSplitIsVideo;
+        if (!isVideo) return;
+        handleSplitPanelActivate(panelId);
+        togglePanelVideoPlayback(panelId);
+        return;
+      }
+
+      if (!activeItemIsVideo) return;
+      togglePanelVideoPlayback("primary");
+    },
+    [
+      activeItemIsVideo,
+      handleSplitPanelActivate,
+      hideUI,
+      leftSplitIsVideo,
+      rightSplitIsVideo,
+      showSplitMode,
+      togglePanelVideoPlayback,
+      viewerOpen,
+    ],
+  );
+
   const retryPanelMedia = useCallback(
     (panelId, item) => {
       if (!item) return;
@@ -2605,14 +2811,49 @@ export default function AlbumDetailPage({ params }) {
   }, [resetImageZoom, viewerOpen, viewerMode, activeItem?.id, activeItemIsVideo]);
 
   useEffect(() => {
-    // Reset split zoom whenever panel content changes or split mode toggles.
+    // Reset zoom only for the panel whose media changed — keep the other
+    // panel's zoom (e.g. top image stays zoomed when right video advances).
     if (!viewerOpen || viewerMode !== "split") {
       setSplitZoom(createDefaultSplitZoomState());
       splitPinchRef.current = createDefaultSplitPinchState();
+      prevSplitItemIdsRef.current = { left: null, right: null };
       return;
     }
-    setSplitZoom(createDefaultSplitZoomState());
-    splitPinchRef.current = createDefaultSplitPinchState();
+
+    const prev = prevSplitItemIdsRef.current;
+    const leftId = leftSplitItem?.id ?? null;
+    const rightId = rightSplitItem?.id ?? null;
+    const leftChanged = leftId !== prev.left;
+    const rightChanged = rightId !== prev.right;
+
+    if (leftChanged || rightChanged) {
+      setSplitZoom((current) => ({
+        left: leftChanged ? { scale: 1, x: 0, y: 0 } : current.left,
+        right: rightChanged ? { scale: 1, x: 0, y: 0 } : current.right,
+      }));
+      if (leftChanged) {
+        splitPinchRef.current.left = {
+          distance: 0,
+          scale: 1,
+          centerX: 0,
+          centerY: 0,
+          offsetX: 0,
+          offsetY: 0,
+        };
+      }
+      if (rightChanged) {
+        splitPinchRef.current.right = {
+          distance: 0,
+          scale: 1,
+          centerX: 0,
+          centerY: 0,
+          offsetX: 0,
+          offsetY: 0,
+        };
+      }
+    }
+
+    prevSplitItemIdsRef.current = { left: leftId, right: rightId };
   }, [viewerOpen, viewerMode, leftSplitItem?.id, rightSplitItem?.id]);
 
   useEffect(() => {
@@ -2680,10 +2921,14 @@ export default function AlbumDetailPage({ params }) {
             offsetX: currentZoom.x || 0,
             offsetY: currentZoom.y || 0,
           };
-          // Double-tap to toggle zoom on this panel (single-finger stationary taps).
+          // Double-tap zooms images; triple-tap pauses/plays videos.
           if (event.changedTouches?.length === 1 && event.touches.length === 0) {
             const touch = event.changedTouches[0];
-            if (registerTap(panelId, touch.clientX, touch.clientY)) {
+            const isVideo =
+              panelId === "left" ? leftSplitIsVideo : rightSplitIsVideo;
+            if (
+              registerTap(panelId, touch.clientX, touch.clientY, { isVideo })
+            ) {
               event.preventDefault();
               event.stopPropagation();
             }
@@ -2691,7 +2936,13 @@ export default function AlbumDetailPage({ params }) {
         },
       };
     },
-    [splitZoom, updateSplitZoom, registerTap],
+    [
+      leftSplitIsVideo,
+      registerTap,
+      rightSplitIsVideo,
+      splitZoom,
+      updateSplitZoom,
+    ],
   );
 
   const leftSplitPinchHandlers = useMemo(
@@ -2771,6 +3022,7 @@ export default function AlbumDetailPage({ params }) {
     if (
       !viewerOpen ||
       !isPlaying ||
+      !(delayMs > 0) ||
       !activeItem ||
       activeItemIsVideo ||
       viewerMode === "split"
@@ -2809,16 +3061,49 @@ export default function AlbumDetailPage({ params }) {
     activeItem,
   ]);
 
+  const prevSplitMediaRef = useRef({
+    leftId: null,
+    rightId: null,
+    leftKey: null,
+    rightKey: null,
+  });
+
   useEffect(() => {
-    if (!viewerOpen || viewerMode !== "split") return;
-    if (leftSplitItem) {
+    if (!viewerOpen || viewerMode !== "split") {
+      prevSplitMediaRef.current = {
+        leftId: null,
+        rightId: null,
+        leftKey: null,
+        rightKey: null,
+      };
+      return;
+    }
+
+    const prev = prevSplitMediaRef.current;
+    const leftId = leftSplitItem?.id ?? null;
+    const rightId = rightSplitItem?.id ?? null;
+    const leftKey = leftSplitMedia.key || null;
+    const rightKey = rightSplitMedia.key || null;
+
+    // Only the panel whose media actually changed should show a loader.
+    // Setting both true on every next/prev made the other panel flash a
+    // stuck spinner over already-playing video.
+    if (
+      leftSplitItem &&
+      (leftId !== prev.leftId || leftKey !== prev.leftKey)
+    ) {
       setPanelLoading("left", true);
       clearPanelMediaError("left", leftSplitItem);
     }
-    if (rightSplitItem) {
+    if (
+      rightSplitItem &&
+      (rightId !== prev.rightId || rightKey !== prev.rightKey)
+    ) {
       setPanelLoading("right", true);
       clearPanelMediaError("right", rightSplitItem);
     }
+
+    prevSplitMediaRef.current = { leftId, rightId, leftKey, rightKey };
   }, [
     viewerOpen,
     viewerMode,
@@ -2861,6 +3146,7 @@ export default function AlbumDetailPage({ params }) {
       !viewerOpen ||
       viewerMode !== "split" ||
       !leftSplitPanel?.isPlaying ||
+      !(leftSplitPanel?.delayMs > 0) ||
       !leftSplitItem ||
       leftSplitIsVideo
     ) {
@@ -2886,6 +3172,7 @@ export default function AlbumDetailPage({ params }) {
       !viewerOpen ||
       viewerMode !== "split" ||
       !rightSplitPanel?.isPlaying ||
+      !(rightSplitPanel?.delayMs > 0) ||
       !rightSplitItem ||
       rightSplitIsVideo
     ) {
@@ -2906,23 +3193,20 @@ export default function AlbumDetailPage({ params }) {
     moveSplitPanel,
   ]);
 
+  // Videos always try to play when shown; timer (delayMs) only controls auto-advance.
   useEffect(() => {
     if (!viewerOpen || viewerMode !== "split" || !rightSplitIsVideo) return;
-    if (!rightSplitPanel?.isPlaying) {
-      const player = splitRightVideoRef.current;
-      player?.pause();
-      return;
-    }
     const player = splitRightVideoRef.current;
     if (!player) return;
     player.play().catch(() => {});
-  }, [
-    viewerOpen,
-    viewerMode,
-    rightSplitIsVideo,
-    rightSplitPanel?.isPlaying,
-    rightSplitItem?.id,
-  ]);
+  }, [viewerOpen, viewerMode, rightSplitIsVideo, rightSplitItem?.id]);
+
+  useEffect(() => {
+    if (!viewerOpen || viewerMode !== "split" || !leftSplitIsVideo) return;
+    const player = splitLeftVideoRef.current;
+    if (!player) return;
+    player.play().catch(() => {});
+  }, [viewerOpen, viewerMode, leftSplitIsVideo, leftSplitItem?.id]);
 
   const handleTouchStart = (event) => {
     if (!viewerOpen) return;
@@ -3138,50 +3422,69 @@ export default function AlbumDetailPage({ params }) {
 
         {resumePrompt && !viewerOpen ? (
           <div
-            role="dialog"
-            aria-label="Resume viewing"
-            className="flex flex-col gap-3 rounded-2xl border border-emerald-300/40 bg-emerald-500/10 p-4 text-slate-100 shadow-lg shadow-emerald-950/20 sm:flex-row sm:items-center sm:justify-between"
+            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/55 p-4 backdrop-blur-[2px]"
+            role="presentation"
+            onClick={dismissResumePrompt}
           >
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-emerald-100">
-                Continue where you left off?
-              </p>
-              <p className="mt-0.5 truncate text-xs text-emerald-100/80">
-                {(() => {
-                  const session = resumePrompt.session;
-                  const mode = session?.viewerMode || "focus";
-                  if (mode === "split") {
-                    const left =
-                      clampPhotoIndex(
-                        session?.splitLeftIndex ?? session?.photoIndex ?? 0,
-                      ) + 1;
-                    const right =
-                      clampPhotoIndex(session?.splitRightIndex ?? 0) + 1;
-                    return `Resume split · left item ${left} · right item ${right}`;
-                  }
-                  const item = Number.isFinite(session?.photoIndex)
-                    ? clampPhotoIndex(session.photoIndex) + 1
-                    : null;
-                  return `Resume in ${mode} mode${item ? ` at item ${item}` : ""}`;
-                })()}
-                .
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="resume-prompt-title"
+              aria-describedby="resume-prompt-desc"
+              className="relative w-full max-w-xl rounded-3xl border border-white/10 bg-[#0b1220] p-6 text-slate-100 shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:p-7"
+              onClick={(event) => event.stopPropagation()}
+            >
               <button
                 type="button"
-                onClick={() => resumeFromSession(resumePrompt.session)}
-                className="rounded-full border border-emerald-300/60 bg-emerald-500/25 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-emerald-50 transition hover:bg-emerald-500/40"
+                onClick={dismissResumePrompt}
+                aria-label="Close resume prompt"
+                className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-slate-300 transition hover:bg-white/10 hover:text-white"
               >
-                Continue
+                <X className="h-4 w-4" strokeWidth={2} />
               </button>
-              <button
-                type="button"
-                onClick={startFreshSession}
-                className="rounded-full border border-white/25 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-white transition hover:bg-white/10"
-              >
-                Start fresh
-              </button>
+
+              <div className="flex items-start gap-4 pr-8">
+                <div className="relative mt-0.5 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 ring-1 ring-emerald-400/40 shadow-[0_0_28px_rgba(16,185,129,0.35)]">
+                  <div className="absolute inset-0 rounded-full bg-emerald-400/10 blur-md" />
+                  <CloudUpload
+                    className="relative h-7 w-7 text-emerald-400"
+                    strokeWidth={1.75}
+                  />
+                </div>
+                <div className="min-w-0 pt-1">
+                  <h2
+                    id="resume-prompt-title"
+                    className="text-lg font-semibold tracking-tight text-white sm:text-xl"
+                  >
+                    Continue where you left off?
+                  </h2>
+                  <p
+                    id="resume-prompt-desc"
+                    className="mt-1.5 text-sm leading-relaxed text-slate-400"
+                  >
+                    A previous session was found. Would you like to load it?
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => resumeFromSession(resumePrompt.session)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-medium text-white shadow-[0_0_24px_rgba(16,185,129,0.45)] transition hover:bg-emerald-400"
+                >
+                  <History className="h-4 w-4" strokeWidth={2} />
+                  Continue
+                </button>
+                <button
+                  type="button"
+                  onClick={startFreshSession}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-600/80 bg-transparent px-4 py-2.5 text-sm font-medium text-white transition hover:border-slate-500 hover:bg-white/5"
+                >
+                  <Folder className="h-4 w-4" strokeWidth={2} />
+                  Start New Session
+                </button>
+              </div>
             </div>
           </div>
         ) : null}
@@ -3504,13 +3807,21 @@ export default function AlbumDetailPage({ params }) {
               } ${showSplitMode ? `${hideUI ? "grid grid-cols-1 gap-1 p-0 lg:grid-cols-2" : "grid grid-cols-1 gap-3 p-2 lg:grid-cols-2"}` : ""}`}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
+              onContextMenu={handleFullscreenVideoContextMenu}
             >
               {showSplitMode ? (
                 <>
                   <SplitPanelMediaSurface
                     panelId="left"
                     hideUI={hideUI}
-                    label="Left Panel"
+                    label={
+                      <>
+                        <span className="lg:hidden">
+                          {isSplitMobileSwapped ? "Bottom" : "Top"}
+                        </span>
+                        <span className="hidden lg:inline">Left Panel</span>
+                      </>
+                    }
                     showWatermark={showWatermark}
                     watermarkText={watermarkText}
                     surfaceRef={(node) => {
@@ -3530,9 +3841,8 @@ export default function AlbumDetailPage({ params }) {
                     assignVideoRef={splitLeftVideoRef}
                     zoomState={splitZoom.left}
                     muted={Boolean(leftSplitPanel?.isMuted)}
-                    autoPlay={Boolean(leftSplitPanel?.isPlaying)}
+                    autoPlay
                     onForegroundVideoReady={(player) => {
-                      if (!leftSplitPanel?.isPlaying) return;
                       player?.play().catch(() => {});
                     }}
                     onPinchStart={leftSplitPinchHandlers.onPinchStart}
@@ -3544,7 +3854,12 @@ export default function AlbumDetailPage({ params }) {
                         event.currentTarget.play().catch(() => {});
                         return;
                       }
-                      moveSplitPanel("left", "next");
+                      if (
+                        leftSplitPanel?.isPlaying &&
+                        leftSplitPanel?.delayMs > 0
+                      ) {
+                        moveSplitPanel("left", "next");
+                      }
                     }}
                     onMediaSuccess={(item) => {
                       markPanelMediaSuccess("left", item);
@@ -3569,7 +3884,14 @@ export default function AlbumDetailPage({ params }) {
                   <SplitPanelMediaSurface
                     panelId="right"
                     hideUI={hideUI}
-                    label="Right Panel"
+                    label={
+                      <>
+                        <span className="lg:hidden">
+                          {isSplitMobileSwapped ? "Top" : "Bottom"}
+                        </span>
+                        <span className="hidden lg:inline">Right Panel</span>
+                      </>
+                    }
                     showWatermark={showWatermark}
                     watermarkText={watermarkText}
                     surfaceRef={(node) => {
@@ -3592,21 +3914,22 @@ export default function AlbumDetailPage({ params }) {
                     onPinchMove={rightSplitPinchHandlers.onPinchMove}
                     onPinchEnd={rightSplitPinchHandlers.onPinchEnd}
                     muted={Boolean(rightSplitPanel?.isMuted)}
-                    autoPlay={Boolean(rightSplitPanel?.isPlaying)}
+                    autoPlay
                     onForegroundVideoReady={(player) => {
-                      if (!rightSplitPanel?.isPlaying) return;
                       player?.play().catch(() => {});
                     }}
                     onEnded={(event) => {
-                      if (!rightSplitPanel?.isPlaying) {
-                        return;
-                      }
                       if (rightSplitPanel?.loop) {
                         event.currentTarget.currentTime = 0;
                         event.currentTarget.play().catch(() => {});
                         return;
                       }
-                      moveSplitPanel("right", "next");
+                      if (
+                        rightSplitPanel?.isPlaying &&
+                        rightSplitPanel?.delayMs > 0
+                      ) {
+                        moveSplitPanel("right", "next");
+                      }
                     }}
                     onMediaSuccess={(item) => {
                       markPanelMediaSuccess("right", item);
@@ -3630,16 +3953,33 @@ export default function AlbumDetailPage({ params }) {
                   />
                 </>
               ) : activeItemIsVideo ? (
-                <div className="relative h-full w-full">
+                <div
+                  className="relative h-full w-full"
+                  style={{ touchAction: hideUI ? "none" : "manipulation" }}
+                  onTouchEnd={(event) => {
+                    if (event.changedTouches?.length !== 1) return;
+                    if (event.touches.length > 0) return;
+                    const touch = event.changedTouches[0];
+                    if (
+                      registerTap("primary", touch.clientX, touch.clientY, {
+                        isVideo: true,
+                      })
+                    ) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }
+                  }}
+                >
                   <video
                     key={activeMediaKey}
                     ref={activeVideoRef}
                     src={activePlayableSrc || undefined}
                     className="h-full w-full object-contain"
-                    controls
+                    controls={!hideUI}
                     playsInline
                     preload="auto"
                     poster={getVideoPosterUrl(activeItem.imageUrl) || undefined}
+                    style={{ touchAction: hideUI ? "none" : "manipulation" }}
                     onLoadedMetadata={() => {
                       markPanelMediaSuccess("primary", activeItem);
                     }}
@@ -3922,6 +4262,31 @@ export default function AlbumDetailPage({ params }) {
                         >
                           <Repeat2 className="h-3.5 w-3.5" />
                         </button>
+                        <label className="relative inline-flex shrink-0 items-center">
+                          <select
+                            value={String(
+                              activeSplitSettings?.delayMs > 0
+                                ? activeSplitSettings.delayMs
+                                : TIMER_OFF_MS,
+                            )}
+                            onChange={(event) => {
+                              applySplitPanelTimer(
+                                activeSplitPanel,
+                                event.target.value,
+                              );
+                            }}
+                            aria-label="Active panel timer"
+                            className="h-8 appearance-none rounded-md border border-white/35 bg-[#0b1220] py-1 pl-2.5 pr-7 text-[11px] font-medium text-white outline-none transition hover:border-white/50"
+                          >
+                            <option value={TIMER_OFF_MS}>Off</option>
+                            {timerPresetMs.map((ms) => (
+                              <option key={`fs-split-delay-${ms}`} value={ms}>
+                                {Math.round(ms / 1000)}s
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-1.5 h-3.5 w-3.5 text-white/90" />
+                        </label>
                         <button
                           type="button"
                           onClick={() => {
@@ -3940,7 +4305,7 @@ export default function AlbumDetailPage({ params }) {
                 </>
               ) : viewerMode !== "split" ? (
                 <div
-                  className={`absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-black/45 p-1.5 backdrop-blur transition-all duration-300 ${
+                  className={`absolute bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/20 bg-black/45 p-1.5 backdrop-blur transition-all duration-300 ${
                     hideUI
                       ? viewerMode === "slideshow" && fullscreenControlsHidden
                         ? "pointer-events-none opacity-0"
@@ -3952,9 +4317,9 @@ export default function AlbumDetailPage({ params }) {
                     type="button"
                     onClick={goToPrev}
                     aria-label="Previous slide"
-                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                    className="rounded-full border border-white/25 p-2 text-white transition hover:bg-white/15"
                   >
-                    Prev
+                    <ChevronLeft className="h-3.5 w-3.5" />
                   </button>
                   <button
                     type="button"
@@ -3962,33 +4327,61 @@ export default function AlbumDetailPage({ params }) {
                     aria-label={
                       isPlaying ? "Pause slideshow" : "Play slideshow"
                     }
-                    className="rounded-full border border-emerald-300/50 bg-emerald-500/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-emerald-100 transition hover:bg-emerald-500/35"
+                    className={`rounded-full border p-2 transition ${
+                      isPlaying
+                        ? "border-emerald-300/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
+                        : "border-white/25 text-white hover:bg-white/15"
+                    }`}
                   >
-                    {isPlaying ? "Pause" : "Play"}
+                    {isPlaying ? (
+                      <Pause className="h-3.5 w-3.5" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
                   </button>
                   <button
                     type="button"
                     onClick={goToNext}
                     aria-label="Next slide"
-                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                    className="rounded-full border border-white/25 p-2 text-white transition hover:bg-white/15"
                   >
-                    Next
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </button>
+                  {viewerMode === "slideshow" ? (
+                    <label className="relative inline-flex shrink-0 items-center">
+                      <select
+                        value={String(delayMs > 0 ? delayMs : TIMER_OFF_MS)}
+                        onChange={(event) => {
+                          applySlideshowTimer(event.target.value);
+                        }}
+                        aria-label="Slideshow timer"
+                        className="h-8 appearance-none rounded-md border border-white/35 bg-[#0b1220] py-1 pl-2.5 pr-7 text-[11px] font-medium text-white outline-none transition hover:border-white/50"
+                      >
+                        <option value={TIMER_OFF_MS}>Off</option>
+                        {timerPresetMs.map((ms) => (
+                          <option key={`fs-slideshow-delay-${ms}`} value={ms}>
+                            {Math.round(ms / 1000)}s
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-1.5 h-3.5 w-3.5 text-white/90" />
+                    </label>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => {
                       void handleShowUI();
                     }}
                     aria-label="Show viewer interface"
-                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                    className="rounded-full border border-white/25 p-2 text-white transition hover:bg-white/15"
                   >
-                    Show UI
+                    ⛶
                   </button>
                   <button
                     type="button"
                     onClick={closeViewer}
                     aria-label="Close viewer"
-                    className="rounded-full border border-white/25 px-3 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
+                    className="rounded-full border border-white/25 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-white transition hover:bg-white/15"
                   >
                     Close
                   </button>
@@ -4153,12 +4546,18 @@ export default function AlbumDetailPage({ params }) {
                           Timer
                         </span>
                         <select
-                          value={isPresetDelay ? String(delayMs) : "custom"}
+                          value={
+                            delayMs <= 0
+                              ? String(TIMER_OFF_MS)
+                              : isPresetDelay
+                                ? String(delayMs)
+                                : "custom"
+                          }
                           onChange={(event) => {
                             if (event.target.value === "custom") {
                               const parsed = Number(customDelaySeconds);
                               if (Number.isFinite(parsed) && parsed > 0) {
-                                setDelayMs(
+                                applySlideshowTimer(
                                   Math.min(
                                     300000,
                                     Math.max(1000, parsed * 1000),
@@ -4167,10 +4566,11 @@ export default function AlbumDetailPage({ params }) {
                               }
                               return;
                             }
-                            setDelayMs(Number(event.target.value));
+                            applySlideshowTimer(event.target.value);
                           }}
                           className="h-9 rounded-md border border-white/30 bg-slate-900/70 px-2 text-xs text-white"
                         >
+                          <option value={TIMER_OFF_MS}>Off</option>
                           <option value={2000}>2s</option>
                           <option value={5000}>5s</option>
                           <option value={10000}>10s</option>
@@ -4179,7 +4579,7 @@ export default function AlbumDetailPage({ params }) {
                           <option value={30000}>30s</option>
                           <option value="custom">Custom</option>
                         </select>
-                        {!isPresetDelay ? (
+                        {delayMs > 0 && !isPresetDelay ? (
                           <input
                             type="number"
                             min={1}
@@ -4191,7 +4591,7 @@ export default function AlbumDetailPage({ params }) {
                               setCustomDelaySeconds(value);
                               const parsed = Number(value);
                               if (Number.isFinite(parsed) && parsed > 0) {
-                                setDelayMs(
+                                applySlideshowTimer(
                                   Math.min(
                                     300000,
                                     Math.max(1000, parsed * 1000),
@@ -4204,7 +4604,7 @@ export default function AlbumDetailPage({ params }) {
                           />
                         ) : null}
                         <span className="hidden text-[10px] text-slate-400 sm:inline">
-                          {Math.round(delayMs / 1000)}s
+                          {delayMs > 0 ? `${Math.round(delayMs / 1000)}s` : "Off"}
                         </span>
                       </>
                     ) : null}
@@ -4358,15 +4758,21 @@ export default function AlbumDetailPage({ params }) {
                           <Repeat2 className="h-3.5 w-3.5" />
                         </button>
                         <select
-                          value={String(activeSplitSettings?.delayMs || 5000)}
+                          value={String(
+                            activeSplitSettings?.delayMs > 0
+                              ? activeSplitSettings.delayMs
+                              : TIMER_OFF_MS,
+                          )}
                           onChange={(event) => {
-                            updateActiveSplitPanel({
-                              delayMs: Number(event.target.value),
-                            });
+                            applySplitPanelTimer(
+                              activeSplitPanel,
+                              event.target.value,
+                            );
                           }}
                           className="h-8 rounded-md border border-white/30 bg-slate-900/70 px-2 text-[10px] text-white"
                           aria-label="Active panel timer"
                         >
+                          <option value={TIMER_OFF_MS}>Off</option>
                           {timerPresetMs.map((ms) => (
                             <option key={`mobile-active-delay-${ms}`} value={ms}>
                               {Math.round(ms / 1000)}s
@@ -4436,16 +4842,17 @@ export default function AlbumDetailPage({ params }) {
                           <Repeat2 className="h-3.5 w-3.5" />
                         </button>
                         <select
-                          value={String(leftSplitPanel?.delayMs || 5000)}
+                          value={String(
+                            leftSplitPanel?.delayMs > 0
+                              ? leftSplitPanel.delayMs
+                              : TIMER_OFF_MS,
+                          )}
                           onChange={(event) => {
-                            const nextDelay = Number(event.target.value);
-                            setSplitPanels((current) => ({
-                              ...current,
-                              left: { ...current.left, delayMs: nextDelay },
-                            }));
+                            applySplitPanelTimer("left", event.target.value);
                           }}
                           className="h-8 rounded-md border border-white/30 bg-slate-900/70 px-2 text-[10px] text-white"
                         >
+                          <option value={TIMER_OFF_MS}>Off</option>
                           {timerPresetMs.map((ms) => (
                             <option key={`left-delay-${ms}`} value={ms}>
                               {Math.round(ms / 1000)}s
