@@ -40,9 +40,9 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-startup-image" href="/app-splash?w=1242&h=2688" />
       </head>
       <body>
-        <GlobalLoader />
         <PwaRegistration />
         <Suspense fallback={null}>
+          <GlobalLoader />
           <PwaRoutePersistence />
         </Suspense>
         <Toaster richColors position="top-right" />

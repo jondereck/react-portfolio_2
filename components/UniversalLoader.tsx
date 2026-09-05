@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 
 export type UniversalLoaderTheme = 'light' | 'dark' | 'auto';
 
@@ -11,6 +11,7 @@ export type UniversalLoaderProps = {
   message?: string;
   hint?: string;
   steps?: string[];
+  footer?: ReactNode;
   interactive?: boolean;
 };
 
@@ -52,6 +53,7 @@ export default function UniversalLoader({
   message,
   hint,
   steps,
+  footer,
   interactive = true,
 }: UniversalLoaderProps) {
   const reducedMotion = usePrefersReducedMotion();
@@ -277,6 +279,7 @@ export default function UniversalLoader({
           <p className={`mt-4 text-[11px] uppercase tracking-[0.28em] ${isDark ? 'text-cyan-200/70' : 'text-sky-600/70'}`}>
             {resolvedSteps[stepIndex]}
           </p>
+          {footer ? <div className="mt-6">{footer}</div> : null}
         </div>
       </div>
     </div>
