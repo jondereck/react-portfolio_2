@@ -106,10 +106,22 @@ export async function GET(request: Request, context: RouteContext) {
 
     if (!response.ok) {
       if (response.status === 404) {
-        return errorResponse(404, 'Google Drive file not found.');
+        return NextResponse.json(
+          {
+            error: 'Google Drive file not found.',
+            code: 'DRIVE_FILE_MISSING',
+          },
+          { status: 404 },
+        );
       }
       if (response.status === 403) {
-        return errorResponse(403, 'Google Drive file access denied.');
+        return NextResponse.json(
+          {
+            error: 'Google Drive file access denied.',
+            code: 'DRIVE_FILE_DENIED',
+          },
+          { status: 403 },
+        );
       }
 
       const message = await response.text().catch(() => '');
