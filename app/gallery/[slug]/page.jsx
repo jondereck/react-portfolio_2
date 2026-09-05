@@ -1009,6 +1009,7 @@ export default function AlbumDetailPage({ params }) {
   const splitRightVideoRef = useRef(null);
   const splitSurfaceRefs = useRef({ left: null, right: null });
   const touchStartRef = useRef({ x: 0, y: 0, id: null, active: false });
+  const mouseSwipeRef = useRef({ x: 0, y: 0, active: false, pointerId: null });
   const zoomSurfaceRef = useRef(null);
   const zoomGestureRef = useRef({
     pointerId: null,
@@ -3282,16 +3283,78 @@ export default function AlbumDetailPage({ params }) {
     moveSplitPanel,
   ]);
 
-  const handleTouchStart = (event) => {
-    if (!viewerOpen) return;
-    if (event.touches.length !== 1) return;
-
+  const isViewerSwipeZoomed = useCallback(() => {
     const zoomedSplit =
       showSplitMode &&
       ((splitZoom.left?.scale || 1) > 1 || (splitZoom.right?.scale || 1) > 1);
     const zoomedPrimary = !showSplitMode && imageZoom.scale > 1;
+    return zoomedSplit || zoomedPrimary;
+  }, [
+    showSplitMode,
+    splitZoom.left?.scale,
+    splitZoom.right?.scale,
+    imageZoom.scale,
+  ]);
+
+  const applyViewerSwipe = useCallback(
+    (deltaX, deltaY, { horizontalThreshold = 35 } = {}) => {
+      if (!viewerOpen) return;
+
+      if (
+        hideUI &&
+        (showSplitMode || viewerMode === "slideshow") &&
+        !isViewerSwipeZoomed()
+      ) {
+        if (Math.abs(deltaY) >= 45 && Math.abs(deltaY) > Math.abs(deltaX)) {
+          setFullscreenControlsHidden(deltaY > 0);
+          return;
+        }
+      }
+
+      // Split fullscreen: swipe horizontally switches the active panel item.
+      if (hideUI && showSplitMode) {
+        if (isViewerSwipeZoomed()) return;
+        if (Math.abs(deltaX) >= 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
+          moveSplitPanel(
+            activeSplitPanelRef.current,
+            deltaX < 0 ? "next" : "prev",
+          );
+          return;
+        }
+      }
+
+      if (imageZoom.scale > 1) return;
+      if (
+        Math.abs(deltaX) < horizontalThreshold ||
+        Math.abs(deltaX) < Math.abs(deltaY)
+      ) {
+        return;
+      }
+      if (deltaX < 0) {
+        goToNext();
+        return;
+      }
+      goToPrev();
+    },
+    [
+      viewerOpen,
+      hideUI,
+      showSplitMode,
+      viewerMode,
+      isViewerSwipeZoomed,
+      moveSplitPanel,
+      imageZoom.scale,
+      goToNext,
+      goToPrev,
+    ],
+  );
+
+  const handleTouchStart = (event) => {
+    if (!viewerOpen) return;
+    if (event.touches.length !== 1) return;
+
     // While zoomed, ignore swipe-to-hide / swipe-nav tracking so drag-pan works.
-    if (zoomedSplit || zoomedPrimary) {
+    if (isViewerSwipeZoomed()) {
       touchStartRef.current = { x: 0, y: 0, id: null, active: false };
       return;
     }
@@ -3313,52 +3376,66 @@ export default function AlbumDetailPage({ params }) {
       (candidate) => candidate.identifier === start.id,
     );
     if (!touch) return;
-    const deltaX = touch.clientX - start.x;
-    const deltaY = touch.clientY - start.y;
+    applyViewerSwipe(touch.clientX - start.x, touch.clientY - start.y);
+  };
 
-    if (
-      viewerOpen &&
-      hideUI &&
-      (showSplitMode || viewerMode === "slideshow")
-    ) {
-      const zoomedSplit =
-        showSplitMode &&
-        ((splitZoom.left?.scale || 1) > 1 || (splitZoom.right?.scale || 1) > 1);
-      const zoomedPrimary = !showSplitMode && imageZoom.scale > 1;
-      if (zoomedSplit || zoomedPrimary) {
-        return;
-      }
-      if (Math.abs(deltaY) >= 45 && Math.abs(deltaY) > Math.abs(deltaX)) {
-        setFullscreenControlsHidden(deltaY > 0);
-        return;
-      }
-    }
+  const isSwipeIgnoredTarget = (target) => {
+    if (!(target instanceof Element)) return false;
+    return Boolean(
+      target.closest(
+        "button, a, input, select, label, textarea, [data-no-swipe]",
+      ),
+    );
+  };
 
-    // Split fullscreen: swipe horizontally switches the active panel item.
-    if (viewerOpen && hideUI && showSplitMode) {
-      if (
-        (splitZoom.left?.scale || 1) > 1 ||
-        (splitZoom.right?.scale || 1) > 1
-      ) {
-        return;
-      }
-      if (Math.abs(deltaX) >= 45 && Math.abs(deltaX) > Math.abs(deltaY)) {
-        moveSplitPanel(
-          activeSplitPanelRef.current,
-          deltaX < 0 ? "next" : "prev",
-        );
-        return;
-      }
-    }
-
-    if (imageZoom.scale > 1) return;
-
-    if (Math.abs(deltaX) < 35 || Math.abs(deltaX) < Math.abs(deltaY)) return;
-    if (deltaX < 0) {
-      goToNext();
+  const handleSwipePointerDown = (event) => {
+    if (!viewerOpen) return;
+    // Touch keeps using touch handlers; this path is for mouse/pen on PC.
+    if (event.pointerType === "touch") return;
+    if (event.button !== 0) return;
+    if (isSwipeIgnoredTarget(event.target)) return;
+    if (isViewerSwipeZoomed()) {
+      mouseSwipeRef.current = {
+        x: 0,
+        y: 0,
+        active: false,
+        pointerId: null,
+      };
       return;
     }
-    goToPrev();
+
+    mouseSwipeRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+      active: true,
+      pointerId: event.pointerId,
+    };
+  };
+
+  const handleSwipePointerUp = (event) => {
+    if (!mouseSwipeRef.current.active) return;
+    if (mouseSwipeRef.current.pointerId !== event.pointerId) return;
+    const start = mouseSwipeRef.current;
+    mouseSwipeRef.current = {
+      x: 0,
+      y: 0,
+      active: false,
+      pointerId: null,
+    };
+    applyViewerSwipe(event.clientX - start.x, event.clientY - start.y, {
+      // Slightly higher threshold so normal clicks don't change media.
+      horizontalThreshold: 50,
+    });
+  };
+
+  const handleSwipePointerCancel = (event) => {
+    if (mouseSwipeRef.current.pointerId !== event.pointerId) return;
+    mouseSwipeRef.current = {
+      x: 0,
+      y: 0,
+      active: false,
+      pointerId: null,
+    };
   };
 
   const handleImagePointerDown = useCallback((event) => {
@@ -3881,6 +3958,9 @@ export default function AlbumDetailPage({ params }) {
               } ${showSplitMode ? `${hideUI ? "grid grid-cols-1 gap-1 p-0 lg:grid-cols-2" : "grid grid-cols-1 gap-3 p-2 lg:grid-cols-2"}` : ""}`}
               onTouchStart={handleTouchStart}
               onTouchEnd={handleTouchEnd}
+              onPointerDown={handleSwipePointerDown}
+              onPointerUp={handleSwipePointerUp}
+              onPointerCancel={handleSwipePointerCancel}
               onContextMenu={handleFullscreenVideoContextMenu}
             >
               {showSplitMode ? (
@@ -4180,8 +4260,51 @@ export default function AlbumDetailPage({ params }) {
               {showSplitMode && hideUI ? (
                 <>
                   {!fullscreenControlsHidden ? (
-                    <div className="pointer-events-none absolute bottom-3 left-1/2 z-40 flex -translate-x-1/2">
-                      <div className="pointer-events-auto flex max-w-[calc(100vw-1.5rem)] items-center gap-1 overflow-x-auto rounded-full border border-white/20 bg-black/35 p-1.5 backdrop-blur-md">
+                    <div className="pointer-events-none absolute bottom-3 left-1/2 z-40 flex w-full max-w-[calc(100vw-1.5rem)] -translate-x-1/2 flex-col items-center gap-2">
+                      {audioTracks.length > 0 && audioPlayerOpen ? (
+                        <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full border border-white/20 bg-black/35 px-2.5 py-1.5 backdrop-blur-md">
+                          <Music2
+                            className={`hidden h-3.5 w-3.5 shrink-0 sm:block ${
+                              audioIsPlaying
+                                ? "text-emerald-400 animate-pulse"
+                                : "text-slate-400"
+                            }`}
+                          />
+                          <p className="hidden min-w-0 max-w-[9rem] truncate text-[11px] text-slate-200 sm:block">
+                            {currentAudioTrack?.caption ||
+                              currentAudioTrack?.originalFilename ||
+                              "Audio track"}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleAudioTogglePlay}
+                            aria-label={
+                              audioIsPlaying ? "Pause music" : "Play music"
+                            }
+                            className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition ${
+                              audioIsPlaying
+                                ? "border-emerald-300/60 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
+                                : "border-white/25 text-white hover:bg-white/15"
+                            }`}
+                          >
+                            {audioIsPlaying ? (
+                              <Pause className="h-3.5 w-3.5" />
+                            ) : (
+                              <Play className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleAudioNext}
+                            disabled={audioTracks.length <= 1}
+                            aria-label="Next track"
+                            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/25 text-white transition hover:bg-white/15 disabled:opacity-30"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : null}
+                      <div className="pointer-events-auto flex max-w-full items-center gap-1 overflow-x-auto rounded-full border border-white/20 bg-black/35 p-1.5 backdrop-blur-md">
                         <div
                           className="mr-0.5 inline-flex shrink-0 rounded-full border border-white/20 bg-black/40 p-0.5"
                           role="tablist"
@@ -4304,6 +4427,35 @@ export default function AlbumDetailPage({ params }) {
                             <Volume2 className="h-3.5 w-3.5" />
                           )}
                         </button>
+                        {audioTracks.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setAudioPlayerOpen((open) => !open)
+                            }
+                            aria-label={
+                              audioPlayerOpen
+                                ? "Hide music controls"
+                                : "Show music controls"
+                            }
+                            aria-pressed={audioPlayerOpen}
+                            title={
+                              audioIsPlaying
+                                ? "Music playing"
+                                : "Background music"
+                            }
+                            className={`relative rounded-full border p-2 transition ${
+                              audioPlayerOpen || audioIsPlaying
+                                ? "border-emerald-300/50 bg-emerald-500/25 text-emerald-100 hover:bg-emerald-500/35"
+                                : "border-white/25 text-white hover:bg-white/15"
+                            }`}
+                          >
+                            <Music2 className="h-3.5 w-3.5" />
+                            {audioIsPlaying ? (
+                              <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-1 ring-black animate-pulse" />
+                            ) : null}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           aria-label="Toggle active panel loop"
